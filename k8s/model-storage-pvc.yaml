@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-storage-pvc
+  namespace: dashboard
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: model-loader
+  namespace: dashboard
+spec:
+  template:
+    spec:
+      containers:
+      - name: model-loader
+        image: busybox
+        command: ['sh', '-c']
+        args:
+        - |
+          echo "Dual-model loading job - CodeT5+ and Chart Selection models"
+          mkdir -p /model-data/codet5_trino_model
+          mkdir -p /model-data/chart_model
+          echo "Model directories created for dual-model architecture"
+          # This job would copy the trained models from a source
+          # CodeT5+ model (~770MB) and Chart Selection model (~5MB)
+        volumeMounts:
+        - name: model-storage
+          mountPath: /model-data
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: model-storage-pvc
+      restartPolicy: OnFailure

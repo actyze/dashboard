@@ -1,0 +1,81 @@
+# Values for production Azure AKS deployment
+global:
+  namespace: dashboard
+  imagePullPolicy: Always
+
+backend:
+  replicaCount: 3
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+
+fastapi:
+  replicaCount: 2
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+  storage:
+    storageClass: "managed-csi"
+    size: 50Gi
+
+frontend:
+  replicaCount: 3
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: dashboard.yourdomain.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+        - path: /api
+          pathType: Prefix
+          service: backend
+  tls:
+    - secretName: dashboard-tls
+      hosts:
+        - dashboard.yourdomain.com
+
+autoscaling:
+  backend:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+  frontend:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 8
+  fastapi:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+networkPolicy:
+  enabled: true
+
+serviceMonitor:
+  enabled: true

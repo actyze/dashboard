@@ -1,0 +1,295 @@
+import React, { useState } from 'react';
+import { 
+  Box, 
+  Grid, 
+  Typography, 
+  Drawer, 
+  List, 
+  ListItem, 
+  ListItemText, 
+  Divider, 
+  Chip 
+} from '@mui/material';
+import ChatInput from './ChatInput';
+import SqlQuery from './SqlQuery';
+import Chart from './Chart';
+import QueryResults from './QueryResults';
+
+const Dashboard = () => {
+  // State for the SQL query
+  const [sqlQuery, setSqlQuery] = useState("SELECT column1,column3\nFROM table_name\nWHERE column1='example'\nORDER BY column2;");
+  // State for backend response
+  const [backendResponse, setBackendResponse] = useState('');
+  
+  // State for query execution and results
+  const [queryLoading, setQueryLoading] = useState(false);
+  const [queryError, setQueryError] = useState(null);
+  const [queryResults, setQueryResults] = useState(null);
+  const [chartData, setChartData] = useState(null);
+  
+  // Backend API call function
+  const executeQueryWithChart = async (query, chartType = 'bar') => {
+    setQueryLoading(true);
+    setQueryError(null);
+    
+    try {
+      const response = await fetch('/api/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          input: query,
+          type: 'sql',
+          chartType: chartType,
+          includeChart: true
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      // Set both chart and query results from backend response
+      // Transform chartData structure to match Chart component expectations
+      if (result.chartData) {
+        console.log('Backend chartData:', result.chartData);
+        console.log('Backend queryResults:', result.queryResults);
+        
+        const transformedChartData = {
+          chart: {
+            type: result.chartData.type,
+            config: result.chartData.config,
+            fallback: false
+          },
+          data: result.queryResults, // Use queryResults as the data source
+          cached: false
+        };
+        
+        console.log('Transformed chartData:', transformedChartData);
+        setChartData(transformedChartData);
+      }
+      setQueryResults(result.queryResults);
+      setBackendResponse(`Query executed successfully. ${result.queryResults?.rowCount || 0} rows returned.`);
+      
+    } catch (error) {
+      console.error('Query execution failed:', error);
+      setQueryError(error.message);
+      setBackendResponse(`Error: ${error.message}`);
+    } finally {
+      setQueryLoading(false);
+    }
+  };
+
+  // FastAPI status state (commented out for now since we're not using FastAPI)
+  // const [fastApiStatus, setFastApiStatus] = useState('Unknown');
+  // useEffect(() => {
+  //   fetch('http://localhost:8000/health')
+  //     .then(res => res.ok ? setFastApiStatus('Online') : setFastApiStatus('Offline'))
+  //     .catch(() => setFastApiStatus('Offline'));
+  // }, []);
+
+  // Handle SQL query execution
+  const handleExecuteQuery = () => {
+    executeQueryWithChart(sqlQuery);
+  };
+
+  // Handle data changes from QueryResults component
+  const handleDataChange = (updatedData) => {
+    setQueryResults(updatedData);
+  };
+
+  // Handle chat input submission with complete NL-to-SQL-to-Chart workflow
+  const handleChatSubmit = async (message) => {
+    setQueryLoading(true);
+    setQueryError(null);
+    setBackendResponse('Processing natural language query...');
+    
+    try {
+      // Call complete NL-to-SQL-to-Chart workflow endpoint
+      const response = await fetch('/api/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          input: message,
+          type: 'natural',
+          includeChart: true
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      if (result.success) {
+        // Update SQL query box with generated SQL
+        if (result.generatedSQL) {
+          setSqlQuery(result.generatedSQL);
+        }
+        
+        // Update query results with executed data
+        if (result.queryResults) {
+          setQueryResults(result.queryResults);
+        }
+        
+        // Update chart with generated chart configuration
+        if (result.chartData) {
+          setChartData(result.chartData);
+        }
+        
+        // Update backend response with comprehensive information
+        let responseMessage = `✅ Complete workflow executed successfully!\n`;
+        responseMessage += `📝 SQL: Generated with ${result.confidence || 'high'} confidence\n`;
+        responseMessage += `📊 Data: ${result.queryResults?.rowCount || 0} rows retrieved\n`;
+        responseMessage += `📈 Chart: ${result.extractedChartType || 'auto'} chart recommended`;
+        
+        if (result.naturalLanguage) {
+          responseMessage += `\n\n💡 Natural Language: ${result.naturalLanguage}`;
+        }
+        if (result.generatedSQL) {
+          responseMessage += `\n📝 Generated SQL: ${result.generatedSQL}`;
+        }
+        
+        setBackendResponse(responseMessage);
+      } else {
+        setBackendResponse('No SQL query could be generated from the input.');
+      }
+      
+    } catch (error) {
+      console.error('Complete workflow failed:', error);
+      setQueryError(error.message);
+      setBackendResponse(`❌ Workflow failed: ${error.message}`);
+    } finally {
+      setQueryLoading(false);
+    }
+  };
+  
+  return (
+    <Box sx={{ display: 'flex', height: 'calc(100vh - 150px)' }}>
+      {/* Sidebar */}
+      <Drawer
+        variant="permanent"
+        sx={{
+          width: 250,
+          flexShrink: 0,
+          '& .MuiDrawer-paper': {
+            width: 250,
+            boxSizing: 'border-box',
+            position: 'relative',
+            borderRight: '1px solid rgba(0, 0, 0, 0.12)',
+            height: '100%',
+          },
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          <Typography variant="h6" component="div" sx={{ fontWeight: 'bold', mb: 2 }}>
+            Dashboards
+          </Typography>
+          <List>
+            <ListItem button>
+              <ListItemText primary="Project Gamma" />
+            </ListItem>
+            <Divider sx={{ my: 1 }} />
+            <ListItem button>
+              <ListItemText 
+                primary={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    Dashboard Name <Chip size="small" label="Draft" />
+                  </Box>
+                }
+              />
+            </ListItem>
+            <ListItem button>
+              <ListItemText 
+                primary={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    Dashboard Name <Chip size="small" label="Published" />
+                  </Box>
+                }
+              />
+            </ListItem>
+            <ListItem button>
+              <ListItemText 
+                primary={
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    Dashboard Name <Chip size="small" label="Published" />
+                  </Box>
+                }
+              />
+            </ListItem>
+            <ListItem button>
+              <ListItemText primary="Dashboard Name" />
+            </ListItem>
+            <ListItem button>
+              <ListItemText primary="Draft" />
+            </ListItem>
+          </List>
+        </Box>
+      </Drawer>
+
+      {/* Main content */}
+      <Box component="main" sx={{ flexGrow: 1, p: 0, overflow: 'hidden' }}>
+        {/* Chat section */}
+        <Box sx={{ p: 2, backgroundColor: '#f5f5f5' }}>
+          <Box 
+            sx={{ 
+              backgroundColor: '#e0e0e0', 
+              p: 2, 
+              borderRadius: 1,
+              display: 'inline-block',
+              maxWidth: '60%'
+            }}
+          >
+            <Typography>Hello! How can I assist you today?</Typography>
+          </Box>
+          <ChatInput onSubmit={handleChatSubmit} />
+        </Box>
+
+        {/* SQL Query and Chart grid */}
+        <Box sx={{ p: 2, display: 'flex', flex: 1 }}>
+          <Grid container spacing={2}>
+            {/* SQL Query section */}
+            <Grid item xs={12} md={6}>
+              <Typography variant="h6" sx={{ mb: 1 }}>SQL Query</Typography>
+              <SqlQuery sqlQuery={sqlQuery} setSqlQuery={setSqlQuery} backendResponse={backendResponse} onExecute={handleExecuteQuery} />
+            </Grid>
+            
+            {/* Chart section using new Chart component */}
+            <Grid item xs={12} md={6}>
+              <Chart 
+                chartData={chartData}
+                loading={queryLoading}
+                error={queryError}
+              />
+            </Grid>
+
+            {/* Query Results section using new QueryResults component */}
+            <Grid item xs={12}>
+              <QueryResults 
+                queryData={queryResults}
+                loading={queryLoading}
+                error={queryError}
+              />
+            </Grid>
+          </Grid>
+        </Box>
+      </Box>
+    </Box>
+  );
+};
+
+export default Dashboard;

@@ -1,0 +1,11 @@
+transformers>=4.36.0  # Hugging Face library for CodeT5+ model
+torch>=2.0.0         # PyTorch for deep learning inference
+fastapi>=0.104.0     # FastAPI web framework
+uvicorn>=0.24.0      # ASGI server for FastAPI
+pydantic>=2.0.0      # Data validation and serialization
+aiofiles>=23.0.0     # Async file operations
+aiohttp>=3.9.0       # Async HTTP client for MCP server communication
+numpy>=1.24.0        # Numerical computing
+pandas>=2.0.0        # Data manipulation and analysis
+scikit-learn>=1.3.0  # Machine learning for chart selection model
+joblib>=1.3.0        # Model serialization

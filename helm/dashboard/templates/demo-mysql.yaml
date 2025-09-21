@@ -1,0 +1,90 @@
+{{- if and .Values.demo.enabled .Values.demo.mysql.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dashboard.fullname" . }}-demo-mysql
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: demo-mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "dashboard.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: demo-mysql
+  template:
+    metadata:
+      labels:
+        {{- include "dashboard.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: demo-mysql
+    spec:
+      containers:
+      - name: mysql
+        image: "{{ .Values.demo.mysql.image.repository }}:{{ .Values.demo.mysql.image.tag }}"
+        imagePullPolicy: {{ .Values.demo.mysql.imagePullPolicy | default .Values.global.imagePullPolicy }}
+        ports:
+        - name: mysql
+          containerPort: 3306
+          protocol: TCP
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: {{ .Values.demo.mysql.rootPassword }}
+        - name: MYSQL_DATABASE
+          value: {{ .Values.demo.mysql.database }}
+        - name: MYSQL_USER
+          value: {{ .Values.demo.mysql.user }}
+        - name: MYSQL_PASSWORD
+          value: {{ .Values.demo.mysql.password }}
+        resources:
+          {{- toYaml .Values.demo.mysql.resources | nindent 10 }}
+        volumeMounts:
+        - name: mysql-data
+          mountPath: /var/lib/mysql
+        - name: mysql-init
+          mountPath: /docker-entrypoint-initdb.d
+          readOnly: true
+        livenessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: mysql-data
+        emptyDir: {}
+      - name: mysql-init
+        configMap:
+          name: {{ include "dashboard.fullname" . }}-demo-mysql-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dashboard.fullname" . }}-demo-mysql
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: demo-mysql
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3306
+      targetPort: mysql
+      protocol: TCP
+      name: mysql
+  selector:
+    {{- include "dashboard.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: demo-mysql
+{{- end }}

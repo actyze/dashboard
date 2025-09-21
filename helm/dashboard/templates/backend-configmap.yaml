@@ -1,0 +1,125 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dashboard.fullname" . }}-backend-config
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+data:
+  application.yml: |
+    # Dashboard Backend Configuration
+    spring:
+      application:
+        name: dashboard-backend
+      
+      # Database Configuration
+      datasource:
+        url: jdbc:h2:mem:testdb
+        driverClassName: org.h2.Driver
+        username: sa
+        password: password
+      
+      # JPA Configuration
+      jpa:
+        database-platform: org.hibernate.dialect.H2Dialect
+        hibernate:
+          ddl-auto: update
+        show-sql: false
+      
+      # H2 Console (for development)
+      h2:
+        console:
+          enabled: {{ .Values.global.environment | eq "development" }}
+          path: /h2-console
+
+    # Server Configuration
+    server:
+      port: 8080
+
+    # Logging Configuration
+    logging:
+      level:
+        com.dashboard: {{ .Values.logging.level.dashboard | default "INFO" }}
+        com.dashboard.mcp: DEBUG
+        AUDIT: {{ .Values.logging.level.audit | default "INFO" }}
+      pattern:
+        console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+      file:
+        name: {{ .Values.logging.files.application.path | default "/app/logs/dashboard-backend.log" }}
+
+    # Dashboard MCP Configuration
+    dashboard:
+      mcp:
+        # Rate Limiting Configuration
+        rateLimit:
+          maxRequestsPerMinute: {{ .Values.backend.config.rateLimit.maxRequestsPerMinute | default 60 }}
+          maxRequestsPerHour: {{ .Values.backend.config.rateLimit.maxRequestsPerHour | default 1000 }}
+          cleanupIntervalMinutes: {{ .Values.backend.config.rateLimit.cleanupIntervalMinutes | default 5 }}
+        
+        # Audit Logging Configuration
+        audit:
+          slowQueryThresholdMs: {{ .Values.backend.config.audit.slowQueryThresholdMs | default 10000 }}
+          maxQueryLogLength: {{ .Values.backend.config.audit.maxQueryLogLength | default 1000 }}
+          maxArgumentsLogLength: {{ .Values.backend.config.audit.maxArgumentsLogLength | default 500 }}
+          enableMetrics: {{ .Values.backend.config.audit.enableMetrics | default true }}
+        
+        # Trino MCP Server Configuration
+        trino:
+          # Server Configuration
+          server:
+            enabled: {{ .Values.backend.config.mcp.trino.server.enabled | default true }}
+            transport: {{ .Values.backend.config.mcp.trino.server.transport | default "http" }}
+            host: {{ .Values.backend.config.mcp.trino.server.host | default "0.0.0.0" }}
+            port: {{ .Values.backend.config.mcp.trino.server.port | default 8081 }}
+            threadPoolSize: {{ .Values.backend.config.mcp.trino.server.threadPoolSize | default 10 }}
+            requestTimeoutMs: {{ .Values.backend.config.mcp.trino.server.requestTimeoutMs | default 30000 }}
+          
+          # Trino Connection Configuration
+          connection:
+            url: {{ .Values.backend.config.mcp.trino.connection.url | default "jdbc:trino://localhost:8080/memory" }}
+            user: {{ .Values.backend.config.mcp.trino.connection.user | default "admin" }}
+            password: {{ .Values.backend.config.mcp.trino.connection.password | default "" }}
+            catalog: {{ .Values.backend.config.mcp.trino.connection.catalog | default "memory" }}
+            schema: {{ .Values.backend.config.mcp.trino.connection.schema | default "default" }}
+            maxRows: {{ .Values.backend.config.mcp.trino.connection.maxRows | default 10000 }}
+            queryTimeoutSeconds: {{ .Values.backend.config.mcp.trino.connection.queryTimeoutSeconds | default 300 }}
+            
+          # Connection Pool Configuration
+          connectionPool:
+            minimumIdle: {{ .Values.backend.config.mcp.trino.connectionPool.minimumIdle | default 2 }}
+            maximumPoolSize: {{ .Values.backend.config.mcp.trino.connectionPool.maximumPoolSize | default 10 }}
+            connectionTimeoutMs: {{ .Values.backend.config.mcp.trino.connectionPool.connectionTimeoutMs | default 30000 }}
+            idleTimeoutMs: {{ .Values.backend.config.mcp.trino.connectionPool.idleTimeoutMs | default 600000 }}
+            maxLifetimeMs: {{ .Values.backend.config.mcp.trino.connectionPool.maxLifetimeMs | default 1800000 }}
+            leakDetectionThresholdMs: {{ .Values.backend.config.mcp.trino.connectionPool.leakDetectionThresholdMs | default 60000 }}
+            
+          # Security Configuration
+          security:
+            readOnlyMode: {{ .Values.backend.config.mcp.trino.security.readOnlyMode | default true }}
+            allowDdl: {{ .Values.backend.config.mcp.trino.security.allowDdl | default false }}
+            allowDml: {{ .Values.backend.config.mcp.trino.security.allowDml | default false }}
+            allowedCatalogs:
+              {{- range .Values.backend.config.mcp.trino.security.allowedCatalogs }}
+              - {{ . }}
+              {{- end }}
+            blockedKeywords:
+              {{- range .Values.backend.config.mcp.trino.security.blockedKeywords }}
+              - {{ . }}
+              {{- end }}
+            maxQueryLength: {{ .Values.backend.config.mcp.trino.security.maxQueryLength | default 50000 }}
+            enableSqlInjectionDetection: {{ .Values.backend.config.mcp.trino.security.enableSqlInjectionDetection | default true }}
+
+    # Management endpoints for health checks and metrics
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: health,ready,prometheus,metrics
+      endpoint:
+        health:
+          show-details: always
+        prometheus:
+          enabled: {{ .Values.monitoring.metrics.enabled | default true }}
+      metrics:
+        export:
+          prometheus:
+            enabled: {{ .Values.monitoring.metrics.enabled | default true }}

@@ -1,0 +1,88 @@
+{{- if and .Values.demo.enabled .Values.demo.postgres.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dashboard.fullname" . }}-demo-postgres
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: demo-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "dashboard.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: demo-postgres
+  template:
+    metadata:
+      labels:
+        {{- include "dashboard.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: demo-postgres
+    spec:
+      containers:
+      - name: postgres
+        image: "{{ .Values.demo.postgres.image.repository }}:{{ .Values.demo.postgres.image.tag }}"
+        imagePullPolicy: {{ .Values.demo.postgres.imagePullPolicy | default .Values.global.imagePullPolicy }}
+        ports:
+        - name: postgres
+          containerPort: 5432
+          protocol: TCP
+        env:
+        - name: POSTGRES_DB
+          value: {{ .Values.demo.postgres.database }}
+        - name: POSTGRES_USER
+          value: {{ .Values.demo.postgres.user }}
+        - name: POSTGRES_PASSWORD
+          value: {{ .Values.demo.postgres.password }}
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        resources:
+          {{- toYaml .Values.demo.postgres.resources | nindent 10 }}
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        - name: postgres-init
+          mountPath: /docker-entrypoint-initdb.d
+          readOnly: true
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - {{ .Values.demo.postgres.user }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - {{ .Values.demo.postgres.user }}
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: postgres-data
+        emptyDir: {}
+      - name: postgres-init
+        configMap:
+          name: {{ include "dashboard.fullname" . }}-demo-postgres-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dashboard.fullname" . }}-demo-postgres
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: demo-postgres
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: postgres
+      protocol: TCP
+      name: postgres
+  selector:
+    {{- include "dashboard.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: demo-postgres
+{{- end }}

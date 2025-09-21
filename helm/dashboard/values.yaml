@@ -1,0 +1,197 @@
+# Default values for dashboard.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+global:
+  namespace: dashboard
+  imagePullPolicy: Never  # For local Kind cluster, use Always for production
+
+# Backend Spring Boot service
+backend:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: dashboard-backend
+    tag: latest
+  service:
+    type: ClusterIP
+    port: 8080
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  env:
+    fastapi:
+      url: "http://dashboard-fastapi:8000"
+    trino:
+      url: "jdbc:trino://dashboard-trino:8080/memory/default"
+      user: "admin"
+
+# FastAPI ML service
+fastapi:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: dashboard-fastapi
+    tag: dual-model
+  service:
+    type: ClusterIP
+    port: 8000
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+  storage:
+    enabled: true
+    size: 10Gi
+    storageClass: "standard"  # Change to "managed-csi" for Azure AKS
+
+# Frontend React service
+frontend:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: dashboard-frontend
+    tag: latest
+  service:
+    type: ClusterIP
+    port: 3000
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+  hosts:
+    - host: dashboard.local
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+        - path: /api
+          pathType: Prefix
+          service: backend
+  tls: []
+
+# Service Monitor for Prometheus (optional)
+serviceMonitor:
+  enabled: false
+  namespace: monitoring
+  interval: 30s
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  backend:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+  frontend:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+  fastapi:
+    enabled: false  # ML service typically doesn't need autoscaling
+
+# Network Policies
+networkPolicy:
+  enabled: false
+
+# Pod Disruption Budgets
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Trino database service
+trino:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: trinodb/trino
+    tag: "435"
+  service:
+    type: ClusterIP
+    port: 8080
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+  environment: "production"
+  nodeId: "ffffffff-ffff-ffff-ffff-ffffffffffff"
+  jvm:
+    maxHeapSize: "2G"
+  config:
+    enabled: true
+  catalogs:
+    memory:
+      connector.name: "memory"
+    tpch:
+      connector.name: "tpch"
+      tpch.splits-per-node: "4"
+  livenessProbe:
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+# Demo mode configuration (optional)
+demo:
+  enabled: false  # Set to true to enable demo databases and sample data
+  postgres:
+    enabled: true
+    image:
+      repository: postgres
+      tag: "15-alpine"
+    database: "ecommerce_demo"
+    user: "demo_user"
+    password: "demo_password"
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "250m"
+  mysql:
+    enabled: true
+    image:
+      repository: mysql
+      tag: "8.0"
+    database: "hrms"
+    user: "demo_user"
+    password: "demo_password"
+    rootPassword: "root_password"
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "250m"
+
+# Environment-specific overrides
+environment: local  # local, staging, production

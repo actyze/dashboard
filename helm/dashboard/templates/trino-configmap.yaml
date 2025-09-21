@@ -1,0 +1,65 @@
+{{- if and .Values.trino.enabled .Values.trino.config.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dashboard.trino.fullname" . }}-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.trino.labels" . | nindent 4 }}
+data:
+  config.properties: |
+    coordinator=true
+    node-scheduler.include-coordinator=true
+    http-server.http.port=8080
+    discovery.uri=http://localhost:8080
+    node.environment={{ .Values.trino.environment }}
+    node.id={{ .Values.trino.nodeId | default "ffffffff-ffff-ffff-ffff-ffffffffffff" }}
+    
+  jvm.config: |
+    -server
+    -Xmx{{ .Values.trino.jvm.maxHeapSize | default "2G" }}
+    -XX:InitialRAMPercentage=80
+    -XX:MaxRAMPercentage=80
+    -XX:G1HeapRegionSize=32M
+    -XX:+ExplicitGCInvokesConcurrent
+    -XX:+ExitOnOutOfMemoryError
+    -XX:+HeapDumpOnOutOfMemoryError
+    -XX:-OmitStackTraceInFastThrow
+    -XX:ReservedCodeCacheSize=512M
+    -XX:PerMethodRecompilationCutoff=10000
+    -XX:PerBytecodeRecompilationCutoff=10000
+    -Djdk.attach.allowAttachSelf=true
+    -Djdk.nio.maxCachedBufferSize=2000000
+    
+  log.properties: |
+    io.trino=INFO
+    
+  node.properties: |
+    node.environment={{ .Values.trino.environment }}
+    node.id={{ .Values.trino.nodeId | default "ffffffff-ffff-ffff-ffff-ffffffffffff" }}
+    
+  {{- if .Values.trino.catalogs }}
+  {{- range $name, $config := .Values.trino.catalogs }}
+  {{ $name }}.properties: |
+    {{- range $key, $value := $config }}
+    {{ $key }}={{ $value }}
+    {{- end }}
+  {{- end }}
+  {{- end }}
+  
+  {{- if and .Values.demo.enabled .Values.demo.postgres.enabled }}
+  postgres.properties: |
+    connector.name=postgresql
+    connection-url=jdbc:postgresql://{{ include "dashboard.fullname" . }}-demo-postgres:5432/{{ .Values.demo.postgres.database }}
+    connection-user={{ .Values.demo.postgres.user }}
+    connection-password={{ .Values.demo.postgres.password }}
+  {{- end }}
+  
+  {{- if and .Values.demo.enabled .Values.demo.mysql.enabled }}
+  mysql.properties: |
+    connector.name=mysql
+    connection-url=jdbc:mysql://{{ include "dashboard.fullname" . }}-demo-mysql:3306/{{ .Values.demo.mysql.database }}
+    connection-user={{ .Values.demo.mysql.user }}
+    connection-password={{ .Values.demo.mysql.password }}
+  {{- end }}
+{{- end }}

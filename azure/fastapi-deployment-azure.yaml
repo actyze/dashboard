@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard-fastapi
+  namespace: dashboard
+  labels:
+    app: dashboard-fastapi
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: dashboard-fastapi
+  template:
+    metadata:
+      labels:
+        app: dashboard-fastapi
+    spec:
+      # Schedule on ML nodes with taint toleration
+      tolerations:
+      - key: ml-workload
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+      nodeSelector:
+        workload: ml-inference
+      containers:
+      - name: fastapi
+        image: dashboardacr.azurecr.io/dashboard-fastapi:dual-model
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            memory: "1.5Gi"
+            cpu: "500m"
+          limits:
+            memory: "3Gi"
+            cpu: "1500m"
+        env:
+        - name: MODEL_NAME
+          value: "Salesforce/codet5p-770m"
+        - name: HF_HOME
+          value: "/app/model_cache"
+        - name: WORKERS
+          value: "1"
+        - name: TRINO_HOST
+          value: "trino-coordinator.trino.svc.cluster.local"
+        - name: TRINO_PORT
+          value: "8080"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 180
+          periodSeconds: 30
+          timeoutSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 120
+          periodSeconds: 15
+          timeoutSeconds: 10
+        volumeMounts:
+        - name: model-storage
+          mountPath: /app/models
+          readOnly: true
+        - name: tmp-storage
+          mountPath: /tmp
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: model-storage-pvc
+      - name: tmp-storage
+        emptyDir:
+          sizeLimit: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard-fastapi-service
+  namespace: dashboard
+spec:
+  selector:
+    app: dashboard-fastapi
+  ports:
+  - protocol: TCP
+    port: 8000
+    targetPort: 8000
+  type: ClusterIP

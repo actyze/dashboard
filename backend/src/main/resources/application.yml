@@ -1,0 +1,107 @@
+# Dashboard Backend Configuration
+spring:
+  application:
+    name: dashboard-backend
+  
+  # Database Configuration
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driverClassName: org.h2.Driver
+    username: sa
+    password: password
+  
+  # JPA Configuration
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+  
+  # H2 Console (for development)
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+# Server Configuration
+server:
+  port: 8080
+
+# Logging Configuration
+logging:
+  level:
+    com.dashboard: INFO
+    com.dashboard.mcp: DEBUG
+    AUDIT: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+  file:
+    name: logs/dashboard-backend.log
+
+# Dashboard MCP Configuration
+dashboard:
+  mcp:
+    # Rate Limiting Configuration
+    rateLimit:
+      maxRequestsPerMinute: 60
+      maxRequestsPerHour: 1000
+      cleanupIntervalMinutes: 5
+    
+    # Audit Logging Configuration
+    audit:
+      slowQueryThresholdMs: 10000
+      maxQueryLogLength: 1000
+      maxArgumentsLogLength: 500
+      enableMetrics: true
+    
+    # Trino MCP Server Configuration
+    trino:
+      # Server Configuration
+      server:
+        enabled: true
+        transport: http  # http or stdio
+        host: localhost
+        port: 8081
+        threadPoolSize: 10
+        requestTimeoutMs: 30000
+      
+      # Trino Connection Configuration
+      connection:
+        url: jdbc:trino://localhost:8080/memory/default
+        user: admin
+        password: ""
+        catalog: memory
+        schema: default
+        maxRows: 10000
+        queryTimeoutSeconds: 300
+        
+      # Connection Pool Configuration
+      connectionPool:
+        minimumIdle: 2
+        maximumPoolSize: 10
+        connectionTimeoutMs: 30000
+        idleTimeoutMs: 600000
+        maxLifetimeMs: 1800000
+        leakDetectionThresholdMs: 60000
+        
+      # Security Configuration
+      security:
+        readOnlyMode: true
+        allowDdl: false
+        allowDml: false
+        allowedCatalogs:
+          - memory
+          - system
+        blockedKeywords:
+          - DROP
+          - DELETE
+          - UPDATE
+          - INSERT
+          - CREATE
+          - ALTER
+          - TRUNCATE
+          - MERGE
+          - CALL
+          - EXECUTE
+        maxQueryLength: 50000
+        enableSqlInjectionDetection: true

@@ -1,0 +1,50 @@
+models:
+  sql_generation:
+    name: "codet5-trino"
+    version: "v1.0"
+    algorithm: "CodeT5+"
+    size: "770MB"
+    location: "models/sql-generation/codet5-trino"
+    description: "Fine-tuned CodeT5+ model for Trino SQL generation from natural language"
+    training_data: "models/sql-generation/training/trino_train_sample.json"
+    accuracy: "95%"
+    
+  chart_selection:
+    name: "enhanced-chart-selector"
+    version: "v2.0"
+    algorithm: "RandomForest"
+    size: "5MB"
+    location: "models/chart-selection/models/chart_selection_model.joblib"
+    description: "ML-based chart type recommendation using RandomForest classifier"
+    accuracy: "92%"
+    supported_charts:
+      - bar
+      - column
+      - line
+      - pie
+      - scatter
+      - area
+      - heatmap
+      - treemap
+      - funnel
+      - gauge
+      - histogram
+      - box
+      - violin
+      - radar
+      - sankey
+
+deployment:
+  development:
+    sql_model_path: "/app/models/sql-generation/codet5-trino"
+    chart_model_path: "/app/models/chart-selection/models/chart_selection_model.joblib"
+    
+  production:
+    sql_model_path: "/mnt/models/sql-generation/codet5-trino"
+    chart_model_path: "/mnt/models/chart-selection/models/chart_selection_model.joblib"
+    storage_backend: "azure_blob"
+    
+  kubernetes:
+    pvc_name: "model-storage"
+    mount_path: "/app/models"
+    storage_size: "10Gi"

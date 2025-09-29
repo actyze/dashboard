@@ -6,6 +6,20 @@ global:
   environment: production
   region: us-west-2
 
+# Component enablement flags
+components:
+  backend: true
+  frontend: true
+  fastapi: true   # ML service - enabled for MCP security
+  trino: true
+  schemaService: true
+  mcpTrino: true  # MCP servers - enabled for security testing
+  mcpChart: true
+  demo:
+    enabled: false  # Demo mode - disabled for security
+    postgres: false
+    mysql: false
+
 # Dashboard Backend Configuration
 backend:
   image:

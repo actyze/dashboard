@@ -1,4 +1,4 @@
-package com.dashboard;
+package com.dashboard.controller;
 
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -6,6 +6,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.beans.factory.annotation.Autowired;
+import com.dashboard.service.OrchestrationService;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
@@ -15,6 +17,9 @@ import java.util.ArrayList;
 @RequestMapping("/api")
 @CrossOrigin(origins = "http://localhost:3000")
 public class DashboardController {
+
+    @Autowired
+    private OrchestrationService orchestrationService;
 
     @GetMapping("/status")
     public Map<String, Object> getStatus() {
@@ -129,38 +134,6 @@ public class DashboardController {
         return "natural";
     }
 
-    private String extractChartTypeFromNL(String nlQuery) {
-        String lower = nlQuery.toLowerCase();
-        
-        // Look for explicit chart type mentions
-        if (lower.contains("bar chart") || lower.contains("bar graph")) {
-            return "bar";
-        } else if (lower.contains("line chart") || lower.contains("line graph") || lower.contains("trend")) {
-            return "line";
-        } else if (lower.contains("pie chart") || lower.contains("pie graph") || lower.contains("distribution")) {
-            return "pie";
-        } else if (lower.contains("scatter plot") || lower.contains("scatter chart")) {
-            return "scatter";
-        } else if (lower.contains("area chart") || lower.contains("area graph")) {
-            return "area";
-        } else if (lower.contains("table") || lower.contains("tabular")) {
-            return "table";
-        }
-        
-        // Infer from query intent
-        if (lower.contains("over time") || lower.contains("trend") || lower.contains("timeline")) {
-            return "line";
-        } else if (lower.contains("compare") || lower.contains("comparison") || lower.contains("by category")) {
-            return "bar";
-        } else if (lower.contains("percentage") || lower.contains("proportion") || lower.contains("share")) {
-            return "pie";
-        } else if (lower.contains("relationship") || lower.contains("correlation")) {
-            return "scatter";
-        }
-        
-        // Default to auto if no specific type detected
-        return "auto";
-    }
 
     private Map<String, Object> processSQLQuery(String sql, Boolean includeChart, String chartType) {
         Map<String, Object> result = new HashMap<>();
@@ -182,31 +155,8 @@ public class DashboardController {
     }
 
     private Map<String, Object> processNaturalLanguageQuery(String nlQuery, Boolean includeChart, String chartType) {
-        Map<String, Object> result = new HashMap<>();
-        
-        // Extract chart type from natural language if not specified
-        if ("auto".equals(chartType)) {
-            chartType = extractChartTypeFromNL(nlQuery);
-        }
-        
-        // Mock NL processing
-        String generatedSQL = generateMockSQL(nlQuery);
-        result.put("naturalLanguage", nlQuery);
-        result.put("generatedSQL", generatedSQL);
-        result.put("confidence", 0.92);
-        result.put("processingTime", 1200);
-        result.put("extractedChartType", chartType);
-        
-        // Mock query execution with generated SQL
-        List<Map<String, Object>> queryData = getMockQueryResults(generatedSQL);
-        result.put("queryResults", createQueryResultsResponse(queryData));
-        
-        // Include chart data if requested
-        if (includeChart) {
-            result.put("chartData", createChartResponse(queryData, chartType));
-        }
-        
-        return result;
+        // Delegate to OrchestrationService for complete workflow management
+        return orchestrationService.processNaturalLanguageWorkflow(nlQuery, includeChart, chartType);
     }
 
     private Map<String, Object> createQueryResultsResponse(List<Map<String, Object>> data) {
@@ -266,16 +216,6 @@ public class DashboardController {
         return row;
     }
 
-    private String generateMockSQL(String nlQuery) {
-        String lower = nlQuery.toLowerCase();
-        if (lower.contains("sales") || lower.contains("revenue")) {
-            return "SELECT month, SUM(revenue) as revenue, COUNT(*) as orders FROM sales GROUP BY month ORDER BY month";
-        } else if (lower.contains("customer") || lower.contains("user")) {
-            return "SELECT region, COUNT(*) as customers, AVG(satisfaction) as satisfaction FROM customers GROUP BY region";
-        } else {
-            return "SELECT category, SUM(value) as value, COUNT(*) as count FROM data GROUP BY category ORDER BY value DESC";
-        }
-    }
 
     private String recommendChartType(List<Map<String, Object>> data) {
         if (data.isEmpty()) return "table";

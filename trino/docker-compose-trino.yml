@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database for sample data
+  postgres:
+    image: postgres:15
+    container_name: trino-postgres
+    environment:
+      POSTGRES_DB: sampledb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - trino-network
+
+  # MySQL database for additional sample data
+  mysql:
+    image: mysql:8.0
+    container_name: trino-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: mysql
+      MYSQL_DATABASE: ecommerce
+      MYSQL_USER: mysql
+      MYSQL_PASSWORD: mysql
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    networks:
+      - trino-network
+
+  # Trino coordinator
+  trino:
+    image: trinodb/trino:435
+    container_name: trino-coordinator
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./trino-config:/etc/trino
+    environment:
+      - TRINO_ENVIRONMENT=development
+    depends_on:
+      - postgres
+      - mysql
+    networks:
+      - trino-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/v1/info || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  postgres_data:
+  mysql_data:
+
+networks:
+  trino-network:
+    driver: bridge

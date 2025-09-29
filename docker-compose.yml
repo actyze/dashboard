@@ -42,6 +42,7 @@ services:
     depends_on:
       - dashboard-backend
       - dashboard-fastapi
+      - dashboard-schema-service
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
@@ -50,6 +51,35 @@ services:
       start_period: 30s
     networks:
       - dashboard-network
+
+  dashboard-schema-service:
+    build:
+      context: ./models/schema-service
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - TRINO_HOST=localhost
+      - TRINO_PORT=8080
+      - TRINO_USER=admin
+      - SCHEMA_REFRESH_HOURS=3
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8001
+      - LOG_LEVEL=INFO
+    volumes:
+      - schema_models:/app/models
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 120s
+    networks:
+      - dashboard-network
+    restart: unless-stopped
+
+volumes:
+  schema_models:
 
 networks:
   dashboard-network:

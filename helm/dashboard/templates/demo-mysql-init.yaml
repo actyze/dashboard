@@ -1,4 +1,4 @@
-{{- if and .Values.demo.enabled .Values.demo.mysql.enabled }}
+{{- if and .Values.components.demo.enabled .Values.components.demo.mysql }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

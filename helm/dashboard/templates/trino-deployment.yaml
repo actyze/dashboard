@@ -1,4 +1,4 @@
-{{- if .Values.trino.enabled }}
+{{- if .Values.components.trino }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -50,11 +50,41 @@ spec:
         - name: trino-config
           mountPath: /etc/trino
           readOnly: true
+        - name: trino-catalogs
+          mountPath: /etc/trino/catalog
+          readOnly: true
         {{- end }}
       {{- if .Values.trino.config.enabled }}
       volumes:
       - name: trino-config
         configMap:
           name: {{ include "dashboard.trino.fullname" . }}-config
+          items:
+          - key: config.properties
+            path: config.properties
+          - key: jvm.config
+            path: jvm.config
+          - key: log.properties
+            path: log.properties
+          - key: node.properties
+            path: node.properties
+      - name: trino-catalogs
+        configMap:
+          name: {{ include "dashboard.trino.fullname" . }}-config
+          items:
+          {{- if .Values.trino.catalogs }}
+          {{- range $name, $config := .Values.trino.catalogs }}
+          - key: {{ $name }}.properties
+            path: {{ $name }}.properties
+          {{- end }}
+          {{- end }}
+          {{- if and .Values.components.demo.enabled .Values.components.demo.postgres }}
+          - key: postgres.properties
+            path: postgres.properties
+          {{- end }}
+          {{- if and .Values.components.demo.enabled .Values.components.demo.mysql }}
+          - key: mysql.properties
+            path: mysql.properties
+          {{- end }}
       {{- end }}
 {{- end }}

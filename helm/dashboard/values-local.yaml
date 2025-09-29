@@ -1,7 +1,22 @@
 # Values for local Kind cluster deployment
 global:
   namespace: dashboard
-  imagePullPolicy: Never
+  imagePullPolicy: IfNotPresent
+  storageClass: "standard"
+
+# Component enablement flags
+components:
+  backend: true
+  frontend: true
+  fastapi: false  # ML service - disabled for local
+  trino: true
+  schemaService: true   # Enable schema service
+  mcpTrino: false  # MCP servers - disabled for local
+  mcpChart: false
+  demo:
+    enabled: true  # Demo mode with sample data
+    postgres: true
+    mysql: true
 
 # Override for Trino to use Always pull policy
 trino:
@@ -16,6 +31,54 @@ backend:
     limits:
       memory: "512Mi"
       cpu: "250m"
+  config:
+    rateLimit:
+      maxRequestsPerMinute: 60
+      maxRequestsPerHour: 1000
+      cleanupIntervalMinutes: 5
+    audit:
+      slowQueryThresholdMs: 10000
+      maxQueryLogLength: 1000
+      maxArgumentsLogLength: 500
+      enableMetrics: true
+    mcp:
+      trino:
+        server:
+          enabled: true
+          transport: "http"
+          host: "0.0.0.0"
+          port: 8081
+          threadPoolSize: 10
+          requestTimeoutMs: 30000
+        connection:
+          url: "jdbc:trino://dashboard-trino:8080/memory"
+          user: "admin"
+          password: ""
+          catalog: "memory"
+          schema: "default"
+          maxRows: 10000
+          queryTimeoutSeconds: 300
+        connectionPool:
+          minimumIdle: 2
+          maximumPoolSize: 10
+          connectionTimeoutMs: 30000
+          idleTimeoutMs: 600000
+          maxLifetimeMs: 1800000
+          leakDetectionThresholdMs: 60000
+        security:
+          readOnlyMode: true
+          allowDdl: false
+          allowDml: false
+          allowedCatalogs:
+            - "memory"
+            - "tpch"
+          blockedKeywords:
+            - "DROP"
+            - "DELETE"
+            - "UPDATE"
+            - "INSERT"
+          maxQueryLength: 50000
+          enableSqlInjectionDetection: true
 
 fastapi:
   replicaCount: 1
@@ -71,7 +134,6 @@ autoscaling:
 
 # Trino database service (basic version without gateway)
 trino:
-  enabled: true
   replicaCount: 1
   image:
     repository: trinodb/trino
@@ -81,15 +143,15 @@ trino:
     port: 8080
   resources:
     requests:
-      memory: "512Mi"
+      memory: "1Gi"
       cpu: "250m"
     limits:
-      memory: "1Gi"
+      memory: "2Gi"
       cpu: "500m"
   environment: "development"
   nodeId: "ffffffff-ffff-ffff-ffff-ffffffffffff"
   jvm:
-    maxHeapSize: "1G"
+    maxHeapSize: "1536m"
   config:
     enabled: true
   catalogs:
@@ -111,9 +173,7 @@ trino:
 
 # Demo mode configuration (enabled for local testing)
 demo:
-  enabled: true  # Enable demo databases and sample data for local development
   postgres:
-    enabled: true
     imagePullPolicy: Always
     database: "ecommerce_demo"
     user: "demo_user"
@@ -126,7 +186,6 @@ demo:
         memory: "256Mi"
         cpu: "100m"
   mysql:
-    enabled: true
     imagePullPolicy: Always
     database: "hrms"
     user: "demo_user"
@@ -134,11 +193,25 @@ demo:
     rootPassword: "root_password"
     resources:
       requests:
-        memory: "128Mi"
-        cpu: "50m"
-      limits:
-        memory: "256Mi"
+        memory: "512Mi"
         cpu: "100m"
+      limits:
+        memory: "1Gi"
+        cpu: "250m"
 
 podDisruptionBudget:
   enabled: false
+
+# Logging configuration
+logging:
+  level:
+    dashboard: INFO
+    audit: INFO
+  files:
+    application:
+      path: "/app/logs/dashboard-backend.log"
+
+# Monitoring configuration
+monitoring:
+  metrics:
+    enabled: false

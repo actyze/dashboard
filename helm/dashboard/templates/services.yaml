@@ -1,4 +1,4 @@
-{{- if .Values.backend.enabled }}
+{{- if .Values.components.backend }}
 ---
 apiVersion: v1
 kind: Service
@@ -18,7 +18,7 @@ spec:
     {{- include "dashboard.backend.selectorLabels" . | nindent 4 }}
 {{- end }}
 
-{{- if .Values.fastapi.enabled }}
+{{- if .Values.components.fastapi }}
 ---
 apiVersion: v1
 kind: Service
@@ -42,7 +42,7 @@ spec:
     {{- include "dashboard.fastapi.selectorLabels" . | nindent 4 }}
 {{- end }}
 
-{{- if .Values.frontend.enabled }}
+{{- if .Values.components.frontend }}
 ---
 apiVersion: v1
 kind: Service
@@ -62,7 +62,7 @@ spec:
     {{- include "dashboard.frontend.selectorLabels" . | nindent 4 }}
 {{- end }}
 
-{{- if .Values.trino.enabled }}
+{{- if .Values.components.trino }}
 ---
 apiVersion: v1
 kind: Service

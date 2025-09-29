@@ -5,6 +5,20 @@ global:
   namespace: dashboard
   imagePullPolicy: Always
 
+# Component enablement flags
+components:
+  backend: true
+  frontend: true
+  fastapi: true   # ML service - enabled for demo
+  trino: true
+  schemaService: true
+  mcpTrino: false  # MCP servers - disabled for demo
+  mcpChart: false
+  demo:
+    enabled: true  # Demo mode with sample data
+    postgres: true
+    mysql: true
+
 backend:
   replicaCount: 1
   resources:
@@ -49,7 +63,6 @@ frontend:
 
 # Trino with enhanced catalogs for demo
 trino:
-  enabled: true
   replicaCount: 1
   resources:
     requests:
@@ -75,9 +88,7 @@ trino:
 
 # Demo databases with rich sample data
 demo:
-  enabled: true
   postgres:
-    enabled: true
     database: "ecommerce_demo"
     user: "demo_user"
     password: "demo_password"
@@ -89,7 +100,6 @@ demo:
         memory: "512Mi"
         cpu: "250m"
   mysql:
-    enabled: true
     database: "hrms"
     user: "demo_user"
     password: "demo_password"

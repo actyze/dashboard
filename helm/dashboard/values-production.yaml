@@ -3,6 +3,20 @@ global:
   namespace: dashboard
   imagePullPolicy: Always
 
+# Component enablement flags
+components:
+  backend: true
+  frontend: true
+  fastapi: true   # ML service - enabled for production
+  trino: true
+  schemaService: true
+  mcpTrino: true  # MCP servers - enabled for production
+  mcpChart: true
+  demo:
+    enabled: false  # Demo mode - disabled for production
+    postgres: false
+    mysql: false
+
 backend:
   replicaCount: 3
   resources:

@@ -1,4 +1,4 @@
-{{- if and .Values.demo.enabled .Values.demo.postgres.enabled }}
+{{- if and .Values.components.demo.enabled .Values.components.demo.postgres }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

@@ -8,17 +8,27 @@ global:
   imagePullPolicy: IfNotPresent
   storageClass: "standard"
 
+# Service Account
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Automatically mount a ServiceAccount's API credentials?
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
 # Component enablement flags
 components:
-  backend: true
-  frontend: true
-  fastapi: false  # ML service - disabled for testing
-  trino: true
-  schemaService: true
-  mcpTrino: false  # MCP servers - disabled for testing
-  mcpChart: false
+  backend: true          # Spring Boot orchestration service
+  frontend: true         # React UI
+  schemaService: true    # FAISS-based schema recommendations
+  phiSqlLora: true      # Phi-4-mini LoRA SQL generator (CPU INT8)
+  trino: true           # Trino for demo data
   demo:
-    enabled: true  # Demo mode with sample data
+    enabled: true       # Demo mode with sample data
     postgres: true
     mysql: true
 
@@ -39,32 +49,13 @@ backend:
       memory: "1Gi"
       cpu: "500m"
   env:
-    fastapi:
-      url: "http://dashboard-fastapi:8000"
+    phiSqlLora:
+      url: "http://dashboard-phi-sql-lora:8000"
+    schemaService:
+      url: "http://dashboard-schema-service:8001"
     trino:
       url: "jdbc:trino://dashboard-trino:8080/memory/default"
       user: "admin"
-
-# FastAPI ML service
-fastapi:
-  replicaCount: 1
-  image:
-    repository: dashboard-fastapi
-    tag: dual-model
-  service:
-    type: ClusterIP
-    port: 8000
-  resources:
-    requests:
-      memory: "2Gi"
-      cpu: "1000m"
-    limits:
-      memory: "4Gi"
-      cpu: "2000m"
-  storage:
-    enabled: true
-    size: 10Gi
-    storageClass: "standard"  # Change to "managed-csi" for Azure AKS
 
 # Frontend React service
 frontend:
@@ -238,6 +229,86 @@ schemaService:
     enabled: true
     size: 2Gi
     storageClass: "standard"
+
+# Phi SQL LoRA Service (CPU INT8 Quantized)
+phiSqlLora:
+  replicaCount: 1
+  image:
+    repository: phi-sql-lora-clean
+    tag: k8s
+  service:
+    type: ClusterIP
+    port: 8000
+    targetPort: 8000
+    name: http
+  resources:
+    requests:
+      memory: "8Gi"
+      cpu: "4"
+    limits:
+      memory: "24Gi"
+      cpu: "10"
+  env:
+    PYTHONUNBUFFERED: "1"
+    TRANSFORMERS_CACHE: "/app/model_cache"
+    HF_HOME: "/app/model_cache"
+    TOKENIZERS_PARALLELISM: "false"
+  persistence:
+    enabled: true
+    storageClass: "standard"
+    accessMode: ReadWriteOnce
+    size: 50Gi
+    mountPath: /app/model_cache
+  healthCheck:
+    enabled: true
+    path: /health
+    port: 8000
+    initialDelaySeconds: 300  # 5 minutes for model loading
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+    successThreshold: 1
+  readinessCheck:
+    enabled: true
+    path: /health
+    port: 8000
+    initialDelaySeconds: 300  # 5 minutes for model loading
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+  model:
+    name: "phi-4-mini-trino-lora-cpu-int8"
+    maxTokens: 1000
+    temperature: 0.1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  securityContext:
+    runAsNonRoot: false
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop:
+      - ALL
+      add:
+      - NET_BIND_SERVICE
+
+# Logging configuration
+logging:
+  level:
+    dashboard: INFO
+    root: INFO
+  files:
+    application:
+      path: "/app/logs/dashboard-backend.log"
+
+# Monitoring configuration
+monitoring:
+  metrics:
+    enabled: true
 
 # Environment-specific overrides
 environment: local  # local, staging, production

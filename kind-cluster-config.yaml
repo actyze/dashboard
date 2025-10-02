@@ -1,0 +1,34 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: dev-cluster
+nodes:
+- role: control-plane
+  # Configure resource limits for the Docker container
+  extraMounts:
+  - hostPath: /var/run/docker.sock
+    containerPath: /var/run/docker.sock
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        node-labels: "ingress-ready=true"
+        system-reserved: memory=2Gi,cpu=500m
+        kube-reserved: memory=2Gi,cpu=500m
+  # Map host ports to container
+  extraPortMappings:
+  - containerPort: 80
+    hostPort: 80
+    protocol: TCP
+  - containerPort: 443
+    hostPort: 443
+    protocol: TCP
+  - containerPort: 8080
+    hostPort: 8080
+    protocol: TCP
+  - containerPort: 8001
+    hostPort: 8001
+    protocol: TCP
+  - containerPort: 8000
+    hostPort: 8000
+    protocol: TCP

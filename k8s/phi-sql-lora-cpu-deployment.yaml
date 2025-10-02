@@ -1,0 +1,123 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: phi-sql-lora-cpu-service
+  namespace: dashboard
+  labels:
+    app: phi-sql-lora-cpu
+    tier: backend
+spec:
+  selector:
+    app: phi-sql-lora-cpu
+  ports:
+  - protocol: TCP
+    port: 8000
+    targetPort: 8000
+    name: http
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phi-sql-lora-cpu
+  namespace: dashboard
+  labels:
+    app: phi-sql-lora-cpu
+    tier: backend
+    version: v1
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: phi-sql-lora-cpu
+  template:
+    metadata:
+      labels:
+        app: phi-sql-lora-cpu
+        tier: backend
+        version: v1
+    spec:
+      containers:
+      - name: phi-sql-lora-cpu
+        image: phi-sql-lora-clean:k8s
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: TRANSFORMERS_CACHE
+          value: "/app/model_cache"
+        - name: HF_HOME
+          value: "/app/model_cache"
+        - name: TOKENIZERS_PARALLELISM
+          value: "false"  # Avoid tokenizer warnings
+        volumeMounts:
+        - name: model-cache
+          mountPath: /app/model_cache
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "4"
+          limits:
+            memory: "24Gi"
+            cpu: "10"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 300  # 5 minutes for model loading
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+            scheme: HTTP
+          initialDelaySeconds: 300  # 5 minutes for model loading
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        # Graceful shutdown
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 15"]
+        # Security context
+        securityContext:
+          runAsNonRoot: false  # Allow root for now, can be hardened later
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+            add:
+            - NET_BIND_SERVICE
+      volumes:
+      - name: model-cache
+        persistentVolumeClaim:
+          claimName: model-storage-pvc
+      # CPU-only deployment - no GPU requirements
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: phi-sql-lora-cpu-config
+  namespace: dashboard
+data:
+  max_tokens: "1000"
+  temperature: "0.1"
+  model_name: "phi-4-mini-trino-lora-cpu-int8"

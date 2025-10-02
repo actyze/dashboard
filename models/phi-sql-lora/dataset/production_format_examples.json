@@ -1,0 +1,50 @@
+[
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are an expert Trino 477 SQL developer. Generate optimized SQL queries and provide a brief dataset summary."
+      },
+      {
+        "role": "user",
+        "content": "Previous Query: None\n\nDatabase: postgres, mysql\nSchema: postgres.sales, mysql.orders\nTables and Columns:\n- postgres.sales.customers: customer_id|integer, name|varchar, city|varchar, state|varchar, email|varchar, created_at|timestamp\n- mysql.orders.orders: order_id|integer, customer_id|integer, amount|decimal(10,2), order_date|date, status|varchar\n\nNatural Language Query: Show me customers from California with their total order amounts"
+      },
+      {
+        "role": "assistant",
+        "content": "```sql\nSELECT \n    c.name as customer_name,\n    c.city,\n    SUM(o.amount) as total_order_amount,\n    COUNT(o.order_id) as order_count\nFROM postgres.sales.customers c\nJOIN mysql.orders.orders o ON c.customer_id = o.customer_id\nWHERE c.state = 'California'\n  AND o.status = 'completed'\nGROUP BY c.customer_id, c.name, c.city\nORDER BY total_order_amount DESC;\n```\n\nDataset Summary: Cross-catalog join between PostgreSQL customer data and MySQL order data, filtering for California customers. Returns customer names, cities, and aggregated order metrics including total amount and order count for completed orders only."
+      }
+    ]
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are an expert Trino 477 SQL developer. Generate optimized SQL queries and provide a brief dataset summary."
+      },
+      {
+        "role": "user",
+        "content": "Previous Query: Show me customers from California with their total order amounts\n\nDatabase: postgres, mysql, s3\nSchema: postgres.sales, mysql.orders, s3.analytics\nTables and Columns:\n- postgres.sales.customers: customer_id|integer, name|varchar, city|varchar, state|varchar, email|varchar, created_at|timestamp\n- mysql.orders.orders: order_id|integer, customer_id|integer, amount|decimal(10,2), order_date|date, status|varchar\n- s3.analytics.customer_metrics: customer_id|integer, lifetime_value|decimal(12,2), last_purchase|date, segment|varchar\n\nNatural Language Query: Now add their lifetime value and segment information from the analytics data"
+      },
+      {
+        "role": "assistant",
+        "content": "```sql\nSELECT \n    c.name as customer_name,\n    c.city,\n    cm.segment,\n    cm.lifetime_value,\n    cm.last_purchase,\n    SUM(o.amount) as recent_order_total,\n    COUNT(o.order_id) as recent_order_count\nFROM postgres.sales.customers c\nLEFT JOIN s3.analytics.customer_metrics cm ON c.customer_id = cm.customer_id\nLEFT JOIN mysql.orders.orders o ON c.customer_id = o.customer_id \n    AND o.order_date >= DATE '2024-01-01'\n    AND o.status = 'completed'\nWHERE c.state = 'California'\nGROUP BY c.customer_id, c.name, c.city, cm.segment, cm.lifetime_value, cm.last_purchase\nORDER BY cm.lifetime_value DESC NULLS LAST;\n```\n\nDataset Summary: Enhanced customer analysis combining PostgreSQL customer data, S3 analytics metrics, and recent MySQL order data. Builds on previous California customer query by adding lifetime value, customer segments, and recent purchase activity. Shows comprehensive customer profiles with both historical and recent transaction data."
+      }
+    ]
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are an expert Trino 477 SQL developer. Generate optimized SQL queries and provide a brief dataset summary."
+      },
+      {
+        "role": "user",
+        "content": "Previous Query: None\n\nDatabase: postgresql, mysql\nSchema: postgresql.inventory, mysql.sales\nTables and Columns:\n- postgresql.inventory.products: product_id|integer, name|varchar, category|varchar, price|decimal(8,2), stock_quantity|integer\n- mysql.sales.transactions: transaction_id|bigint, product_id|integer, quantity|integer, sale_date|date, revenue|decimal(10,2)\n\nNatural Language Query: Find products with low stock that are selling well"
+      },
+      {
+        "role": "assistant",
+        "content": "```sql\nWITH recent_sales AS (\n    SELECT \n        product_id,\n        SUM(quantity) as total_sold,\n        SUM(revenue) as total_revenue,\n        COUNT(*) as transaction_count,\n        AVG(revenue / NULLIF(quantity, 0)) as avg_unit_price\n    FROM mysql.sales.transactions\n    WHERE sale_date >= CURRENT_DATE - INTERVAL '30' DAY\n    GROUP BY product_id\n    HAVING SUM(quantity) >= 10  -- Products with significant sales\n)\nSELECT \n    p.name as product_name,\n    p.category,\n    p.price,\n    p.stock_quantity,\n    rs.total_sold,\n    rs.total_revenue,\n    rs.transaction_count,\n    ROUND(rs.avg_unit_price, 2) as avg_selling_price,\n    ROUND(p.stock_quantity / NULLIF(rs.total_sold, 0) * 30, 1) as days_of_stock_remaining\nFROM postgresql.inventory.products p\nJOIN recent_sales rs ON p.product_id = rs.product_id\nWHERE p.stock_quantity <= 50  -- Low stock threshold\nORDER BY days_of_stock_remaining ASC, rs.total_revenue DESC;\n```\n\nDataset Summary: Cross-database inventory analysis combining PostgreSQL product catalog with MySQL sales transactions. Identifies products with low stock levels (≤50 units) that have strong recent sales performance (≥10 units sold in last 30 days). Calculates estimated days of remaining stock based on current sales velocity to prioritize restocking decisions."
+      }
+    ]
+  }
+]

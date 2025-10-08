@@ -1,12 +1,42 @@
-# Default values for dashboard.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Development Environment Configuration
+# This file contains settings for local Kind cluster deployment
+
+# Environment identifier
+environment: dev
 
 # Global configuration
 global:
   namespace: dashboard
   imagePullPolicy: IfNotPresent
   storageClass: "standard"
+
+# ============================================================================
+# MODEL STRATEGY - Choose ONE approach for SQL generation
+# ============================================================================
+modelStrategy:
+  # Option 1: External LLM APIs (Recommended for dev/testing)
+  externalLLM:
+    enabled: true              # ← Toggle: Use external LLM (OpenAI, Perplexity, Claude, etc.)
+    provider: "perplexity"     # Options: openai, perplexity, anthropic, groq, together
+    model: "sonar-reasoning-pro"
+    baseUrl: "https://api.perplexity.ai"
+    apiKey: "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"  # Should be from secret in production
+    maxTokens: 1000
+    temperature: 0.1
+    timeout: 30s
+    fallbackToLocal: false     # Don't fallback to local model if external fails
+    
+  # Option 2: Local Phi-4 LoRA Model (Self-hosted, resource intensive)
+  phiSqlLora:
+    enabled: false             # ← Toggle: Use local Phi-4-mini LoRA model
+    replicas: 1
+    resources:
+      requests:
+        memory: "4Gi"
+        cpu: "1000m"
+      limits:
+        memory: "8Gi"
+        cpu: "2000m"
 
 # Service Account
 serviceAccount:
@@ -20,24 +50,34 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: ""
 
-# Component enablement flags
-components:
-  backend: true          # Spring Boot orchestration service
-  frontend: true         # React UI
-  schemaService: true    # FAISS-based schema recommendations
-  phiSqlLora: true      # Phi-4-mini LoRA SQL generator (CPU INT8)
-  trino: true           # Trino for demo data
+# ============================================================================
+# SERVICES - Enable/disable individual components
+# ============================================================================
+services:
+  # Core Services (required)
+  backend:
+    enabled: true        # ← Spring Boot orchestration service (REQUIRED)
+  
+  # Optional Services
+  frontend:
+    enabled: true        # ← React UI (can disable for API-only testing)
+  schemaService:
+    enabled: true        # ← FAISS-based schema recommendations (enhances SQL quality)
+  trino:
+    enabled: true        # ← Query execution engine (required for actual query execution)
+  
+  # Demo Data (for development/testing)
   demo:
-    enabled: true       # Demo mode with sample data
-    postgres: true
-    mysql: true
+    enabled: true        # ← Demo databases with sample data
+    postgres: true       # ← PostgreSQL with e-commerce data
+    mysql: true          # ← MySQL with HRMS data
 
 # Backend Spring Boot service
 backend:
   replicaCount: 1
   image:
     repository: dashboard-backend
-    tag: latest
+    tag: v8
   service:
     type: ClusterIP
     port: 8080
@@ -127,7 +167,7 @@ trino:
   replicaCount: 1
   image:
     repository: trinodb/trino
-    tag: "435"
+    tag: "477"
   service:
     type: ClusterIP
     port: 8080
@@ -209,9 +249,6 @@ schemaService:
   image:
     repository: dashboard-schema-service
     tag: latest
-  service:
-    type: ClusterIP
-    port: 8001
   resources:
     requests:
       memory: "768Mi"
@@ -225,17 +262,22 @@ schemaService:
       port: 8080
       user: "admin"
     refreshHours: 3
+  service:
+    type: ClusterIP
+    port: 8001
   storage:
     enabled: true
     size: 2Gi
     storageClass: "standard"
 
-# Phi SQL LoRA Service (CPU INT8 Quantized)
+
+# Phi SQL LoRA Service (CPU INT8 Quantized) - Optional
 phiSqlLora:
+  enabled: false  # Set to true to deploy local Phi-4 model
   replicaCount: 1
   image:
-    repository: phi-sql-lora-clean
-    tag: k8s
+    repository: phi-sql-lora-optimized
+    tag: frontend
   service:
     type: ClusterIP
     port: 8000
@@ -310,5 +352,6 @@ monitoring:
   metrics:
     enabled: true
 
-# Environment-specific overrides
-environment: local  # local, staging, production
+# ============================================================================
+# NOTE: Model strategy is configured at the top in the modelStrategy section
+# ============================================================================

@@ -1,24 +1,82 @@
-# Values for production Azure AKS deployment
+# Production Environment Configuration
+# This file contains settings for Azure AKS deployment
+
+# Environment identifier
+environment: production
+
+# Global configuration
 global:
   namespace: dashboard
   imagePullPolicy: Always
+  storageClass: "managed-csi"
 
-# Component enablement flags
-components:
-  backend: true
-  frontend: true
-  fastapi: true   # ML service - enabled for production
-  trino: true
-  schemaService: true
-  mcpTrino: true  # MCP servers - enabled for production
-  mcpChart: true
+# ============================================================================
+# MODEL STRATEGY - Choose ONE approach for SQL generation
+# ============================================================================
+modelStrategy:
+  # Option 1: External LLM APIs (Recommended for production)
+  externalLLM:
+    enabled: true              # ← Toggle: Use external LLM (production default)
+    provider: "perplexity"     # Options: openai, perplexity, anthropic, groq, together
+    model: "sonar-reasoning-pro"
+    baseUrl: "https://api.perplexity.ai"
+    apiKey: "${EXTERNAL_LLM_API_KEY}"  # MUST be from Kubernetes secret in production
+    maxTokens: 1000
+    temperature: 0.1
+    timeout: 30s
+    fallbackToLocal: false     # No fallback in production
+    
+  # Option 2: Local Phi-4 LoRA Model (Can enable for hybrid or cost optimization)
+  phiSqlLora:
+    enabled: false             # ← Toggle: Use local Phi-4-mini LoRA model
+    replicas: 2                # High availability in production
+    resources:
+      requests:
+        memory: "4Gi"
+        cpu: "2000m"
+      limits:
+        memory: "8Gi"
+        cpu: "4000m"
+
+# Service Account
+serviceAccount:
+  create: true
+  automount: true
+  annotations:
+    azure.workload.identity/client-id: ""  # Add your Azure Managed Identity
+  name: ""
+
+# ============================================================================
+# SERVICES - Enable/disable individual components
+# ============================================================================
+services:
+  # Core Services (required)
+  backend:
+    enabled: true        # ← Spring Boot orchestration service (REQUIRED)
+  
+  # Optional Services
+  frontend:
+    enabled: true        # ← React UI
+  schemaService:
+    enabled: true        # ← FAISS-based schema recommendations
+  trino:
+    enabled: true        # ← Query execution engine
+  
+  # Demo Data (disabled in production)
   demo:
-    enabled: false  # Demo mode - disabled for production
+    enabled: false       # ← No demo databases in production
     postgres: false
     mysql: false
 
+# Backend Spring Boot service
 backend:
-  replicaCount: 3
+  replicaCount: 3        # High availability
+  image:
+    repository: dashboard-backend
+    tag: v8
+  service:
+    type: ClusterIP
+    port: 8080
   resources:
     requests:
       memory: "512Mi"
@@ -27,21 +85,15 @@ backend:
       memory: "1Gi"
       cpu: "500m"
 
-fastapi:
-  replicaCount: 2
-  resources:
-    requests:
-      memory: "2Gi"
-      cpu: "1000m"
-    limits:
-      memory: "4Gi"
-      cpu: "2000m"
-  storage:
-    storageClass: "managed-csi"
-    size: 50Gi
-
+# Frontend React service
 frontend:
   replicaCount: 3
+  image:
+    repository: dashboard-frontend
+    tag: latest
+  service:
+    type: ClusterIP
+    port: 3000
   resources:
     requests:
       memory: "128Mi"
@@ -50,6 +102,38 @@ frontend:
       memory: "256Mi"
       cpu: "200m"
 
+# Schema Service (FAISS)
+schemaService:
+  replicaCount: 2
+  image:
+    repository: dashboard-schema-service
+    tag: latest
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+
+# Trino database service
+trino:
+  replicaCount: 3
+  image:
+    repository: trinodb/trino
+    tag: "477"
+  service:
+    type: ClusterIP
+    port: 8080
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+
+# Ingress configuration
 ingress:
   enabled: true
   className: "nginx"
@@ -70,26 +154,55 @@ ingress:
       hosts:
         - dashboard.yourdomain.com
 
+# Autoscaling
 autoscaling:
   backend:
     enabled: true
     minReplicas: 3
     maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
   frontend:
     enabled: true
     minReplicas: 3
     maxReplicas: 8
-  fastapi:
+    targetCPUUtilizationPercentage: 70
+  schemaService:
     enabled: true
     minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 75
+  phiSqlLora:
+    enabled: false
+    minReplicas: 2
     maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
 
+# Pod Disruption Budget
 podDisruptionBudget:
   enabled: true
   minAvailable: 2
 
+# Network Policy
 networkPolicy:
   enabled: true
 
+# Service Monitor (Prometheus)
 serviceMonitor:
   enabled: true
+
+# Logging configuration
+logging:
+  level:
+    root: INFO
+    dashboard: INFO
+
+# Monitoring configuration
+monitoring:
+  metrics:
+    enabled: true
+    scrapeInterval: 30s
+
+# ============================================================================
+# NOTE: API keys should be injected via Kubernetes secrets in production
+# Never commit actual API keys to version control
+# ============================================================================

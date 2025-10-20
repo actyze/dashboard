@@ -22,86 +22,107 @@ spring:
     console:
       enabled: true
       path: /h2-console
+  
+  # Disable Spring Security (development only)
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
 
 # Server Configuration
 server:
   port: 8080
 
-# Logging Configuration
+# Logging Configuration (delegated to logback-spring.xml)
 logging:
   level:
-    com.dashboard: INFO
-    com.dashboard.mcp: DEBUG
+    # Application packages
+    com.dashboard.repository: DEBUG  # Show SQL execution details
+    com.dashboard.service: INFO
+    com.dashboard.controller: INFO
+    
+    # Third-party packages
+    io.trino.jdbc: WARN  # Reduce Trino driver verbosity
+    org.springframework.web: WARN
+    org.springframework.security: WARN
+    org.hibernate: WARN
+    
+    # Audit logging
     AUDIT: INFO
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
-  file:
-    name: logs/dashboard-backend.log
-
-# Dashboard MCP Configuration
+# Dashboard Configuration
 dashboard:
-  mcp:
-    # Rate Limiting Configuration
-    rateLimit:
-      maxRequestsPerMinute: 60
-      maxRequestsPerHour: 1000
-      cleanupIntervalMinutes: 5
-    
-    # Audit Logging Configuration
-    audit:
-      slowQueryThresholdMs: 10000
-      maxQueryLogLength: 1000
-      maxArgumentsLogLength: 500
-      enableMetrics: true
-    
-    # Trino MCP Server Configuration
-    trino:
-      # Server Configuration
-      server:
-        enabled: true
-        transport: http  # http or stdio
-        host: localhost
-        port: 8081
-        threadPoolSize: 10
-        requestTimeoutMs: 30000
+  # FAISS Schema Service Configuration
+  faiss:
+    service:
+      url: ${SCHEMA_SERVICE_URL:http://dashboard-schema-service:8001}
+      retries: ${SCHEMA_SERVICE_RETRIES:3}
+  
+  # ML Model Service Configuration
+  ml:
+    service:
+      # Model type selection: t4-phi4-lora, external-llm, or custom
+      # t4-phi4-lora: Local T4 GPU Phi-4 LoRA model
+      # external-llm: External API (OpenAI, Perplexity, etc.)
+      model-type: ${ML_SERVICE_MODEL_TYPE:external-llm}
+      url: ${PHI_SQL_LORA_URL:http://phi-sql-lora-service:8000}
+      endpoint: ${ML_SERVICE_ENDPOINT:/predict}
+      timeout: ${ML_SERVICE_TIMEOUT:30s}
+      retries: ${ML_SERVICE_RETRIES:2}
+      read-timeout: ${ML_SERVICE_READ_TIMEOUT:15s}
       
-      # Trino Connection Configuration
-      connection:
-        url: jdbc:trino://localhost:8080/memory/default
-        user: admin
-        password: ""
-        catalog: memory
-        schema: default
-        maxRows: 10000
-        queryTimeoutSeconds: 300
+      # Model parameters (only for local ML models - external LLM uses modelStrategy values)
+      parameters:
+        max-tokens: ${ML_SERVICE_MAX_TOKENS:1000}
+        temperature: ${ML_SERVICE_TEMPERATURE:0.1}
+        max-length: ${ML_SERVICE_MAX_LENGTH:512}
+        do-sample: ${ML_SERVICE_DO_SAMPLE:false}
+        num-beams: ${ML_SERVICE_NUM_BEAMS:1}
         
-      # Connection Pool Configuration
-      connectionPool:
-        minimumIdle: 2
-        maximumPoolSize: 10
-        connectionTimeoutMs: 30000
-        idleTimeoutMs: 600000
-        maxLifetimeMs: 1800000
-        leakDetectionThresholdMs: 60000
-        
-      # Security Configuration
-      security:
-        readOnlyMode: true
-        allowDdl: false
-        allowDml: false
-        allowedCatalogs:
-          - memory
-          - system
-        blockedKeywords:
-          - DROP
-          - DELETE
-          - UPDATE
-          - INSERT
-          - CREATE
-          - ALTER
-          - TRUNCATE
-          - MERGE
-          - CALL
-          - EXECUTE
-        maxQueryLength: 50000
-        enableSqlInjectionDetection: true
+      # Request format options (only for local ML models)
+      request-format:
+        use-standard-format: ${ML_SERVICE_USE_STANDARD_FORMAT:true}
+        include-schema-context: ${ML_SERVICE_INCLUDE_SCHEMA_CONTEXT:true}
+        include-conversation-history: ${ML_SERVICE_INCLUDE_CONVERSATION_HISTORY:true}
+  
+    # External LLM Configuration - All values from Helm/Environment (no defaults)
+    external-llm:
+      enabled: ${EXTERNAL_LLM_ENABLED:false}
+      provider: ${EXTERNAL_LLM_PROVIDER:}
+      api-key: ${EXTERNAL_LLM_API_KEY:}
+      model: ${EXTERNAL_LLM_MODEL:}
+      base-url: ${EXTERNAL_LLM_BASE_URL:}
+      max-tokens: ${EXTERNAL_LLM_MAX_TOKENS:1000}
+      temperature: ${EXTERNAL_LLM_TEMPERATURE:0.1}
+      timeout: ${EXTERNAL_LLM_TIMEOUT:30s}
+      fallback:
+        enabled: ${EXTERNAL_LLM_FALLBACK_ENABLED:false}
+        local-model: ${EXTERNAL_LLM_FALLBACK_MODEL:}
+  
+  # Query Cache Configuration
+  cache:
+    # Enable/disable caching
+    enabled: ${CACHE_ENABLED:true}
+    stats-log-interval: ${CACHE_STATS_LOG_INTERVAL:300s}
+    # Cache key prefix for namespacing
+    key-prefix: ${CACHE_KEY_PREFIX:dashboard:query:}
+  
+  # SQL Execution Configuration
+  sql:
+    execution:
+      # Default query limits
+      default-max-results: ${SQL_EXECUTION_DEFAULT_MAX_RESULTS:100}
+      default-timeout-seconds: ${SQL_EXECUTION_DEFAULT_TIMEOUT_SECONDS:30}
+      # Query size limits
+      max-query-length: ${SQL_EXECUTION_MAX_QUERY_LENGTH:10000}
+      # Result limits
+      max-result-rows: ${SQL_EXECUTION_MAX_RESULT_ROWS:1000}
+  
+  # Trino Database Configuration
+  trino:
+    connection:
+      url: ${TRINO_URL:jdbc:trino://dashboard-trino:8080/tpch/tiny}
+      user: ${TRINO_USER:admin}
+      password: ${TRINO_PASSWORD:}
+      catalog: ${TRINO_CATALOG:tpch}
+      schema: ${TRINO_SCHEMA:tiny}
+      maxRows: ${TRINO_MAX_ROWS:1000}
+      queryTimeoutSeconds: ${TRINO_QUERY_TIMEOUT_SECONDS:300}

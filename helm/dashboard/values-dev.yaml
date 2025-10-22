@@ -7,8 +7,12 @@ environment: dev
 # Global configuration
 global:
   namespace: dashboard
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: IfNotPresent  # Allow pulling public images
   storageClass: "standard"
+  
+  # Local development - no registry needed for Kind
+  imageRegistry: ""
+  imagePullSecrets: []
 
 # ============================================================================
 # MODEL STRATEGY - Choose ONE approach for SQL generation
@@ -26,17 +30,9 @@ modelStrategy:
     timeout: 30s
     fallbackToLocal: false     # Don't fallback to local model if external fails
     
-  # Option 2: Local Phi-4 LoRA Model (Self-hosted, resource intensive)
+  # Option 2: Local Phi-4 LoRA Model (configuration in phiSqlLora section below)
   phiSqlLora:
     enabled: false             # ← Toggle: Use local Phi-4-mini LoRA model
-    replicas: 1
-    resources:
-      requests:
-        memory: "4Gi"
-        cpu: "1000m"
-      limits:
-        memory: "8Gi"
-        cpu: "2000m"
 
 # Service Account
 serviceAccount:
@@ -64,7 +60,7 @@ services:
   schemaService:
     enabled: true        # ← FAISS-based schema recommendations (enhances SQL quality)
   trino:
-    enabled: true        # ← Query execution engine (required for actual query execution)
+    enabled: false       # ← Embedded Trino pod disabled (using explicit configs in backend/schemaService)
   
   # Demo Data (for development/testing)
   demo:
@@ -77,7 +73,8 @@ backend:
   replicaCount: 1
   image:
     repository: dashboard-backend
-    tag: v8
+    tag: latest
+    pullPolicy: Never  # Use local images for Kind
   service:
     type: ClusterIP
     port: 8080
@@ -94,8 +91,19 @@ backend:
     schemaService:
       url: "http://dashboard-schema-service:8001"
     trino:
-      url: "jdbc:trino://dashboard-trino:8080/memory/default"
-      user: "admin"
+      host: "external-trino-cluster.company.com"  # Replace with your Trino cluster hostname
+      port: 443
+      catalog: "catalog"  # Replace with your catalog name
+      schema: "schema"    # Replace with your schema name
+      user: "trino_user"  # Replace with your Trino username
+      password: "CHANGE_ME"  # Replace with your password or use secrets
+    mlService:
+      modelType: "external-llm"
+    sqlExecution:
+      defaultMaxResults: 100
+      defaultTimeoutSeconds: 30
+    cache:
+      enabled: true
 
 # Frontend React service
 frontend:
@@ -103,6 +111,7 @@ frontend:
   image:
     repository: dashboard-frontend
     tag: latest
+    pullPolicy: Never  # Use local images for Kind
   service:
     type: ClusterIP
     port: 3000
@@ -138,17 +147,17 @@ serviceMonitor:
   namespace: monitoring
   interval: 30s
 
-# Horizontal Pod Autoscaler
+# Horizontal Pod Autoscaler (disabled for dev)
 autoscaling:
   backend:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 10
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
     targetCPUUtilizationPercentage: 80
   frontend:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 5
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
     targetCPUUtilizationPercentage: 80
   fastapi:
     enabled: false  # ML service typically doesn't need autoscaling
@@ -162,7 +171,9 @@ podDisruptionBudget:
   enabled: true
   minAvailable: 1
 
-# Trino database service
+# External Trino configuration removed - each service has its own explicit trino config
+
+# Trino database service (when services.trino.enabled = true)
 trino:
   replicaCount: 1
   image:
@@ -173,15 +184,15 @@ trino:
     port: 8080
   resources:
     requests:
-      memory: "2Gi"
-      cpu: "1000m"
+      memory: "4Gi"        # ↑ Maximum memory for aggressive query caching
+      cpu: "2500m"         # ↑ High CPU for maximum parallel processing
     limits:
-      memory: "4Gi"
-      cpu: "2000m"
+      memory: "8Gi"        # ↑ Large headroom for complex analytics
+      cpu: "4000m"         # ↑ Maximum CPU for concurrent query execution
   environment: "production"
   nodeId: "ffffffff-ffff-ffff-ffff-ffffffffffff"
   jvm:
-    maxHeapSize: "2G"
+    maxHeapSize: "6G"      # ↑ 3x JVM heap for optimal performance
   config:
     enabled: true
   catalogs:
@@ -192,14 +203,14 @@ trino:
       tpch.splits-per-node: "4"
     postgresql:
       connector.name: "postgresql"
-      connection-url: "jdbc:postgresql://dashboard-postgres:5432/sampledb"
-      connection-user: "postgres"
-      connection-password: "postgres"
+      connection-url: "jdbc:postgresql://dashboard-demo-postgres:5432/ecommerce_demo"
+      connection-user: "demo_user"
+      connection-password: "demo_password"
     mysql:
       connector.name: "mysql"
-      connection-url: "jdbc:mysql://dashboard-mysql:3306/ecommerce"
-      connection-user: "mysql"
-      connection-password: "mysql"
+      connection-url: "jdbc:mysql://dashboard-demo-mysql:3306/hrms"
+      connection-user: "demo_user"
+      connection-password: "demo_password"
   livenessProbe:
     initialDelaySeconds: 60
     periodSeconds: 30
@@ -249,19 +260,34 @@ schemaService:
   image:
     repository: dashboard-schema-service
     tag: latest
+    pullPolicy: Never  # Use local images for Kind
   resources:
     requests:
-      memory: "768Mi"
-      cpu: "250m"
+      memory: "2Gi"        # ↑ Sufficient for ~1GB actual usage + overhead
+      cpu: "4000m"         # ↑ 4 cores for faster multilingual MPNet embedding generation
     limits:
-      memory: "1.5Gi"
-      cpu: "500m"
+      memory: "4Gi"        # ↑ Reasonable limit with safety margin
+      cpu: "6000m"         # ↑ 6 cores for maximum embedding performance
   env:
     trino:
-      host: "dashboard-trino"
-      port: 8080
-      user: "admin"
+      host: "external-trino-cluster.company.com"  # Replace with your Trino cluster hostname
+      port: 443
+      catalog: "catalog"  # Replace with your catalog name
+      schema: "schema"    # Replace with your schema name
+      user: "trino_user"  # Replace with your Trino username
+      password: "CHANGE_ME"  # Replace with your password or use secrets
     refreshHours: 3
+  probes:
+    liveness:
+      initialDelaySeconds: 900    # 15 minutes buffer for embedding generation
+      periodSeconds: 60
+      timeoutSeconds: 30
+      failureThreshold: 3
+    readiness:
+      initialDelaySeconds: 900    # 15 minutes buffer for embedding generation
+      periodSeconds: 30
+      timeoutSeconds: 5
+      failureThreshold: 10
   service:
     type: ClusterIP
     port: 8001
@@ -271,63 +297,91 @@ schemaService:
     storageClass: "standard"
 
 
-# Phi SQL LoRA Service (CPU INT8 Quantized) - Optional
+# Phi SQL LoRA Service (T4 GPU Only) - Optional
 phiSqlLora:
-  enabled: false  # Set to true to deploy local Phi-4 model
+  enabled: false  # Set to true to deploy local T4 GPU model
   replicaCount: 1
+  
+  # ============================================================================
+  # T4 GPU CONFIGURATION - No CPU fallback
+  # ============================================================================
+  resources:
+    requests:
+      memory: "4Gi"      # T4 uses FP16, optimized memory usage
+      cpu: "2"
+      nvidia.com/gpu: 1
+    limits:
+      memory: "8Gi"
+      cpu: "4"
+      nvidia.com/gpu: 1
+      
+  nodeSelector:
+    accelerator: nvidia-tesla-t4
+    
+  tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+      
+  
   image:
-    repository: phi-sql-lora-optimized
-    tag: frontend
+    repository: phi-sql-lora-unified
+    tag: latest
+    pullPolicy: Always
+    
   service:
     type: ClusterIP
     port: 8000
     targetPort: 8000
     name: http
-  resources:
-    requests:
-      memory: "8Gi"
-      cpu: "4"
-    limits:
-      memory: "24Gi"
-      cpu: "10"
+    
   env:
     PYTHONUNBUFFERED: "1"
     TRANSFORMERS_CACHE: "/app/model_cache"
     HF_HOME: "/app/model_cache"
     TOKENIZERS_PARALLELISM: "false"
+    MODEL_NAME: "microsoft/Phi-4-mini-instruct"
+    LORA_ADAPTER_PATH: "adapters/phi4-trino477-lora"
+    PORT: "8000"
+    
   persistence:
     enabled: true
     storageClass: "standard"
     accessMode: ReadWriteOnce
-    size: 50Gi
+    size: 20Gi              # Reduced size, more efficient
     mountPath: /app/model_cache
+    
   healthCheck:
     enabled: true
     path: /health
     port: 8000
-    initialDelaySeconds: 300  # 5 minutes for model loading
+    initialDelaySeconds: 120  # Faster startup with GPU
     periodSeconds: 30
     timeoutSeconds: 10
     failureThreshold: 3
     successThreshold: 1
+    
   readinessCheck:
     enabled: true
     path: /health
     port: 8000
-    initialDelaySeconds: 300  # 5 minutes for model loading
+    initialDelaySeconds: 60   # Faster readiness with GPU
     periodSeconds: 10
     timeoutSeconds: 5
     failureThreshold: 3
     successThreshold: 1
+    
   model:
-    name: "phi-4-mini-trino-lora-cpu-int8"
-    maxTokens: 1000
+    name: "phi-4-mini-trino-lora-unified"
+    maxTokens: 500           # Optimized for faster inference
     temperature: 0.1
+    
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
       maxUnavailable: 0
+      
   securityContext:
     runAsNonRoot: false
     allowPrivilegeEscalation: false

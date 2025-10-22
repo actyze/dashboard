@@ -54,8 +54,14 @@ public class LlmCommunicationService {
     @Value("${dashboard.external-llm.base-url:https://api.perplexity.ai}")
     private String externalLlmBaseUrl;
     
-    @Value("${dashboard.external-llm.max-tokens:1000}")
+    @Value("${dashboard.external-llm.max-tokens:4096}")
     private int externalLlmMaxTokens;
+    
+    @Value("${dashboard.ml-service.parameters.max-length:4096}")
+    private int mlServiceMaxLength;
+    
+    @Value("${dashboard.conversation.history-size:5}")
+    private int conversationHistorySize;
     
     @Value("${dashboard.external-llm.temperature:0.1}")
     private double externalLlmTemperature;
@@ -219,33 +225,41 @@ public class LlmCommunicationService {
                                   Map<String, Object> schemaRecommendations) {
         StringBuilder prompt = new StringBuilder();
         
+        // Add Trino-specific context first
+        prompt.append("TARGET DATABASE: Trino/Presto SQL Engine\n");
+        addTrinoRules(prompt);
+        
         // Add schema context
         if (schemaRecommendations != null && schemaRecommendations.get("recommendations") != null) {
-            prompt.append("Available Database Schema:\n");
+            prompt.append("Schema:\n");
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> recommendations = (List<Map<String, Object>>) schemaRecommendations.get("recommendations");
             
             for (Map<String, Object> rec : recommendations) {
-                prompt.append("- Table: ").append(rec.get("full_name"))
-                      .append(" (Confidence: ").append(rec.get("confidence")).append(")\n");
+                prompt.append(rec.get("full_name")).append(" (").append(rec.get("confidence")).append(")\n");
                 if (rec.get("columns") != null) {
-                    prompt.append("  Columns: ").append(rec.get("columns")).append("\n");
+                    prompt.append("  ").append(rec.get("columns")).append("\n");
                 }
             }
             prompt.append("\n");
         }
         
-        // Add conversation history
+        // Add conversation history - configurable size (default: last 3 queries)
         if (userQueryHistory != null && !userQueryHistory.isEmpty()) {
-            prompt.append("Previous Queries:\n");
-            for (int i = Math.max(0, userQueryHistory.size() - 3); i < userQueryHistory.size(); i++) {
-                prompt.append("- ").append(userQueryHistory.get(i)).append("\n");
+            // Include last N queries based on configuration - let LLM handle relevance
+            int historySize = Math.min(conversationHistorySize, userQueryHistory.size());
+            int startIndex = userQueryHistory.size() - historySize;
+            
+            prompt.append("History: ");
+            for (int i = startIndex; i < userQueryHistory.size(); i++) {
+                if (i > startIndex) prompt.append(", ");
+                prompt.append(userQueryHistory.get(i));
             }
-            prompt.append("\n");
+            prompt.append("\n\n");
         }
         
         // Natural Language Query
-        prompt.append("Natural Language Query: ").append(nlQuery);
+        prompt.append("Query: ").append(nlQuery);
         
         return prompt.toString();
     }
@@ -344,17 +358,32 @@ public class LlmCommunicationService {
     }
     
     /**
-     * Build Phi-4 LoRA request format
+     * Build Phi-4 LoRA request format (OpenAI-compatible role-based)
      */
     private Map<String, Object> buildPhi4LoRAMessages(String nlQuery, List<String> userQueryHistory, 
                                                      Map<String, Object> schemaRecommendations) {
         Map<String, Object> requestBody = new HashMap<>();
         
-        // Build the prompt for Phi-4 LoRA
-        String prompt = buildUserPrompt(nlQuery, userQueryHistory, schemaRecommendations);
+        // Build user prompt content
+        String userPrompt = buildUserPrompt(nlQuery, userQueryHistory, schemaRecommendations);
         
-        requestBody.put("prompt", prompt);
-        requestBody.put("max_length", 512);
+        // Messages array with system and user roles (same as External LLM)
+        List<Map<String, Object>> messages = new ArrayList<>();
+        
+        // System message
+        Map<String, Object> systemMessage = new HashMap<>();
+        systemMessage.put("role", "system");
+        systemMessage.put("content", SYSTEM_MESSAGE);
+        messages.add(systemMessage);
+        
+        // User message with context
+        Map<String, Object> userMessage = new HashMap<>();
+        userMessage.put("role", "user");
+        userMessage.put("content", userPrompt);
+        messages.add(userMessage);
+        
+        requestBody.put("messages", messages);
+        requestBody.put("max_length", mlServiceMaxLength);
         requestBody.put("temperature", 0.1);
         requestBody.put("do_sample", false);
         requestBody.put("num_beams", 1);
@@ -362,4 +391,11 @@ public class LlmCommunicationService {
         return requestBody;
     }
     
+    
+    /**
+     * Add optimized Trino rules to prompts (shared with SqlErrorAnalysisService)
+     */
+    private void addTrinoRules(StringBuilder prompt) {
+        prompt.append("RULES: NO semicolons (;), use catalog.schema.table format, Trino/Presto syntax only\n\n");
+    }
 }

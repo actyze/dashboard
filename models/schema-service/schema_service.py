@@ -129,9 +129,43 @@ class TrinoSchemaService:
 
     def connect(self):
         try:
-            self.connection = trino.dbapi.connect(
-                host=self.host, port=self.port, user=self.user, catalog=self.catalog
-            )
+            import trino.dbapi
+            import trino.auth
+            
+            # Check for basic auth credentials
+            auth_user = os.getenv("TRINO_AUTH_USER")
+            auth_password = os.getenv("TRINO_AUTH_PASSWORD")
+            
+            # Auto-detect SSL for port 443
+            if self.port == 443:
+                logger.info(f"Port 443 detected, using HTTPS with SSL verification disabled")
+                
+                # Use basic auth if credentials provided
+                if auth_user and auth_password:
+                    logger.info(f"Using basic authentication for user: {auth_user}")
+                    auth_obj = trino.auth.BasicAuthentication(auth_user, auth_password)
+                    self.connection = trino.dbapi.connect(
+                        host=self.host, 
+                        port=self.port, 
+                        user=auth_user,  # Use auth user instead of self.user
+                        catalog=self.catalog,
+                        http_scheme="https",
+                        verify=False,  # Disable SSL verification for self-signed certs
+                        auth=auth_obj
+                    )
+                else:
+                    self.connection = trino.dbapi.connect(
+                        host=self.host, 
+                        port=self.port, 
+                        user=self.user, 
+                        catalog=self.catalog,
+                        http_scheme="https",
+                        verify=False  # Disable SSL verification for self-signed certs
+                    )
+            else:
+                self.connection = trino.dbapi.connect(
+                    host=self.host, port=self.port, user=self.user, catalog=self.catalog
+                )
             logger.info(f"Connected to Trino at {self.host}:{self.port}")
         except Exception as e:
             logger.error(f"Trino connect failed: {e}")
@@ -157,9 +191,12 @@ class TrinoSchemaService:
         attempt = 0
         while True:
             try:
+                logger.info(f"🔍 Executing schema query (attempt {attempt + 1}/{retries})")
                 cursor = self.connection.cursor()
                 cursor.execute(query)
+                logger.info("📊 Query executed, fetching results...")
                 rows = cursor.fetchall()
+                logger.info(f"✅ Fetched {len(rows)} raw rows from Trino")
                 cursor.close()
 
                 table_map: Dict[str, Dict[str, Any]] = {}
@@ -176,7 +213,26 @@ class TrinoSchemaService:
                     table_map[key]["columns"].append(f"{col}|{self._normalize_data_type(dtype)}")
 
                 schemas = list(table_map.values())
-                logger.info(f"Loaded {len(schemas)} table schemas from Trino (system.jdbc.columns)")
+                
+                # Count catalogs, schemas, and tables
+                catalogs = set()
+                schema_names = set()
+                table_names = set()
+                total_columns = 0
+                
+                for schema_info in schemas:
+                    catalogs.add(schema_info['catalog'])
+                    schema_names.add(f"{schema_info['catalog']}.{schema_info['schema']}")
+                    table_names.add(f"{schema_info['catalog']}.{schema_info['schema']}.{schema_info['table']}")
+                    total_columns += len(schema_info['columns'])
+                
+                logger.info(f"📊 SCHEMA SUMMARY:")
+                logger.info(f"  • Catalogs: {len(catalogs)} ({', '.join(sorted(catalogs))})")
+                logger.info(f"  • Schemas: {len(schema_names)}")
+                logger.info(f"  • Tables: {len(table_names)}")
+                logger.info(f"  • Total Columns: {total_columns}")
+                logger.info(f"  • Schema Objects: {len(schemas)}")
+                
                 return schemas
 
             except Exception as e:
@@ -214,10 +270,10 @@ class TrinoSchemaService:
 
 # -------- FAISS Embedder --------
 class FAISSSchemaEmbedder:
-    def __init__(self, model_name: str = "sentence-transformers/multi-qa-mpnet-base-dot-v1"):
+    def __init__(self, model_name: str = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"):
         self.model_name = model_name
         self.model = None
-        self.dimension = 768  # multi-qa-mpnet-base-dot-v1 uses 768 dimensions
+        self.dimension = 768  # paraphrase-multilingual-mpnet-base-v2 uses 768 dimensions
         self.index: Optional[faiss.Index] = None
         self.schema_metadata: List[Dict[str, Any]] = []
         self.last_updated: Optional[datetime] = None
@@ -262,22 +318,60 @@ class FAISSSchemaEmbedder:
 
     async def build_embeddings(self, schemas: List[Dict[str, Any]]):
         """Encode schemas -> FP16 embeddings, cosine via IndexFlatIP, atomic swap."""
-        logger.info(f"Building embeddings for {len(schemas)} schemas...")
+        logger.info(f"🔨 Building embeddings for {len(schemas)} schemas...")
+        
+        logger.info("📝 Step 1: Converting schemas to text representations...")
         texts = [self._schema_to_text(s) for s in schemas]
+        logger.info(f"✅ Generated {len(texts)} text representations")
+        
+        # Log sample text to verify format
+        if texts:
+            sample_text = texts[0][:200] + "..." if len(texts[0]) > 200 else texts[0]
+            logger.info(f"📄 Sample text: {sample_text}")
 
+        logger.info("🧠 Step 2: Encoding texts with SentenceTransformer model...")
         loop = asyncio.get_event_loop()
+        
+        # Encode with progress tracking using batch processing
+        def encode_with_progress(texts):
+            import numpy as np
+            batch_size = 100  # Process in batches for progress updates
+            total_texts = len(texts)
+            all_embeddings = []
+            
+            logger.info(f"📊 Processing {total_texts} schemas in batches of {batch_size}")
+            
+            for i in range(0, total_texts, batch_size):
+                batch_texts = texts[i:i + batch_size]
+                batch_embeddings = self.model.encode(batch_texts, show_progress_bar=False)
+                all_embeddings.append(batch_embeddings)
+                
+                processed = min(i + batch_size, total_texts)
+                progress_pct = (processed / total_texts) * 100
+                logger.info(f"🔄 Progress: {processed}/{total_texts} schemas encoded ({progress_pct:.1f}%)")
+            
+            return np.vstack(all_embeddings)
+        
         # Encode in a thread pool so we don't block the event loop
-        embeddings = await loop.run_in_executor(None, self.model.encode, texts)
+        embeddings = await loop.run_in_executor(None, encode_with_progress, texts)
+        logger.info(f"✅ Generated embeddings shape: {embeddings.shape}")
+        
+        logger.info("🔄 Step 3: Converting to float32 for FAISS compatibility...")
         # Convert to float32 for FAISS compatibility
         embeddings = np.asarray(embeddings, dtype=np.float32)
+        logger.info(f"✅ Converted to float32, memory usage: ~{embeddings.nbytes / 1024 / 1024:.1f} MB")
         
+        logger.info("📐 Step 4: Normalizing L2 for cosine similarity...")
         # Normalize L2 for cosine with inner product
         faiss.normalize_L2(embeddings)
+        logger.info("✅ L2 normalization complete")
 
+        logger.info("🏗️ Step 5: Building FAISS index...")
         # FAISS expects float32 internally for IndexFlatIP; cast after normalization
         emb32 = embeddings.astype(np.float32, copy=False)
         new_index = faiss.IndexFlatIP(self.dimension)
         new_index.add(emb32)
+        logger.info(f"✅ FAISS index built with {new_index.ntotal} vectors")
 
         # Atomic swap
         self.index = new_index

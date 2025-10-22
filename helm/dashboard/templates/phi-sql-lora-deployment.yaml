@@ -1,4 +1,4 @@
-{{- if .Values.components.phiSqlLora }}
+{{- if and .Values.services.phiSqlLora .Values.phiSqlLora.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -34,6 +34,14 @@ spec:
       {{- end }}
       serviceAccountName: {{ include "dashboard.serviceAccountName" . }}
       securityContext: {}
+      {{- with .Values.phiSqlLora.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.phiSqlLora.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: phi-sql-lora
           securityContext:
@@ -45,6 +53,7 @@ spec:
               containerPort: {{ .Values.phiSqlLora.service.targetPort }}
               protocol: TCP
           env:
+            # Model configuration
             {{- range $key, $value := .Values.phiSqlLora.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}

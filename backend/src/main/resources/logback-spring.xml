@@ -1,24 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
     
-    <!-- Console Appender -->
+    <!-- Console Appender (Primary for Kubernetes) -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{40} - %msg%n</pattern>
         </encoder>
     </appender>
     
-    <!-- Main Application Log File -->
+    <!-- JSON Console Appender (Optional for structured logging) -->
+    <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <timestamp/>
+                <logLevel/>
+                <loggerName/>
+                <message/>
+                <mdc/>
+                <arguments/>
+                <stackTrace/>
+            </providers>
+        </encoder>
+    </appender>
+    
+    <!-- File Appender (Fallback - not recommended for containers) -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/dashboard-backend.log</file>
+        <file>/app/logs/dashboard-backend.log</file>
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{40} - %msg%n</pattern>
         </encoder>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>logs/dashboard-backend.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
-            <maxFileSize>100MB</maxFileSize>
-            <maxHistory>30</maxHistory>
-            <totalSizeCap>3GB</totalSizeCap>
+            <fileNamePattern>/app/logs/dashboard-backend.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>7</maxHistory>
+            <totalSizeCap>500MB</totalSizeCap>
         </rollingPolicy>
     </appender>
     
@@ -61,16 +76,14 @@
         <appender-ref ref="SECURITY_AUDIT_FILE"/>
     </logger>
     
-    <!-- MCP Package Logging -->
-    <logger name="com.dashboard.mcp" level="DEBUG"/>
-    
     <!-- Dashboard Package Logging -->
     <logger name="com.dashboard" level="INFO"/>
     
-    <!-- Root Logger -->
+    <!-- Root Logger (Console-focused for Kubernetes) -->
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="FILE"/>
+        <!-- FILE appender disabled for containers - use kubectl logs instead -->
+        <!-- <appender-ref ref="FILE"/> -->
     </root>
     
 </configuration>

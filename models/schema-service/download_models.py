@@ -18,7 +18,7 @@ def download_sentence_transformer_model():
     try:
         from sentence_transformers import SentenceTransformer
         
-        model_name = "sentence-transformers/multi-qa-mpnet-base-dot-v1"
+        model_name = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
         cache_dir = "/app/model_cache/sentence_transformers"
         
         logger.info(f"Downloading SentenceTransformer model: {model_name}")

@@ -1,0 +1,52 @@
+[
+  {
+    "instruction": "Generate a SQL query to show customers from California with their total order amounts using Trino 477 syntax",
+    "input": "Schema: customers (customer_id, name, state), orders (order_id, customer_id, amount)",
+    "output": "SELECT c.name, SUM(o.amount) AS total_amount\nFROM customers c\nJOIN orders o ON c.customer_id = o.customer_id\nWHERE c.state = 'California'\nGROUP BY c.name\nORDER BY total_amount DESC;"
+  },
+  {
+    "instruction": "Create a query using Trino 477's new APPROX_PERCENTILE function",
+    "input": "Find the 95th percentile of order amounts by month",
+    "output": "SELECT \n    DATE_TRUNC('month', order_date) AS month,\n    APPROX_PERCENTILE(amount, 0.95) AS p95_amount\nFROM orders\nGROUP BY DATE_TRUNC('month', order_date)\nORDER BY month;"
+  },
+  {
+    "instruction": "Use Trino 477's enhanced JSON functions to extract nested data",
+    "input": "Extract product names from JSON order details",
+    "output": "SELECT \n    order_id,\n    JSON_EXTRACT_SCALAR(order_details, '$.product.name') AS product_name,\n    JSON_EXTRACT_SCALAR(order_details, '$.quantity') AS quantity\nFROM orders\nWHERE JSON_EXTRACT_SCALAR(order_details, '$.product.name') IS NOT NULL;"
+  },
+  {
+    "instruction": "Demonstrate Trino 477's improved window function syntax",
+    "input": "Calculate running total of sales with improved window function",
+    "output": "SELECT \n    date,\n    sales,\n    SUM(sales) OVER (\n        ORDER BY date \n        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW\n    ) AS running_total\nFROM daily_sales\nORDER BY date;"
+  },
+  {
+    "instruction": "Use Trino 477's new ARRAY_AGG with ORDER BY clause",
+    "input": "Aggregate customer orders into arrays ordered by date",
+    "output": "SELECT \n    customer_id,\n    ARRAY_AGG(order_id ORDER BY order_date) AS ordered_orders,\n    ARRAY_AGG(amount ORDER BY order_date DESC) AS amounts_desc\nFROM orders\nGROUP BY customer_id;"
+  },
+  {
+    "instruction": "Leverage Trino 477's enhanced UNNEST functionality",
+    "input": "Unnest array of product categories with ordinality",
+    "output": "SELECT \n    product_id,\n    category,\n    category_rank\nFROM products\nCROSS JOIN UNNEST(categories) WITH ORDINALITY AS t(category, category_rank)\nWHERE category IS NOT NULL;"
+  },
+  {
+    "instruction": "Use Trino 477's new REGEXP_EXTRACT_ALL function",
+    "input": "Extract all email addresses from text fields",
+    "output": "SELECT \n    customer_id,\n    contact_info,\n    REGEXP_EXTRACT_ALL(contact_info, '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\\\.[a-zA-Z]{2,}') AS emails\nFROM customers\nWHERE REGEXP_LIKE(contact_info, '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\\\.[a-zA-Z]{2,}');"
+  },
+  {
+    "instruction": "Demonstrate Trino 477's improved CASE expression with multiple conditions",
+    "input": "Categorize orders by amount ranges with enhanced CASE syntax",
+    "output": "SELECT \n    order_id,\n    amount,\n    CASE \n        WHEN amount < 100 THEN 'Small'\n        WHEN amount BETWEEN 100 AND 500 THEN 'Medium'\n        WHEN amount BETWEEN 500 AND 1000 THEN 'Large'\n        ELSE 'Extra Large'\n    END AS order_category\nFROM orders\nORDER BY amount;"
+  },
+  {
+    "instruction": "Use Trino 477's enhanced date/time functions",
+    "input": "Calculate business days between order and delivery dates",
+    "output": "SELECT \n    order_id,\n    order_date,\n    delivery_date,\n    DATE_DIFF('day', order_date, delivery_date) AS total_days,\n    DATE_DIFF('day', order_date, delivery_date) - \n    (DATE_DIFF('week', order_date, delivery_date) * 2) AS business_days\nFROM orders\nWHERE delivery_date IS NOT NULL;"
+  },
+  {
+    "instruction": "Leverage Trino 477's new MAP functions for key-value operations",
+    "input": "Work with product attributes stored as MAP data type",
+    "output": "SELECT \n    product_id,\n    product_name,\n    MAP_KEYS(attributes) AS attribute_names,\n    MAP_VALUES(attributes) AS attribute_values,\n    attributes['color'] AS color,\n    attributes['size'] AS size\nFROM products\nWHERE CARDINALITY(attributes) > 0;"
+  }
+]

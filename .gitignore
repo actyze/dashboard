@@ -64,6 +64,9 @@ Thumbs.db
 *.log
 logs/
 *.pid
+backend.log
+fastapi.log
+fastapi.pid
 
 # ML Models (large files)
 *.bin
@@ -80,3 +83,15 @@ pytorch_model.bin
 # Temporary files
 *.tmp
 *.temp
+
+# Empty/obsolete startup scripts (replaced by Kubernetes/Helm)
+restart-all.sh
+restart-fastapi.sh
+stop-all.sh
+stop-fastapi.sh
+
+# Local Kubernetes files (development/testing only)
+k8s/
+kind-config*.yaml
+*-local.sh
+*-test*.sh

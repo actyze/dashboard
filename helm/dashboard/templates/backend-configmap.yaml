@@ -58,10 +58,10 @@ data:
           url: {{ .Values.backend.env.schemaService.url }}
           timeout: 10000
         
-        # Trino Configuration
+        # Trino Configuration (now handled via environment variables in deployment)
         trino:
-          url: {{ .Values.backend.env.trino.url }}
-          user: {{ .Values.backend.env.trino.user }}
+          url: "jdbc:trino://{{ .Values.backend.env.trino.host }}:{{ .Values.backend.env.trino.port }}/{{ .Values.backend.env.trino.catalog }}/{{ .Values.backend.env.trino.schema }}?SSL=true&SSLVerification=NONE"
+          user: "{{ .Values.backend.env.trino.user }}"
 
     # Management endpoints for health checks and metrics
     management:

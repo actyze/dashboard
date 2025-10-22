@@ -73,7 +73,7 @@ dashboard:
       parameters:
         max-tokens: ${ML_SERVICE_MAX_TOKENS:1000}
         temperature: ${ML_SERVICE_TEMPERATURE:0.1}
-        max-length: ${ML_SERVICE_MAX_LENGTH:512}
+        max-length: ${ML_SERVICE_MAX_LENGTH:4096}
         do-sample: ${ML_SERVICE_DO_SAMPLE:false}
         num-beams: ${ML_SERVICE_NUM_BEAMS:1}
         
@@ -90,12 +90,16 @@ dashboard:
       api-key: ${EXTERNAL_LLM_API_KEY:}
       model: ${EXTERNAL_LLM_MODEL:}
       base-url: ${EXTERNAL_LLM_BASE_URL:}
-      max-tokens: ${EXTERNAL_LLM_MAX_TOKENS:1000}
+      max-tokens: ${EXTERNAL_LLM_MAX_TOKENS:4096}
       temperature: ${EXTERNAL_LLM_TEMPERATURE:0.1}
       timeout: ${EXTERNAL_LLM_TIMEOUT:30s}
       fallback:
         enabled: ${EXTERNAL_LLM_FALLBACK_ENABLED:false}
         local-model: ${EXTERNAL_LLM_FALLBACK_MODEL:}
+  
+  # Conversation Configuration
+  conversation:
+    history-size: ${CONVERSATION_HISTORY_SIZE:5}
   
   # Query Cache Configuration
   cache:

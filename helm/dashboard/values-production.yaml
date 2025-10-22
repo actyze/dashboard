@@ -7,8 +7,13 @@ environment: production
 # Global configuration
 global:
   namespace: dashboard
-  imagePullPolicy: Always
+  imagePullPolicy: Always  # Always pull latest from Docker Hub
   storageClass: "managed-csi"
+  
+  # Docker Hub credentials for private repository
+  imageRegistry: "docker.io/yourusername"  # Replace with your Docker Hub username
+  imagePullSecrets:
+    - name: dockerhub-secret
 
 # ============================================================================
 # MODEL STRATEGY - Choose ONE approach for SQL generation
@@ -30,13 +35,41 @@ modelStrategy:
   phiSqlLora:
     enabled: false             # ← Toggle: Use local Phi-4-mini LoRA model
     replicas: 2                # High availability in production
-    resources:
-      requests:
-        memory: "4Gi"
-        cpu: "2000m"
-      limits:
-        memory: "8Gi"
-        cpu: "4000m"
+    deploymentMode: "t4"       # Options: "t4", "api_key" (no MPS in production)
+    
+    # T4 GPU Configuration (Production)
+    t4:
+      enabled: true
+      resources:
+        requests:
+          memory: "4Gi"        # T4 FP16 optimized
+          cpu: "2000m"
+          nvidia.com/gpu: 1
+        limits:
+          memory: "8Gi"
+          cpu: "4000m"
+          nvidia.com/gpu: 1
+      nodeSelector:
+        accelerator: nvidia-tesla-t4
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+        
+    # API Key Configuration (Production Fallback)
+    apiKey:
+      enabled: false
+      provider: "perplexity"
+      endpoint: "https://api.perplexity.ai"
+      model: "sonar-reasoning-pro"
+      apiKey: "${EXTERNAL_LLM_API_KEY}"  # From Kubernetes secret
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "100m"
+        limits:
+          memory: "512Mi"
+          cpu: "200m"
 
 # Service Account
 serviceAccount:
@@ -72,8 +105,9 @@ services:
 backend:
   replicaCount: 3        # High availability
   image:
-    repository: dashboard-backend
-    tag: v8
+    repository: yourusername/dashboard-backend  # Replace yourusername with your Docker Hub username
+    tag: latest  # Always pull latest
+    pullPolicy: Always
   service:
     type: ClusterIP
     port: 8080
@@ -89,8 +123,9 @@ backend:
 frontend:
   replicaCount: 3
   image:
-    repository: dashboard-frontend
-    tag: latest
+    repository: yourusername/dashboard-frontend  # Replace yourusername with your Docker Hub username
+    tag: latest  # Always pull latest
+    pullPolicy: Always
   service:
     type: ClusterIP
     port: 3000
@@ -106,8 +141,9 @@ frontend:
 schemaService:
   replicaCount: 2
   image:
-    repository: dashboard-schema-service
-    tag: latest
+    repository: yourusername/dashboard-schema-service  # Replace yourusername with your Docker Hub username
+    tag: latest  # Always pull latest
+    pullPolicy: Always
   resources:
     requests:
       memory: "1Gi"

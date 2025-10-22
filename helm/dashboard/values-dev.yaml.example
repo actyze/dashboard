@@ -1,0 +1,29 @@
+# Example configuration file for external Trino integration
+# Copy this to values-dev.yaml and update with your actual values
+
+# Backend Spring Boot service
+backend:
+  env:
+    trino:
+      host: "your-trino-cluster.company.com"  # Replace with your Trino cluster hostname
+      port: 443                               # Replace with your Trino port (443 for HTTPS, 8080 for HTTP)
+      catalog: "your_catalog"                 # Replace with your catalog name
+      schema: "your_schema"                   # Replace with your schema name  
+      user: "your_trino_user"                # Replace with your Trino username
+      password: "your_password"               # Replace with your password or use Kubernetes secrets
+
+# Schema Service
+schemaService:
+  env:
+    trino:
+      host: "your-trino-cluster.company.com"  # Same as backend
+      port: 443
+      catalog: "your_catalog"                 # Same as backend
+      schema: "your_schema"                   # Same as backend
+      user: "your_trino_user"                # Same as backend
+      password: "your_password"               # Same as backend
+
+# For production, consider using Kubernetes secrets instead of plain text passwords:
+# kubectl create secret generic trino-credentials \
+#   --from-literal=username=your_trino_user \
+#   --from-literal=password=your_password

@@ -1,4 +1,4 @@
-{{- if and .Values.components.trino .Values.trino.config.enabled }}
+{{- if and .Values.services.trino.enabled .Values.trino.config.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -47,7 +47,7 @@ data:
   {{- end }}
   {{- end }}
   
-  {{- if and .Values.components.demo.enabled .Values.components.demo.postgres }}
+  {{- if and .Values.services.demo.enabled .Values.services.demo.postgres }}
   postgres.properties: |
     connector.name=postgresql
     connection-url=jdbc:postgresql://{{ include "dashboard.fullname" . }}-demo-postgres:5432/{{ .Values.demo.postgres.database }}
@@ -55,7 +55,7 @@ data:
     connection-password={{ .Values.demo.postgres.password }}
   {{- end }}
   
-  {{- if and .Values.components.demo.enabled .Values.components.demo.mysql }}
+  {{- if and .Values.services.demo.enabled .Values.services.demo.mysql }}
   mysql.properties: |
     connector.name=mysql
     connection-url=jdbc:mysql://{{ include "dashboard.fullname" . }}-demo-mysql:3306

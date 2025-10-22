@@ -7,6 +7,92 @@ We now have **TWO** clean configuration files:
 1. **`values-dev.yaml`** - Development environment (local Kind cluster)
 2. **`values-production.yaml`** - Production environment (Azure AKS)
 
+## Docker Hub Setup (Private Registry)
+
+**All images are configured to always pull `latest` from your private Docker Hub repository.**
+
+### Quick Setup
+
+**1. Replace Docker Hub username in both values files:**
+```bash
+# Replace "yourusername" with your actual Docker Hub username
+sed -i '' 's/yourusername/YOUR_DOCKERHUB_USERNAME/g' helm/dashboard/values-dev.yaml
+sed -i '' 's/yourusername/YOUR_DOCKERHUB_USERNAME/g' helm/dashboard/values-production.yaml
+```
+
+**2. Create private repositories on Docker Hub:**
+- Go to https://hub.docker.com/repositories
+- Create 3 private repositories:
+  - `dashboard-backend`
+  - `dashboard-frontend`
+  - `dashboard-schema-service`
+
+**3. Build and push images:**
+```bash
+# Set your Docker Hub username
+export DOCKERHUB_USERNAME="your-username"
+
+# Login to Docker Hub
+docker login
+
+# Build and push backend
+docker build -f docker/Dockerfile.backend -t ${DOCKERHUB_USERNAME}/dashboard-backend:latest .
+docker push ${DOCKERHUB_USERNAME}/dashboard-backend:latest
+
+# Build and push frontend
+docker build -f docker/Dockerfile.frontend -t ${DOCKERHUB_USERNAME}/dashboard-frontend:latest .
+docker push ${DOCKERHUB_USERNAME}/dashboard-frontend:latest
+
+# Build and push schema service
+docker build -f docker/Dockerfile.schema-service -t ${DOCKERHUB_USERNAME}/dashboard-schema-service:latest .
+docker push ${DOCKERHUB_USERNAME}/dashboard-schema-service:latest
+```
+
+**4. Create Kubernetes secret for Docker Hub authentication:**
+```bash
+# For development (Kind cluster)
+kubectl create secret docker-registry dockerhub-secret \
+  --docker-server=docker.io \
+  --docker-username=YOUR_DOCKERHUB_USERNAME \
+  --docker-password=YOUR_DOCKERHUB_PASSWORD \
+  --docker-email=YOUR_EMAIL \
+  -n dashboard
+
+# For production (Azure AKS)
+kubectl create secret docker-registry dockerhub-secret \
+  --docker-server=docker.io \
+  --docker-username=YOUR_DOCKERHUB_USERNAME \
+  --docker-password=YOUR_DOCKERHUB_PASSWORD \
+  --docker-email=YOUR_EMAIL \
+  -n dashboard \
+  --context=your-production-cluster
+```
+
+**5. Deploy with Helm:**
+```bash
+# Now Helm will always pull the latest images from your private Docker Hub
+helm upgrade --install dashboard ./helm/dashboard \
+  --namespace dashboard \
+  --create-namespace \
+  --values helm/dashboard/values-dev.yaml
+```
+
+### Updating Images (No Helm Changes Needed!)
+
+**Every time you build a new image, just push it:**
+```bash
+# Build new version
+docker build -f docker/Dockerfile.backend -t ${DOCKERHUB_USERNAME}/dashboard-backend:latest .
+
+# Push to Docker Hub (overwrites latest tag)
+docker push ${DOCKERHUB_USERNAME}/dashboard-backend:latest
+
+# Restart pods to pull new image
+kubectl rollout restart deployment dashboard-backend -n dashboard
+```
+
+**Helm values never need updating!** The `latest` tag and `pullPolicy: Always` ensure fresh images every time.
+
 ## Model Strategy - Choose ONE
 
 Both files have a `modelStrategy` section where you choose your SQL generation approach:

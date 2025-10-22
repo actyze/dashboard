@@ -1,4 +1,4 @@
-{{- if and .Values.components.phiSqlLora .Values.phiSqlLora.persistence.enabled }}
+{{- if and .Values.services.phiSqlLora .Values.phiSqlLora.persistence.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

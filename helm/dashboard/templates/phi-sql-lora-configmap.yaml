@@ -1,4 +1,4 @@
-{{- if .Values.components.phiSqlLora }}
+{{- if .Values.services.phiSqlLora }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

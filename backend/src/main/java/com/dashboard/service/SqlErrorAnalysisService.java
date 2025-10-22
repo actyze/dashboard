@@ -21,6 +21,12 @@ public class SqlErrorAnalysisService {
         // Syntax errors - usually fixable with retry
         if (error.contains("syntax error") || error.contains("mismatched input") || 
             error.contains("expecting") || error.contains("line") && error.contains("column")) {
+            
+            // Special case: Semicolon errors are very specific and fixable
+            if (error.contains("mismatched input ';'") || error.contains("semicolon")) {
+                return "SEMICOLON_ERROR";
+            }
+            
             return "SYNTAX_ERROR";
         }
         
@@ -57,53 +63,68 @@ public class SqlErrorAnalysisService {
                                          List<String> errorHistory) {
         
         StringBuilder correctionPrompt = new StringBuilder();
-        correctionPrompt.append("TASK: Fix the SQL query based on the error analysis\n\n");
-        correctionPrompt.append("ORIGINAL REQUEST: ").append(originalQuery).append("\n\n");
-        correctionPrompt.append("FAILED SQL: ").append(failedSQL).append("\n\n");
-        correctionPrompt.append("ERROR TYPE: ").append(errorType).append("\n");
-        correctionPrompt.append("ERROR MESSAGE: ").append(sqlError).append("\n\n");
+        
+        // Add Trino context (same as initial prompt)
+        correctionPrompt.append("TARGET DATABASE: Trino/Presto SQL Engine\n");
+        addTrinoRules(correctionPrompt);
+        
+        correctionPrompt.append("FIX SQL ERROR\n");
+        correctionPrompt.append("Request: ").append(originalQuery).append("\n");
+        correctionPrompt.append("Failed: ").append(failedSQL).append("\n");
+        correctionPrompt.append("Error: ").append(sqlError).append("\n\n");
         
         // Add specific guidance based on error type
         switch (errorType) {
             case "SYNTAX_ERROR":
-                correctionPrompt.append("GUIDANCE: Focus on SQL syntax. Check for:\n");
-                correctionPrompt.append("- Missing commas, parentheses, or keywords\n");
-                correctionPrompt.append("- Incorrect operator usage\n");
-                correctionPrompt.append("- Proper Trino/Presto syntax\n\n");
+                if (sqlError.contains("mismatched input ';'") || sqlError.contains("semicolon")) {
+                    addSemicolonErrorGuidance(correctionPrompt);
+                } else {
+                    addGenericSyntaxGuidance(correctionPrompt);
+                }
+                break;
+            case "SEMICOLON_ERROR":
+                addSemicolonErrorGuidance(correctionPrompt);
                 break;
             case "SCHEMA_ERROR":
-                correctionPrompt.append("GUIDANCE: The schema/table doesn't exist. Please:\n");
-                correctionPrompt.append("- Use only schemas from the provided context\n");
-                correctionPrompt.append("- Check catalog.schema.table format\n");
-                correctionPrompt.append("- Verify table names match exactly\n\n");
+                correctionPrompt.append("Schema/table not found. Use provided schemas, check catalog.schema.table format.\n\n");
                 break;
             case "COLUMN_ERROR":
-                correctionPrompt.append("GUIDANCE: Column not found. Please:\n");
-                correctionPrompt.append("- Check column names in schema recommendations\n");
-                correctionPrompt.append("- Use exact column names (case-sensitive)\n");
-                correctionPrompt.append("- Consider using table aliases for clarity\n\n");
+                correctionPrompt.append("Column not found. Check schema recommendations, use exact names (case-sensitive).\n\n");
                 break;
             case "CONNECTION_ERROR":
-                correctionPrompt.append("GUIDANCE: Connection issue detected. Please:\n");
-                correctionPrompt.append("- Simplify the query if possible\n");
-                correctionPrompt.append("- Reduce complexity to minimize execution time\n\n");
+                correctionPrompt.append("Connection issue. Simplify query, reduce complexity.\n\n");
                 break;
             default:
-                correctionPrompt.append("GUIDANCE: General error. Please:\n");
-                correctionPrompt.append("- Review the error message carefully\n");
-                correctionPrompt.append("- Ensure Trino/Presto compatibility\n\n");
+                correctionPrompt.append("Review error message, ensure Trino compatibility.\n\n");
         }
         
         if (!errorHistory.isEmpty()) {
-            correctionPrompt.append("PREVIOUS ERRORS:\n");
-            for (String error : errorHistory) {
-                correctionPrompt.append("- ").append(error).append("\n");
-            }
-            correctionPrompt.append("\n");
+            correctionPrompt.append("Previous: ").append(String.join(", ", errorHistory)).append("\n");
         }
         
-        correctionPrompt.append("Please generate a corrected SQL query that addresses the specific error type and follows the guidance above.");
+        correctionPrompt.append("Generate corrected SQL:");
         
         return correctionPrompt.toString();
+    }
+    
+    /**
+     * Add optimized Trino rules to prompts (used in both initial and error correction prompts)
+     */
+    private void addTrinoRules(StringBuilder prompt) {
+        prompt.append("RULES: NO semicolons (;), use catalog.schema.table format, Trino/Presto syntax only\n\n");
+    }
+    
+    /**
+     * Add optimized guidance for semicolon errors
+     */
+    private void addSemicolonErrorGuidance(StringBuilder prompt) {
+        prompt.append("SEMICOLON ERROR: Remove ALL semicolons (;). Trino JDBC rejects them. Example: 'SELECT * FROM table' not 'SELECT * FROM table;'\n\n");
+    }
+    
+    /**
+     * Add optimized generic syntax error guidance
+     */
+    private void addGenericSyntaxGuidance(StringBuilder prompt) {
+        prompt.append("SYNTAX ERROR: Check commas, parentheses, keywords. Ensure Trino/Presto compatibility.\n\n");
     }
 }

@@ -16,11 +16,11 @@ WORKDIR /app
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install PyTorch CPU (latest stable)
-RUN pip3 install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+# Install PyTorch with CUDA support (T4 optimized)
+RUN pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # Install other dependencies (compatible versions for Phi-4)
-RUN pip3 install --no-cache-dir transformers==4.53.3 peft==0.17.1 fastapi uvicorn accelerate torchao
+RUN pip3 install --no-cache-dir transformers==4.53.3 peft==0.17.1 fastapi uvicorn accelerate
 
 # Copy application code
 COPY scripts/ ./scripts/
@@ -32,8 +32,8 @@ EXPOSE 8000
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 
-# Check quantization backends available
-RUN python3 -c "import torch; print('Available quantization engines:', torch.backends.quantized.supported_engines)"
+# Check GPU availability
+RUN python3 -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('CUDA version:', torch.version.cuda)"
 
-# Run the CPU INT8 server
-CMD ["python3", "scripts/cpu_int8_server.py"]
+# Run the T4-only server
+CMD ["python3", "scripts/t4_phi4_server.py"]

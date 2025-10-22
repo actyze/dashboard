@@ -1,4 +1,4 @@
-{{- if .Values.components.backend }}
+{{- if .Values.services.backend.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -30,9 +30,65 @@ spec:
         - name: SCHEMA_SERVICE_URL
           value: {{ .Values.backend.env.schemaService.url }}
         - name: TRINO_URL
-          value: {{ .Values.backend.env.trino.url }}
+          value: "jdbc:trino://{{ .Values.backend.env.trino.host }}:{{ .Values.backend.env.trino.port }}/{{ .Values.backend.env.trino.catalog }}/{{ .Values.backend.env.trino.schema }}?SSL=true&SSLVerification=NONE"
         - name: TRINO_USER
-          value: {{ .Values.backend.env.trino.user }}
+          value: "{{ .Values.backend.env.trino.user }}"
+        - name: TRINO_PASSWORD
+          value: "{{ .Values.backend.env.trino.password }}"
+        {{- if .Values.modelStrategy.externalLLM.enabled }}
+        # External LLM Configuration
+        - name: EXTERNAL_LLM_ENABLED
+          value: "{{ .Values.modelStrategy.externalLLM.enabled }}"
+        # Spring relaxed-binding for dashboard.external-llm.enabled
+        - name: DASHBOARD_EXTERNAL_LLM_ENABLED
+          value: "{{ .Values.modelStrategy.externalLLM.enabled }}"
+        - name: EXTERNAL_LLM_PROVIDER
+          value: {{ .Values.modelStrategy.externalLLM.provider }}
+        - name: DASHBOARD_EXTERNAL_LLM_PROVIDER
+          value: {{ .Values.modelStrategy.externalLLM.provider }}
+        - name: EXTERNAL_LLM_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-external-llm
+              key: external-llm-api-key
+              optional: true
+        - name: DASHBOARD_EXTERNAL_LLM_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-external-llm
+              key: external-llm-api-key
+              optional: true
+        - name: EXTERNAL_LLM_MODEL
+          value: {{ .Values.modelStrategy.externalLLM.model }}
+        - name: DASHBOARD_EXTERNAL_LLM_MODEL
+          value: {{ .Values.modelStrategy.externalLLM.model }}
+        - name: EXTERNAL_LLM_BASE_URL
+          value: {{ .Values.modelStrategy.externalLLM.baseUrl }}
+        - name: DASHBOARD_EXTERNAL_LLM_BASE_URL
+          value: {{ .Values.modelStrategy.externalLLM.baseUrl }}
+        - name: EXTERNAL_LLM_MAX_TOKENS
+          value: "{{ .Values.modelStrategy.externalLLM.maxTokens }}"
+        - name: EXTERNAL_LLM_TEMPERATURE
+          value: "{{ .Values.modelStrategy.externalLLM.temperature }}"
+        - name: EXTERNAL_LLM_TIMEOUT
+          value: {{ .Values.modelStrategy.externalLLM.timeout }}
+        - name: EXTERNAL_LLM_FALLBACK_ENABLED
+          value: "{{ .Values.modelStrategy.externalLLM.fallbackToLocal }}"
+        {{- end }}
+        # ML Service Configuration
+        - name: ML_SERVICE_MODEL_TYPE
+          value: "{{ .Values.backend.env.mlService.modelType | default "external-llm" }}"
+        # SQL Execution Configuration
+        - name: SQL_EXECUTION_DEFAULT_MAX_RESULTS
+          value: "{{ .Values.backend.env.sqlExecution.defaultMaxResults | default "100" }}"
+        - name: SQL_EXECUTION_DEFAULT_TIMEOUT_SECONDS
+          value: "{{ .Values.backend.env.sqlExecution.defaultTimeoutSeconds | default "30" }}"
+        # Cache Configuration
+        - name: CACHE_ENABLED
+          value: "{{ .Values.backend.env.cache.enabled | default "true" }}"
+        # Enable DEBUG logging for OrchestrationService without rebuild
+        - name: LOGGING_LEVEL_COM_DASHBOARD_SERVICE_ORCHESTRATIONSERVICE
+          value: DEBUG
         livenessProbe:
           httpGet:
             path: /api/status

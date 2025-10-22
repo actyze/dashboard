@@ -1,4 +1,4 @@
-{{- if and .Values.components.demo.enabled .Values.components.demo.mysql }}
+{{- if and .Values.services.demo.enabled .Values.services.demo.mysql }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

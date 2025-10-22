@@ -38,23 +38,13 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.springframework.integration</groupId>
-            <artifactId>spring-integration-core</artifactId>
-        </dependency>
-        
-        <!-- MCP Java SDK -->
-        <dependency>
-            <groupId>io.modelcontextprotocol.sdk</groupId>
-            <artifactId>mcp</artifactId>
-            <version>0.11.3</version>
-        </dependency>
+        <!-- Removed unused Spring Integration and MCP SDK dependencies -->
         
         <!-- Trino JDBC Driver -->
         <dependency>
             <groupId>io.trino</groupId>
             <artifactId>trino-jdbc</artifactId>
-            <version>465</version>
+            <version>477</version>
         </dependency>
         
         <!-- JSON Processing -->
@@ -63,19 +53,15 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
         
-        
-        <!-- Jakarta Annotations for @PostConstruct/@PreDestroy -->
+        <!-- Spring Cache with Caffeine for high-performance caching -->
         <dependency>
-            <groupId>jakarta.annotation</groupId>
-            <artifactId>jakarta.annotation-api</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
         </dependency>
-        
-        <!-- HikariCP Connection Pooling -->
         <dependency>
-            <groupId>com.zaxxer</groupId>
-            <artifactId>HikariCP</artifactId>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
         </dependency>
-        
         
     </dependencies>
 

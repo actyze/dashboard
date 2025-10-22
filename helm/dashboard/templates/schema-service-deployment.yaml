@@ -1,8 +1,9 @@
-{{- if .Values.components.schemaService }}
+{{- if .Values.services.schemaService.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "dashboard.fullname" . }}-schema-service
+  namespace: {{ .Values.global.namespace }}
   labels:
     {{- include "dashboard.labels" . | nindent 4 }}
     app.kubernetes.io/component: schema-service
@@ -21,7 +22,7 @@ spec:
       containers:
       - name: schema-service
         image: "{{ .Values.schemaService.image.repository }}:{{ .Values.schemaService.image.tag }}"
-        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        imagePullPolicy: {{ .Values.schemaService.image.pullPolicy | default .Values.global.imagePullPolicy }}
         env:
         - name: TRINO_HOST
           value: "{{ .Values.schemaService.env.trino.host }}"
@@ -29,6 +30,10 @@ spec:
           value: "{{ .Values.schemaService.env.trino.port }}"
         - name: TRINO_USER
           value: "{{ .Values.schemaService.env.trino.user }}"
+        - name: TRINO_AUTH_USER
+          value: "{{ .Values.schemaService.env.trino.user }}"
+        - name: TRINO_AUTH_PASSWORD
+          value: "{{ .Values.schemaService.env.trino.password }}"
         - name: SCHEMA_REFRESH_HOURS
           value: "{{ .Values.schemaService.env.refreshHours }}"
         - name: SERVICE_HOST
@@ -51,18 +56,18 @@ spec:
           httpGet:
             path: /health
             port: http
-          initialDelaySeconds: 120
-          periodSeconds: 30
-          timeoutSeconds: 10
-          failureThreshold: 3
+          initialDelaySeconds: {{ .Values.schemaService.probes.liveness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.schemaService.probes.liveness.periodSeconds }}
+          timeoutSeconds: {{ .Values.schemaService.probes.liveness.timeoutSeconds }}
+          failureThreshold: {{ .Values.schemaService.probes.liveness.failureThreshold }}
         readinessProbe:
           httpGet:
             path: /health
             port: http
-          initialDelaySeconds: 60
-          periodSeconds: 15
-          timeoutSeconds: 5
-          failureThreshold: 10
+          initialDelaySeconds: {{ .Values.schemaService.probes.readiness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.schemaService.probes.readiness.periodSeconds }}
+          timeoutSeconds: {{ .Values.schemaService.probes.readiness.timeoutSeconds }}
+          failureThreshold: {{ .Values.schemaService.probes.readiness.failureThreshold }}
       volumes:
       {{- if .Values.schemaService.storage.enabled }}
       - name: model-cache
@@ -74,6 +79,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "dashboard.fullname" . }}-schema-service
+  namespace: {{ .Values.global.namespace }}
   labels:
     {{- include "dashboard.labels" . | nindent 4 }}
     app.kubernetes.io/component: schema-service
@@ -93,6 +99,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: {{ include "dashboard.fullname" . }}-schema-service-pvc
+  namespace: {{ .Values.global.namespace }}
   labels:
     {{- include "dashboard.labels" . | nindent 4 }}
     app.kubernetes.io/component: schema-service

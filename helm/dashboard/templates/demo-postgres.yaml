@@ -1,4 +1,4 @@
-{{- if and .Values.components.demo.enabled .Values.components.demo.postgres }}
+{{- if and .Values.services.demo.enabled .Values.services.demo.postgres }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

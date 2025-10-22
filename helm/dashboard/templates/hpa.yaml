@@ -1,4 +1,4 @@
-{{- if and .Values.components.backend .Values.autoscaling.backend.enabled }}
+{{- if and .Values.services.backend.enabled .Values.autoscaling.backend.enabled }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -23,7 +23,7 @@ spec:
         averageUtilization: {{ .Values.autoscaling.backend.targetCPUUtilizationPercentage }}
 {{- end }}
 
-{{- if and .Values.components.frontend .Values.autoscaling.frontend.enabled }}
+{{- if and .Values.services.frontend.enabled .Values.autoscaling.frontend.enabled }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -48,7 +48,7 @@ spec:
         averageUtilization: {{ .Values.autoscaling.frontend.targetCPUUtilizationPercentage }}
 {{- end }}
 
-{{- if and .Values.components.fastapi .Values.autoscaling.fastapi.enabled }}
+{{- if and .Values.services.fastapi .Values.autoscaling.fastapi.enabled }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler

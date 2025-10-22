@@ -1,0 +1,52 @@
+[
+  {
+    "instruction": "Optimize a query using proper indexing hints and predicate pushdown",
+    "input": "Find recent high-value orders with customer details, optimized for performance",
+    "output": "SELECT /*+ USE_INDEX(orders, idx_order_date_amount) */\n    c.customer_name,\n    o.order_date,\n    o.total_amount\nFROM orders o\nJOIN customers c ON o.customer_id = c.customer_id\nWHERE o.order_date >= DATE '2024-01-01'\n  AND o.total_amount > 1000\nORDER BY o.order_date DESC, o.total_amount DESC\nLIMIT 100;"
+  },
+  {
+    "instruction": "Use partition pruning for better performance on partitioned tables",
+    "input": "Query sales data with partition pruning by date",
+    "output": "SELECT \n    DATE_TRUNC('month', sale_date) AS month,\n    SUM(amount) AS monthly_sales,\n    COUNT(*) AS transaction_count\nFROM sales_partitioned\nWHERE sale_date >= DATE '2024-01-01'\n  AND sale_date < DATE '2024-07-01'\n  AND region = 'US'  -- Partition key for better pruning\nGROUP BY DATE_TRUNC('month', sale_date)\nORDER BY month;"
+  },
+  {
+    "instruction": "Optimize aggregation queries using materialized views",
+    "input": "Create and use a materialized view for frequently accessed sales summaries",
+    "output": "-- Create materialized view\nCREATE MATERIALIZED VIEW daily_sales_summary AS\nSELECT \n    DATE(order_date) AS sale_date,\n    product_category,\n    COUNT(*) AS order_count,\n    SUM(total_amount) AS daily_revenue,\n    AVG(total_amount) AS avg_order_value\nFROM orders o\nJOIN order_items oi ON o.order_id = oi.order_id\nJOIN products p ON oi.product_id = p.product_id\nGROUP BY DATE(order_date), product_category;\n\n-- Query using materialized view\nSELECT \n    product_category,\n    SUM(daily_revenue) AS total_revenue,\n    AVG(avg_order_value) AS category_avg_order\nFROM daily_sales_summary\nWHERE sale_date BETWEEN DATE '2024-01-01' AND DATE '2024-03-31'\nGROUP BY product_category\nORDER BY total_revenue DESC;"
+  },
+  {
+    "instruction": "Use EXPLAIN ANALYZE to optimize query execution plan",
+    "input": "Analyze and optimize a complex join query",
+    "output": "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)\nSELECT \n    c.customer_name,\n    COUNT(o.order_id) AS order_count,\n    SUM(o.total_amount) AS total_spent\nFROM customers c\nJOIN orders o ON c.customer_id = o.customer_id\nWHERE c.registration_date >= DATE '2023-01-01'\n  AND o.order_date >= DATE '2024-01-01'\nGROUP BY c.customer_id, c.customer_name\nHAVING SUM(o.total_amount) > 500\nORDER BY total_spent DESC;"
+  },
+  {
+    "instruction": "Optimize window functions with proper partitioning",
+    "input": "Calculate running totals efficiently using optimized window functions",
+    "output": "SELECT \n    customer_id,\n    order_date,\n    total_amount,\n    -- Optimized window function with proper partitioning\n    SUM(total_amount) OVER (\n        PARTITION BY customer_id \n        ORDER BY order_date \n        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW\n    ) AS running_total,\n    -- Use RANGE for better performance on date ranges\n    AVG(total_amount) OVER (\n        PARTITION BY customer_id \n        ORDER BY order_date \n        RANGE BETWEEN INTERVAL '30' DAY PRECEDING AND CURRENT ROW\n    ) AS avg_30_day\nFROM orders\nWHERE order_date >= DATE '2024-01-01'\nORDER BY customer_id, order_date;"
+  },
+  {
+    "instruction": "Use UNION ALL instead of UNION for better performance when duplicates are acceptable",
+    "input": "Combine current and archived orders efficiently",
+    "output": "-- Use UNION ALL for better performance (no deduplication)\nSELECT \n    'current' AS source,\n    order_id,\n    customer_id,\n    order_date,\n    total_amount\nFROM current_orders\nWHERE order_date >= DATE '2024-01-01'\n\nUNION ALL\n\nSELECT \n    'archived' AS source,\n    order_id,\n    customer_id,\n    order_date,\n    total_amount\nFROM archived_orders\nWHERE order_date >= DATE '2024-01-01'\n  AND order_date < DATE '2024-06-01'\n\nORDER BY order_date DESC;"
+  },
+  {
+    "instruction": "Optimize EXISTS vs IN clauses for subquery performance",
+    "input": "Find customers who have placed orders, optimized with EXISTS",
+    "output": "-- Use EXISTS for better performance with large datasets\nSELECT \n    c.customer_id,\n    c.customer_name,\n    c.email\nFROM customers c\nWHERE EXISTS (\n    SELECT 1\n    FROM orders o\n    WHERE o.customer_id = c.customer_id\n      AND o.order_date >= DATE '2024-01-01'\n)\nORDER BY c.customer_name;\n\n-- Alternative with semi-join (also efficient)\nSELECT DISTINCT\n    c.customer_id,\n    c.customer_name,\n    c.email\nFROM customers c\nJOIN orders o ON c.customer_id = o.customer_id\nWHERE o.order_date >= DATE '2024-01-01'\nORDER BY c.customer_name;"
+  },
+  {
+    "instruction": "Use columnar storage optimization with proper column selection",
+    "input": "Query large fact table with minimal column selection for better I/O",
+    "output": "-- Select only necessary columns for better columnar performance\nSELECT \n    DATE_TRUNC('day', transaction_date) AS day,\n    SUM(amount) AS daily_total,\n    COUNT(*) AS transaction_count\nFROM large_transactions_table\nWHERE transaction_date >= DATE '2024-01-01'\n  AND transaction_date < DATE '2024-02-01'\n  AND status = 'completed'  -- Early filtering\nGROUP BY DATE_TRUNC('day', transaction_date)\nORDER BY day;"
+  },
+  {
+    "instruction": "Optimize GROUP BY queries with pre-aggregation",
+    "input": "Use pre-aggregated tables for better performance on large datasets",
+    "output": "-- Create pre-aggregated summary table\nCREATE TABLE hourly_sales_summary AS\nSELECT \n    DATE_TRUNC('hour', order_timestamp) AS hour,\n    store_id,\n    product_category,\n    SUM(quantity) AS total_quantity,\n    SUM(revenue) AS total_revenue,\n    COUNT(DISTINCT customer_id) AS unique_customers\nFROM detailed_sales\nGROUP BY DATE_TRUNC('hour', order_timestamp), store_id, product_category;\n\n-- Query using pre-aggregated data\nSELECT \n    DATE_TRUNC('day', hour) AS day,\n    product_category,\n    SUM(total_revenue) AS daily_revenue,\n    SUM(unique_customers) AS daily_customers\nFROM hourly_sales_summary\nWHERE hour >= TIMESTAMP '2024-01-01 00:00:00'\n  AND hour < TIMESTAMP '2024-02-01 00:00:00'\nGROUP BY DATE_TRUNC('day', hour), product_category\nORDER BY day, daily_revenue DESC;"
+  },
+  {
+    "instruction": "Use query hints and join reordering for complex multi-table joins",
+    "input": "Optimize a complex 5-table join with proper join ordering",
+    "output": "SELECT /*+ \n    LEADING(o, c, oi, p, cat)\n    USE_HASH(c, oi, p, cat)\n    PARALLEL(4)\n*/\n    c.customer_name,\n    cat.category_name,\n    SUM(oi.quantity * p.price) AS category_total\nFROM orders o\n-- Start with most selective table (orders with date filter)\nJOIN customers c ON o.customer_id = c.customer_id\nJOIN order_items oi ON o.order_id = oi.order_id\nJOIN products p ON oi.product_id = p.product_id\nJOIN categories cat ON p.category_id = cat.category_id\nWHERE o.order_date >= DATE '2024-01-01'\n  AND o.order_date < DATE '2024-04-01'\n  AND o.status = 'completed'\nGROUP BY c.customer_id, c.customer_name, cat.category_id, cat.category_name\nHAVING SUM(oi.quantity * p.price) > 100\nORDER BY category_total DESC;"
+  }
+]

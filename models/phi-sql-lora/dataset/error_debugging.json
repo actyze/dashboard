@@ -1,0 +1,52 @@
+[
+  {
+    "instruction": "Fix a common syntax error with missing table aliases",
+    "input": "Error: Column 'name' is ambiguous. Fix this query: SELECT name, order_date FROM customers, orders WHERE customer_id = customer_id",
+    "output": "-- Fixed with proper table aliases and JOIN syntax\nSELECT \n    c.name,\n    o.order_date\nFROM customers c\nJOIN orders o ON c.customer_id = o.customer_id;"
+  },
+  {
+    "instruction": "Resolve data type mismatch error in WHERE clause",
+    "input": "Error: Cannot compare VARCHAR to INTEGER. Fix: SELECT * FROM orders WHERE customer_id = '123'",
+    "output": "-- Fix 1: Remove quotes to compare as integer\nSELECT * FROM orders WHERE customer_id = 123;\n\n-- Fix 2: Cast the column if needed\nSELECT * FROM orders WHERE CAST(customer_id AS VARCHAR) = '123';\n\n-- Fix 3: Cast the literal if customer_id is actually VARCHAR\nSELECT * FROM orders WHERE customer_id = CAST(123 AS VARCHAR);"
+  },
+  {
+    "instruction": "Fix GROUP BY error with non-aggregated columns",
+    "input": "Error: Column 'customer_name' must appear in GROUP BY. Fix: SELECT customer_name, COUNT(*) FROM orders GROUP BY customer_id",
+    "output": "-- Fix 1: Add missing column to GROUP BY\nSELECT \n    c.customer_name,\n    COUNT(o.order_id) AS order_count\nFROM customers c\nJOIN orders o ON c.customer_id = o.customer_id\nGROUP BY c.customer_id, c.customer_name;\n\n-- Fix 2: Use aggregation if you don't need the name\nSELECT \n    customer_id,\n    COUNT(*) AS order_count\nFROM orders\nGROUP BY customer_id;"
+  },
+  {
+    "instruction": "Resolve NULL handling issues in calculations",
+    "input": "Error: Arithmetic operations with NULL return NULL. Fix calculation with potential NULL values",
+    "output": "-- Problem: total_amount + shipping_cost returns NULL if either is NULL\n-- Fix with COALESCE to handle NULLs\nSELECT \n    order_id,\n    total_amount,\n    shipping_cost,\n    COALESCE(total_amount, 0) + COALESCE(shipping_cost, 0) AS final_total,\n    -- Alternative using CASE\n    CASE \n        WHEN total_amount IS NULL OR shipping_cost IS NULL THEN NULL\n        ELSE total_amount + shipping_cost\n    END AS final_total_strict\nFROM orders;"
+  },
+  {
+    "instruction": "Fix window function error with incorrect PARTITION BY",
+    "input": "Error: Window function requires ORDER BY. Fix: SELECT customer_id, ROW_NUMBER() OVER (PARTITION BY customer_id) FROM orders",
+    "output": "-- Fix: Add ORDER BY clause to window function\nSELECT \n    customer_id,\n    order_date,\n    total_amount,\n    ROW_NUMBER() OVER (\n        PARTITION BY customer_id \n        ORDER BY order_date DESC\n    ) AS order_sequence\nFROM orders;"
+  },
+  {
+    "instruction": "Resolve subquery returning multiple rows error",
+    "input": "Error: Subquery returns more than one row. Fix: SELECT * FROM customers WHERE customer_id = (SELECT customer_id FROM orders)",
+    "output": "-- Fix 1: Use IN instead of = for multiple values\nSELECT * \nFROM customers \nWHERE customer_id IN (\n    SELECT DISTINCT customer_id \n    FROM orders\n);\n\n-- Fix 2: Use EXISTS for better performance\nSELECT * \nFROM customers c\nWHERE EXISTS (\n    SELECT 1 \n    FROM orders o \n    WHERE o.customer_id = c.customer_id\n);\n\n-- Fix 3: If you want only one result, use LIMIT\nSELECT * \nFROM customers \nWHERE customer_id = (\n    SELECT customer_id \n    FROM orders \n    ORDER BY order_date DESC \n    LIMIT 1\n);"
+  },
+  {
+    "instruction": "Fix date/time format errors",
+    "input": "Error: Invalid date format '2024/01/01'. Fix date comparison query",
+    "output": "-- Fix: Use proper date literal format\nSELECT *\nFROM orders\nWHERE order_date >= DATE '2024-01-01'\n  AND order_date < DATE '2024-02-01';\n\n-- Alternative: Use CAST function\nSELECT *\nFROM orders\nWHERE order_date >= CAST('2024-01-01' AS DATE)\n  AND order_date < CAST('2024-02-01' AS DATE);\n\n-- For timestamp comparisons\nSELECT *\nFROM orders\nWHERE created_timestamp >= TIMESTAMP '2024-01-01 00:00:00'\n  AND created_timestamp < TIMESTAMP '2024-01-01 23:59:59';"
+  },
+  {
+    "instruction": "Resolve division by zero error in calculations",
+    "input": "Error: Division by zero. Fix: SELECT customer_id, total_revenue / order_count FROM customer_stats",
+    "output": "-- Fix 1: Use NULLIF to avoid division by zero\nSELECT \n    customer_id,\n    total_revenue,\n    order_count,\n    total_revenue / NULLIF(order_count, 0) AS avg_order_value\nFROM customer_stats;\n\n-- Fix 2: Use CASE statement for explicit handling\nSELECT \n    customer_id,\n    total_revenue,\n    order_count,\n    CASE \n        WHEN order_count = 0 THEN NULL\n        ELSE total_revenue / order_count\n    END AS avg_order_value\nFROM customer_stats;\n\n-- Fix 3: Filter out zero values\nSELECT \n    customer_id,\n    total_revenue / order_count AS avg_order_value\nFROM customer_stats\nWHERE order_count > 0;"
+  },
+  {
+    "instruction": "Fix UNION type mismatch error",
+    "input": "Error: Column types don't match in UNION. Fix queries with different column types",
+    "output": "-- Problem: Different data types in UNION\n-- Fix: Cast columns to compatible types\nSELECT \n    CAST(customer_id AS VARCHAR) AS id,\n    customer_name AS name,\n    'customer' AS type\nFROM customers\n\nUNION ALL\n\nSELECT \n    CAST(supplier_id AS VARCHAR) AS id,\n    supplier_name AS name,\n    'supplier' AS type\nFROM suppliers;\n\n-- Alternative: Ensure consistent column types\nSELECT \n    customer_id,\n    customer_name,\n    email,\n    CAST(NULL AS VARCHAR) AS phone  -- Placeholder for missing column\nFROM customers\n\nUNION ALL\n\nSELECT \n    supplier_id,\n    supplier_name,\n    contact_email,\n    phone\nFROM suppliers;"
+  },
+  {
+    "instruction": "Resolve performance issues with large result sets",
+    "input": "Error: Query timeout due to large result set. Optimize this query that returns millions of rows",
+    "output": "-- Problem: Query returns too many rows without limits\n-- Fix 1: Add appropriate LIMIT and pagination\nSELECT \n    order_id,\n    customer_id,\n    order_date,\n    total_amount\nFROM orders\nWHERE order_date >= DATE '2024-01-01'\nORDER BY order_date DESC\nLIMIT 1000 OFFSET 0;  -- Paginate results\n\n-- Fix 2: Add more selective WHERE conditions\nSELECT \n    order_id,\n    customer_id,\n    order_date,\n    total_amount\nFROM orders\nWHERE order_date >= DATE '2024-01-01'\n  AND order_date < DATE '2024-01-08'  -- Smaller date range\n  AND total_amount > 100  -- Additional filter\nORDER BY order_date DESC;\n\n-- Fix 3: Use aggregation instead of row-level data\nSELECT \n    DATE_TRUNC('day', order_date) AS day,\n    COUNT(*) AS order_count,\n    SUM(total_amount) AS daily_total\nFROM orders\nWHERE order_date >= DATE '2024-01-01'\nGROUP BY DATE_TRUNC('day', order_date)\nORDER BY day DESC;"
+  }
+]

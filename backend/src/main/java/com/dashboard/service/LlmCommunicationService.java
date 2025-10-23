@@ -11,7 +11,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Service for communicating with LLM services (External LLM and T4 Phi)
@@ -24,7 +27,12 @@ public class LlmCommunicationService {
     
     // System message for external LLM APIs (OpenAI-compatible format)
     private static final String SYSTEM_MESSAGE = 
-        "You are an expert Trino 477 SQL developer. Generate optimized SQL queries and provide a brief dataset summary.";
+        "Expert Trino SQL developer. Generate optimized queries.\n\n" +
+        "RULES:\n" +
+        "1. Use highest confidence table (>0.8) first\n" +
+        "2. Same query = same SQL structure\n" +
+        "3. Prefer first table if confidence similar (<0.05 diff)\n" +
+        "4. Be deterministic, avoid random variations";
     
     @Autowired
     private RestTemplate restTemplate;
@@ -229,16 +237,31 @@ public class LlmCommunicationService {
         prompt.append("TARGET DATABASE: Trino/Presto SQL Engine\n");
         addTrinoRules(prompt);
         
-        // Add schema context
+        // Add schema context with confidence-based prioritization
         if (schemaRecommendations != null && schemaRecommendations.get("recommendations") != null) {
-            prompt.append("Schema:\n");
+            prompt.append("Schema (ordered by relevance confidence):\n");
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> recommendations = (List<Map<String, Object>>) schemaRecommendations.get("recommendations");
             
-            for (Map<String, Object> rec : recommendations) {
-                prompt.append(rec.get("full_name")).append(" (").append(rec.get("confidence")).append(")\n");
+            // Add concise confidence guidance
+            double topConfidence = recommendations.isEmpty() ? 0.0 : 
+                ((Number) recommendations.get(0).get("confidence")).doubleValue();
+            
+            String confidenceLevel = topConfidence > 0.8 ? "HIGH" : topConfidence > 0.6 ? "MED" : "LOW";
+            prompt.append(String.format("Top confidence: %.3f (%s) - Use first table\n\n", topConfidence, confidenceLevel));
+            
+            for (int i = 0; i < recommendations.size(); i++) {
+                Map<String, Object> rec = recommendations.get(i);
+                double confidence = rec.get("confidence") != null ? ((Number) rec.get("confidence")).doubleValue() : 0.0;
+                
+                // Add concise priority indicators
+                String priority = confidence > 0.8 ? " [H]" : confidence > 0.6 ? " [M]" : " [L]";
+                
+                prompt.append(String.format("%d. %s (%.3f)%s\n", 
+                    i + 1, rec.get("full_name"), confidence, priority));
+                
                 if (rec.get("columns") != null) {
-                    prompt.append("  ").append(rec.get("columns")).append("\n");
+                    prompt.append("   Columns: ").append(rec.get("columns")).append("\n");
                 }
             }
             prompt.append("\n");
@@ -263,6 +286,7 @@ public class LlmCommunicationService {
         
         return prompt.toString();
     }
+    
     
     /**
      * Parse External LLM response (OpenAI format)

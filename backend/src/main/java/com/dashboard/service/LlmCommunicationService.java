@@ -119,6 +119,14 @@ public class LlmCommunicationService {
         
         try {
             String userPrompt = buildUserPrompt(nlQuery, userQueryHistory, schemaRecommendations);
+            logger.debug("=== EXTERNAL LLM REQUEST DEBUG ===");
+            logger.debug("Natural Language Query: '{}'", nlQuery);
+            logger.debug("User Query History Size: {}", userQueryHistory != null ? userQueryHistory.size() : 0);
+            logger.debug("Schema Recommendations Count: {}", 
+                schemaRecommendations != null && schemaRecommendations.get("recommendations") != null ? 
+                ((List<?>) schemaRecommendations.get("recommendations")).size() : 0);
+            logger.debug("Built User Prompt Length: {} characters", userPrompt.length());
+            logger.debug("User Prompt Content:\n{}", userPrompt);
             
             // Build OpenAI-compatible request
             Map<String, Object> requestBody = new HashMap<>();
@@ -143,6 +151,13 @@ public class LlmCommunicationService {
             
             requestBody.put("messages", messages);
             
+            logger.debug("Request Body Configuration:");
+            logger.debug("  Model: {}", externalLlmModel);
+            logger.debug("  Max Tokens: {}", externalLlmMaxTokens);
+            logger.debug("  Temperature: {}", externalLlmTemperature);
+            logger.debug("  Messages Count: {}", messages.size());
+            logger.debug("  System Message Length: {} characters", SYSTEM_MESSAGE.length());
+            
             // Set up headers
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -152,12 +167,31 @@ public class LlmCommunicationService {
             
             // Make API call
             String endpoint = externalLlmBaseUrl + "/chat/completions";
-            logger.debug("Calling External LLM at: {}", endpoint);
+            logger.debug("=== EXTERNAL LLM API CALL ===");
+            logger.debug("Endpoint: {}", endpoint);
+            logger.debug("Making API call to External LLM...");
             
             ResponseEntity<Map> response = restTemplate.postForEntity(endpoint, request, Map.class);
             
+            logger.debug("=== EXTERNAL LLM API RESPONSE ===");
+            logger.debug("Response Status: {}", response.getStatusCode());
+            logger.debug("Response Headers: {}", response.getHeaders());
+            
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return parseExternalLLMResponse(response.getBody());
+                logger.debug("Response Body Keys: {}", response.getBody().keySet());
+                logger.debug("Raw Response Body: {}", response.getBody());
+                
+                Map<String, Object> parsedResponse = parseExternalLLMResponse(response.getBody());
+                logger.debug("=== PARSED LLM RESPONSE ===");
+                logger.debug("Parsed Response Success: {}", parsedResponse.get("success"));
+                logger.debug("Generated SQL Length: {}", 
+                    parsedResponse.get("sql") != null ? parsedResponse.get("sql").toString().length() : 0);
+                logger.debug("Generated SQL: {}", parsedResponse.get("sql"));
+                logger.debug("Confidence: {}", parsedResponse.get("confidence"));
+                logger.debug("Reasoning Length: {}", 
+                    parsedResponse.get("reasoning") != null ? parsedResponse.get("reasoning").toString().length() : 0);
+                
+                return parsedResponse;
             } else {
                 logger.error("External LLM API call failed with status: {}", response.getStatusCode());
                 Map<String, Object> errorResponse = new HashMap<>();

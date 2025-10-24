@@ -395,8 +395,12 @@ phiSqlLora:
 # Logging configuration
 logging:
   level:
-    dashboard: INFO
+    dashboard: DEBUG
     root: INFO
+    com.dashboard.service: DEBUG
+    com.dashboard.service.LlmCommunicationService: DEBUG
+    com.dashboard.service.OrchestrationService: DEBUG
+    com.dashboard.service.SchemaRecommendationService: DEBUG
   files:
     application:
       path: "/app/logs/dashboard-backend.log"

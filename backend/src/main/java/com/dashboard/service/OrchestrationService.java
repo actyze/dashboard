@@ -53,6 +53,10 @@ public class OrchestrationService {
             logger.info("=== STEP 1: FAISS SCHEMA SERVICE ===");
             logger.info("Input NL Query: '{}'", nlQuery);
             logger.info("Input Query History: {}", userQueryHistory != null ? userQueryHistory : "None");
+            logger.debug("=== ORCHESTRATION DEBUG - STEP 1 ===");
+            logger.debug("Request timestamp: {}", System.currentTimeMillis());
+            logger.debug("Query length: {} characters", nlQuery.length());
+            logger.debug("History entries: {}", userQueryHistory != null ? userQueryHistory.size() : 0);
             
             Map<String, Object> schemaRecommendations = schemaRecommendationService.getSchemaRecommendations(nlQuery, userQueryHistory);
             

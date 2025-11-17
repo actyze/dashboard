@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Paper, Typography, Box, CircularProgress, Alert, Chip, Stack } from '@mui/material';
+import { Paper, Typography, Box, CircularProgress, Chip, Stack } from '@mui/material';
 import Plot from 'react-plotly.js';
+import { Alert, Card } from './ui';
+import { useTheme } from '../contexts/ThemeContext';
 
 const Chart = ({ chartData, loading = false, error = null }) => {
+  const { isDark } = useTheme();
   const [plotData, setPlotData] = useState([]);
   const [layout, setLayout] = useState({});
   const [chartInfo, setChartInfo] = useState(null);
@@ -243,49 +246,55 @@ const Chart = ({ chartData, loading = false, error = null }) => {
 
   if (loading) {
     return (
-      <Paper sx={{ p: 2, height: 'calc(100% - 40px)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <Box sx={{ textAlign: 'center' }}>
-          <CircularProgress sx={{ mb: 2 }} />
-          <Typography variant="body2" color="text.secondary">
-            Generating chart...
-          </Typography>
-        </Box>
-      </Paper>
+      <Card className="h-full flex flex-col">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <CircularProgress sx={{ mb: 2 }} />
+            <Typography variant="body2" color="text.secondary">
+              Generating chart...
+            </Typography>
+          </div>
+        </div>
+      </Card>
     );
   }
 
   if (error) {
     return (
-      <Paper sx={{ p: 2, height: 'calc(100% - 40px)' }}>
-        <Alert severity="error" sx={{ mb: 2 }}>
+      <Card className="h-full">
+        <Alert variant="error" className="mb-4">
           {error}
         </Alert>
         <Typography variant="body2" color="text.secondary">
           Unable to generate chart. Please try again or check your query.
         </Typography>
-      </Paper>
+      </Card>
     );
   }
 
   if (!chartData || !plotData || plotData.length === 0) {
     return (
-      <Paper sx={{ p: 2, height: 'calc(100% - 40px)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <Box sx={{ textAlign: 'center' }}>
-          <Typography variant="h6" color="text.secondary" gutterBottom>
-            No Chart Data
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Execute a query to generate a chart
-          </Typography>
-        </Box>
-      </Paper>
+      <Card className="h-full flex flex-col">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              No Chart Data
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Execute a query to generate a chart
+            </Typography>
+          </div>
+        </div>
+      </Card>
     );
   }
 
   return (
-    <Paper sx={{ p: 2, height: 'calc(100% - 40px)' }}>
-      {renderChartInfo()}
-      <Box sx={{ height: 'calc(100% - 60px)' }}>
+    <Card className="h-full flex flex-col">
+      <Card.Header className="flex-shrink-0">
+        {renderChartInfo()}
+      </Card.Header>
+      <Card.Body className="flex-1 p-0">
         <Plot
           data={plotData}
           layout={layout}
@@ -297,8 +306,8 @@ const Chart = ({ chartData, loading = false, error = null }) => {
             doubleClick: 'reset'
           }}
         />
-      </Box>
-    </Paper>
+      </Card.Body>
+    </Card>
   );
 };
 

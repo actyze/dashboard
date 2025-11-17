@@ -1,26 +1,21 @@
 import React from 'react';
-import { Paper, TextField, Button, Box, Typography } from '@mui/material';
+import { Card, TextArea, Button } from './ui';
 
 const SqlQuery = ({ sqlQuery, setSqlQuery, backendResponse, onExecute }) => (
-  <Paper sx={{ p: 2, height: 'calc(100% - 40px)', backgroundColor: '#f8f9fa' }}>
-    <TextField
-      multiline
-      fullWidth
-      rows={5}
-      variant="outlined"
-      value={sqlQuery}
-      onChange={(e) => setSqlQuery(e.target.value)}
-      sx={{ 
-        fontFamily: 'monospace',
-        backgroundColor: '#f8f9fa',
-        mb: 2,
-        '& .MuiOutlinedInput-root': {
-          backgroundColor: '#f8f9fa'
-        }
-      }}
-    />
-    <Button variant="contained" onClick={onExecute}>Execute</Button>
-  </Paper>
+  <Card className="h-full">
+    <div className="space-y-4">
+      <TextArea
+        value={sqlQuery}
+        onChange={(e) => setSqlQuery(e.target.value)}
+        rows={8}
+        placeholder="Enter your SQL query here..."
+        className="font-mono text-sm"
+      />
+      <Button onClick={onExecute} variant="primary">
+        Execute Query
+      </Button>
+    </div>
+  </Card>
 );
 
 export default SqlQuery;

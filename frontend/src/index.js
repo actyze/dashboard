@@ -1,26 +1,43 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './index.css';
 import App from './App';
 import { CssBaseline, ThemeProvider } from '@mui/material';
 import { createTheme } from '@mui/material/styles';
+import { ThemeProvider as CustomThemeProvider, useTheme } from './contexts/ThemeContext';
 
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#1976d2',
+const AppWithTheme = () => {
+  const { isDark } = useTheme();
+  
+  const muiTheme = createTheme({
+    palette: {
+      mode: isDark ? 'dark' : 'light',
+      primary: {
+        main: '#1976d2',
+      },
+      secondary: {
+        main: '#dc004e',
+      },
+      background: {
+        default: isDark ? '#111827' : '#ffffff',
+        paper: isDark ? '#1f2937' : '#ffffff',
+      },
     },
-    secondary: {
-      main: '#dc004e',
-    },
-  },
-});
+  });
+
+  return (
+    <ThemeProvider theme={muiTheme}>
+      <CssBaseline />
+      <App />
+    </ThemeProvider>
+  );
+};
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <App />
-    </ThemeProvider>
+    <CustomThemeProvider>
+      <AppWithTheme />
+    </CustomThemeProvider>
   </React.StrictMode>
 );

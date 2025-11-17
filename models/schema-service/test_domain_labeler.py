@@ -102,7 +102,7 @@ class DomainLabeler:
         
         # Domain-specific patterns
         self.product_patterns = [
-            r'\b(fritos|doritos|pepsi|coke|nike|adidas|iphone|macbook|samsung|dell)\b',
+            r'\b(fritos|doritos|coke|nike|adidas|iphone|macbook|samsung|dell)\b',
             r'\b\w+\s+(chips|soda|shoes|shirt|pants|laptop|phone|tablet)\b'
         ]
         

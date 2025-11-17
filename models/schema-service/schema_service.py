@@ -136,36 +136,48 @@ class TrinoSchemaService:
             auth_user = os.getenv("TRINO_AUTH_USER")
             auth_password = os.getenv("TRINO_AUTH_PASSWORD")
             
-            # Auto-detect SSL for port 443
-            if self.port == 443:
-                logger.info(f"Port 443 detected, using HTTPS with SSL verification disabled")
-                
-                # Use basic auth if credentials provided
-                if auth_user and auth_password:
-                    logger.info(f"Using basic authentication for user: {auth_user}")
-                    auth_obj = trino.auth.BasicAuthentication(auth_user, auth_password)
-                    self.connection = trino.dbapi.connect(
-                        host=self.host, 
-                        port=self.port, 
-                        user=auth_user,  # Use auth user instead of self.user
-                        catalog=self.catalog,
-                        http_scheme="https",
-                        verify=False,  # Disable SSL verification for self-signed certs
-                        auth=auth_obj
-                    )
-                else:
-                    self.connection = trino.dbapi.connect(
-                        host=self.host, 
-                        port=self.port, 
-                        user=self.user, 
-                        catalog=self.catalog,
-                        http_scheme="https",
-                        verify=False  # Disable SSL verification for self-signed certs
-                    )
+            # Check SSL configuration
+            ssl_enabled = os.getenv("TRINO_SSL_ENABLED", "false").lower() == "true"
+            ssl_verification = os.getenv("TRINO_SSL_VERIFICATION", "NONE").upper()
+            
+            # Auto-detect SSL for port 443 if not explicitly configured
+            if not ssl_enabled and self.port == 443:
+                ssl_enabled = True
+                logger.info(f"Port 443 detected, auto-enabling SSL")
+            
+            # Determine SSL verification setting
+            verify_ssl = True
+            if ssl_verification == "NONE":
+                verify_ssl = False
+            elif ssl_verification == "CA":
+                verify_ssl = True
+            elif ssl_verification == "FULL":
+                verify_ssl = True
+            
+            # Build connection parameters
+            connect_params = {
+                "host": self.host,
+                "port": self.port,
+                "catalog": self.catalog
+            }
+            
+            if ssl_enabled:
+                connect_params["http_scheme"] = "https"
+                connect_params["verify"] = verify_ssl
+                logger.info(f"Using HTTPS with SSL verification: {ssl_verification}")
             else:
-                self.connection = trino.dbapi.connect(
-                    host=self.host, port=self.port, user=self.user, catalog=self.catalog
-                )
+                logger.info(f"Using HTTP (SSL disabled)")
+            
+            # Use basic auth if credentials provided
+            if auth_user and auth_password:
+                logger.info(f"Using basic authentication for user: {auth_user}")
+                auth_obj = trino.auth.BasicAuthentication(auth_user, auth_password)
+                connect_params["user"] = auth_user
+                connect_params["auth"] = auth_obj
+            else:
+                connect_params["user"] = self.user
+            
+            self.connection = trino.dbapi.connect(**connect_params)
             logger.info(f"Connected to Trino at {self.host}:{self.port}")
         except Exception as e:
             logger.error(f"Trino connect failed: {e}")
@@ -447,7 +459,7 @@ class DomainLabeler:
         
         # Domain-specific patterns
         self.product_patterns = [
-            r'\b(fritos|doritos|pepsi|coke|nike|adidas|iphone|macbook|samsung|dell)\b',
+            r'\b(fritos|doritos|coke|nike|adidas|iphone|macbook|samsung|dell)\b',
             r'\b\w+\s+(chips|soda|shoes|shirt|pants|laptop|phone|tablet)\b'
         ]
         

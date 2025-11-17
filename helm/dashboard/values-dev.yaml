@@ -15,6 +15,34 @@ global:
   imagePullSecrets: []
 
 # ============================================================================
+# DEVELOPMENT SECRET MANAGEMENT
+# ============================================================================
+# ⚠️  SECRETS ARE EXTERNALIZED - NOT IN GIT
+# Copy values-dev-secrets.yaml.example to values-dev-secrets.yaml
+# Fill in your actual secrets in values-dev-secrets.yaml (not committed to Git)
+secrets:
+  create: true  # Create secrets from values for development convenience
+  
+  # External LLM configuration - LOADED FROM values-dev-secrets.yaml
+  externalLLM:
+    apiKey: ""  # ⚠️  MUST be provided in values-dev-secrets.yaml
+    
+  # Trino credentials - LOADED FROM values-dev-secrets.yaml  
+  trino:
+    username: ""  # ⚠️  MUST be provided in values-dev-secrets.yaml
+    password: ""  # ⚠️  MUST be provided in values-dev-secrets.yaml
+    
+  # Demo database credentials - LOADED FROM values-dev-secrets.yaml
+  demo:
+    postgres:
+      username: ""  # ⚠️  LOADED from values-dev-secrets.yaml
+      password: ""  # ⚠️  LOADED from values-dev-secrets.yaml
+    mysql:
+      username: ""  # ⚠️  LOADED from values-dev-secrets.yaml
+      password: ""  # ⚠️  LOADED from values-dev-secrets.yaml
+      rootPassword: ""  # ⚠️  LOADED from values-dev-secrets.yaml
+
+# ============================================================================
 # MODEL STRATEGY - Choose ONE approach for SQL generation
 # ============================================================================
 modelStrategy:
@@ -24,7 +52,7 @@ modelStrategy:
     provider: "perplexity"     # Options: openai, perplexity, anthropic, groq, together
     model: "sonar-reasoning-pro"
     baseUrl: "https://api.perplexity.ai"
-    apiKey: "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"  # Should be from secret in production
+    # apiKey loaded from secret: dashboard-external-llm
     maxTokens: 1000
     temperature: 0.1
     timeout: 30s
@@ -60,7 +88,7 @@ services:
   schemaService:
     enabled: true        # ← FAISS-based schema recommendations (enhances SQL quality)
   trino:
-    enabled: false       # ← Embedded Trino pod disabled (using explicit configs in backend/schemaService)
+    enabled: true        # ← Embedded Trino pod enabled for local testing
   
   # Demo Data (for development/testing)
   demo:
@@ -91,12 +119,8 @@ backend:
     schemaService:
       url: "http://dashboard-schema-service:8001"
     trino:
-      host: "external-trino-cluster.company.com"  # Replace with your Trino cluster hostname
-      port: 443
-      catalog: "catalog"  # Replace with your catalog name
-      schema: "schema"    # Replace with your schema name
-      user: "trino_user"  # Replace with your Trino username
-      password: "CHANGE_ME"  # Replace with your password or use secrets
+      # All Trino connection details loaded from values-dev-secrets.yaml
+      # host, port, catalog, schema, user, password
     mlService:
       modelType: "external-llm"
     sqlExecution:
@@ -201,16 +225,10 @@ trino:
     tpch:
       connector.name: "tpch"
       tpch.splits-per-node: "4"
-    postgresql:
-      connector.name: "postgresql"
-      connection-url: "jdbc:postgresql://dashboard-demo-postgres:5432/ecommerce_demo"
-      connection-user: "demo_user"
-      connection-password: "demo_password"
     mysql:
       connector.name: "mysql"
       connection-url: "jdbc:mysql://dashboard-demo-mysql:3306/hrms"
-      connection-user: "demo_user"
-      connection-password: "demo_password"
+      # Credentials loaded from dashboard-demo-credentials secret
   livenessProbe:
     initialDelaySeconds: 60
     periodSeconds: 30
@@ -229,8 +247,7 @@ demo:
       repository: postgres
       tag: "15-alpine"
     database: "ecommerce_demo"
-    user: "demo_user"
-    password: "demo_password"
+    # Credentials loaded from dashboard-demo-credentials secret
     resources:
       requests:
         memory: "256Mi"
@@ -243,9 +260,7 @@ demo:
       repository: mysql
       tag: "8.0"
     database: "hrms"
-    user: "demo_user"
-    password: "demo_password"
-    rootPassword: "root_password"
+    # Credentials loaded from dashboard-demo-credentials secret
     resources:
       requests:
         memory: "256Mi"
@@ -270,12 +285,8 @@ schemaService:
       cpu: "6000m"         # ↑ 6 cores for maximum embedding performance
   env:
     trino:
-      host: "external-trino-cluster.company.com"  # Replace with your Trino cluster hostname
-      port: 443
-      catalog: "catalog"  # Replace with your catalog name
-      schema: "schema"    # Replace with your schema name
-      user: "trino_user"  # Replace with your Trino username
-      password: "CHANGE_ME"  # Replace with your password or use secrets
+      # All Trino connection details loaded from values-dev-secrets.yaml
+      # host, port, catalog, schema, user, password
     refreshHours: 3
   probes:
     liveness:

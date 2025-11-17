@@ -30,11 +30,17 @@ spec:
         - name: SCHEMA_SERVICE_URL
           value: {{ .Values.backend.env.schemaService.url }}
         - name: TRINO_URL
-          value: "jdbc:trino://{{ .Values.backend.env.trino.host }}:{{ .Values.backend.env.trino.port }}/{{ .Values.backend.env.trino.catalog }}/{{ .Values.backend.env.trino.schema }}?SSL=true&SSLVerification=NONE"
+          value: "jdbc:trino://{{ .Values.backend.env.trino.host }}:{{ .Values.backend.env.trino.port }}/{{ .Values.backend.env.trino.catalog }}/{{ .Values.backend.env.trino.schema }}{{ if .Values.backend.env.trino.jdbcParams }}{{ .Values.backend.env.trino.jdbcParams }}{{ else if .Values.backend.env.trino.ssl | default false }}?SSL=true&SSLVerification={{ .Values.backend.env.trino.sslVerification | default "NONE" }}{{ else }}?SSL=false{{ end }}"
         - name: TRINO_USER
-          value: "{{ .Values.backend.env.trino.user }}"
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-trino-credentials
+              key: username
         - name: TRINO_PASSWORD
-          value: "{{ .Values.backend.env.trino.password }}"
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-trino-credentials
+              key: password
         {{- if .Values.modelStrategy.externalLLM.enabled }}
         # External LLM Configuration
         - name: EXTERNAL_LLM_ENABLED

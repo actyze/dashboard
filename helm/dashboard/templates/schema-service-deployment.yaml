@@ -29,13 +29,26 @@ spec:
         - name: TRINO_PORT
           value: "{{ .Values.schemaService.env.trino.port }}"
         - name: TRINO_USER
-          value: "{{ .Values.schemaService.env.trino.user }}"
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-trino-credentials
+              key: username
         - name: TRINO_AUTH_USER
-          value: "{{ .Values.schemaService.env.trino.user }}"
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-trino-credentials
+              key: username
         - name: TRINO_AUTH_PASSWORD
-          value: "{{ .Values.schemaService.env.trino.password }}"
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-trino-credentials
+              key: password
         - name: SCHEMA_REFRESH_HOURS
           value: "{{ .Values.schemaService.env.refreshHours }}"
+        - name: TRINO_SSL_ENABLED
+          value: "{{ .Values.schemaService.env.trino.ssl | default false }}"
+        - name: TRINO_SSL_VERIFICATION
+          value: "{{ .Values.schemaService.env.trino.sslVerification | default "NONE" }}"
         - name: SERVICE_HOST
           value: "0.0.0.0"
         - name: SERVICE_PORT
@@ -93,24 +106,4 @@ spec:
   selector:
     {{- include "dashboard.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: schema-service
-{{- if .Values.schemaService.storage.enabled }}
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ include "dashboard.fullname" . }}-schema-service-pvc
-  namespace: {{ .Values.global.namespace }}
-  labels:
-    {{- include "dashboard.labels" . | nindent 4 }}
-    app.kubernetes.io/component: schema-service
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: {{ .Values.schemaService.storage.size }}
-  {{- if .Values.schemaService.storage.storageClass }}
-  storageClassName: {{ .Values.schemaService.storage.storageClass }}
-  {{- end }}
-{{- end }}
 {{- end }}

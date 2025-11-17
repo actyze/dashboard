@@ -50,16 +50,16 @@ data:
   {{- if and .Values.services.demo.enabled .Values.services.demo.postgres }}
   postgres.properties: |
     connector.name=postgresql
-    connection-url=jdbc:postgresql://{{ include "dashboard.fullname" . }}-demo-postgres:5432/{{ .Values.demo.postgres.database }}
-    connection-user={{ .Values.demo.postgres.user }}
-    connection-password={{ .Values.demo.postgres.password }}
+    connection-url=jdbc:postgresql://{{ include "dashboard.fullname" . }}-demo-postgres:5432/{{ .Values.demo.postgres.database }}?sslmode=disable
+    connection-user={{ .Values.secrets.demo.postgres.username | default "demo_user" }}
+    connection-password={{ .Values.secrets.demo.postgres.password | default "demo_password" }}
   {{- end }}
   
   {{- if and .Values.services.demo.enabled .Values.services.demo.mysql }}
   mysql.properties: |
     connector.name=mysql
-    connection-url=jdbc:mysql://{{ include "dashboard.fullname" . }}-demo-mysql:3306
-    connection-user={{ .Values.demo.mysql.user }}
-    connection-password={{ .Values.demo.mysql.password }}
+    connection-url=jdbc:mysql://{{ include "dashboard.fullname" . }}-demo-mysql:3306?useSSL=false&allowPublicKeyRetrieval=true
+    connection-user={{ .Values.secrets.demo.mysql.username | default "demo_user" }}
+    connection-password={{ .Values.secrets.demo.mysql.password | default "demo_password" }}
   {{- end }}
 {{- end }}

@@ -16,6 +16,31 @@ global:
     - name: dockerhub-secret
 
 # ============================================================================
+# PRODUCTION SECRET MANAGEMENT
+# ============================================================================
+secrets:
+  create: false  # Secrets managed externally in production
+  
+  # External LLM configuration (managed via script or CI/CD)
+  externalLLM:
+    apiKey: ""  # Loaded from dashboard-external-llm secret
+    
+  # Trino credentials (managed via script or CI/CD)
+  trino:
+    username: ""  # Loaded from dashboard-trino-credentials secret
+    password: ""  # Loaded from dashboard-trino-credentials secret
+    
+  # Demo database credentials (optional for production)
+  demo:
+    postgres:
+      username: ""
+      password: ""
+    mysql:
+      username: ""
+      password: ""
+      rootPassword: ""
+
+# ============================================================================
 # MODEL STRATEGY - Choose ONE approach for SQL generation
 # ============================================================================
 modelStrategy:

@@ -1,4 +1,4 @@
-{{- if and .Values.services.demo.enabled .Values.services.demo.mysql }}
+{{- if and .Values.services.trino.enabled .Values.services.demo.enabled .Values.services.demo.mysql }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -29,13 +29,24 @@ spec:
           protocol: TCP
         env:
         - name: MYSQL_ROOT_PASSWORD
-          value: {{ .Values.demo.mysql.rootPassword }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-demo-credentials
+              key: mysql-root-password
         - name: MYSQL_DATABASE
           value: {{ .Values.demo.mysql.database }}
         - name: MYSQL_USER
-          value: {{ .Values.demo.mysql.user }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-demo-credentials
+              key: mysql-username
         - name: MYSQL_PASSWORD
-          value: {{ .Values.demo.mysql.password }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-demo-credentials
+              key: mysql-password
+        - name: MYSQL_SSL_MODE
+          value: DISABLED  # Disable SSL for local development
         resources:
           {{- toYaml .Values.demo.mysql.resources | nindent 10 }}
         volumeMounts:

@@ -95,3 +95,11 @@ k8s/
 kind-config*.yaml
 *-local.sh
 *-test*.sh
+
+# Secrets files (DO NOT COMMIT)
+helm/dashboard/values-dev-secrets.yaml
+helm/dashboard/values-production-secrets.yaml
+helm/dashboard/values-*-secrets.yaml
+*-secrets.yaml
+*.env
+.env*

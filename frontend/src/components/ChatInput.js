@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { TextField, Button, Box } from '@mui/material';
+import { Box } from '@mui/material';
+import { Input, Button } from './ui';
 
 const ChatInput = ({ onSubmit }) => {
   const [chatInput, setChatInput] = useState('');
@@ -31,21 +32,14 @@ const ChatInput = ({ onSubmit }) => {
 
   return (
     <Box sx={{ mt: 2 }}>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <TextField
-          fullWidth
+      <form onSubmit={handleSubmit} className="flex gap-2 items-end">
+        <Input
           placeholder="Type a message..."
-          variant="outlined"
           value={chatInput}
           onChange={(e) => setChatInput(e.target.value)}
-          sx={{ 
-            backgroundColor: '#ffffff',
-            '& .MuiOutlinedInput-root': {
-              borderRadius: 2
-            }
-          }}
+          className="flex-1"
         />
-        <Button type="submit" variant="contained">Submit</Button>
+        <Button type="submit" variant="primary">Submit</Button>
       </form>
     </Box>
   );

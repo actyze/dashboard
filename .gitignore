@@ -86,9 +86,6 @@ pytorch_model.bin
 
 # Empty/obsolete startup scripts (replaced by Kubernetes/Helm)
 restart-all.sh
-restart-fastapi.sh
-stop-all.sh
-stop-fastapi.sh
 
 # Local Kubernetes files (development/testing only)
 k8s/

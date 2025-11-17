@@ -1,10 +1,10 @@
 #!/bin/bash
-# Start all services: backend (Spring Boot), FastAPI (ML), and frontend (React)
+# Start frontend and backend services only
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-echo "🚀 Starting Enhanced Dashboard Services"
-echo "======================================"
+echo "🚀 Starting Dashboard Services (Frontend + Backend)"
+echo "=================================================="
 
 # --- Shutdown existing services ---
 echo "🛑 Stopping existing services..."
@@ -14,14 +14,6 @@ EXISTING_BACKEND_PID=$(ps aux | grep 'org.springframework.boot.loader.JarLaunche
 if [ -n "$EXISTING_BACKEND_PID" ]; then
   echo "Stopping existing backend process: $EXISTING_BACKEND_PID"
   kill $EXISTING_BACKEND_PID
-  sleep 2
-fi
-
-# Stop FastAPI
-EXISTING_FASTAPI_PID=$(ps aux | grep 'dual_model_server.py\|uvicorn.*dual_model_server' | grep -v grep | awk '{print $2}')
-if [ -n "$EXISTING_FASTAPI_PID" ]; then
-  echo "Stopping existing FastAPI process: $EXISTING_FASTAPI_PID"
-  kill $EXISTING_FASTAPI_PID
   sleep 2
 fi
 
@@ -39,35 +31,23 @@ echo "🏗️ Starting Spring Boot backend..."
 BACKEND_PID=$!
 echo "✅ Backend started with PID $BACKEND_PID (Port 8080)"
 
-# --- Start FastAPI (ML Service) ---
-echo "🧠 Starting FastAPI ML service with CodeT5+ dual-model..."
-"$SCRIPT_DIR/start-fastapi.sh" &
-echo "✅ FastAPI service starting (Port 8000)"
-
-# Wait for services to initialize
-echo "⏳ Waiting for services to start..."
+# Wait for backend to initialize
+echo "⏳ Waiting for backend to start..."
 sleep 10
 
-# Check service health
-echo "🔍 Checking service health..."
+# Check backend health
+echo "🔍 Checking backend health..."
 if curl -s http://localhost:8080/actuator/health > /dev/null; then
   echo "✅ Backend (Spring Boot) is healthy"
 else
   echo "❌ Backend failed to start - check backend.log"
 fi
 
-if curl -s http://localhost:8000/health > /dev/null; then
-  echo "✅ FastAPI (ML) is healthy"
-else
-  echo "❌ FastAPI failed to start - check fastapi.log"
-fi
-
 # --- Start Frontend (React) ---
 echo "🎨 Starting React frontend..."
 echo "📱 Frontend will open in your browser at http://localhost:3000"
 echo "🔗 Backend API: http://localhost:8080"
-echo "🧠 ML API: http://localhost:8000"
-echo "======================================"
+echo "=================================================="
 
 # Start frontend in foreground
 (cd "$SCRIPT_DIR/frontend" && npm start)

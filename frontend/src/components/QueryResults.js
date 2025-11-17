@@ -1,23 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-  Box,
-  CircularProgress,
-  Alert,
-  Stack,
-  Button,
-  TablePagination
-} from '@mui/material';
-import {
-  Download as DownloadIcon
-} from '@mui/icons-material';
+import { Box, CircularProgress, TablePagination } from '@mui/material';
+import { Card, Table, Alert, Button, Text } from './ui';
 
 const QueryResults = ({ 
   queryData, 
@@ -81,12 +64,7 @@ const QueryResults = ({
 
   const renderCellContent = (row, column, rowIndex) => {
     const value = row[column.name];
-
-    return (
-      <Typography variant="body2">
-        {formatCellValue(value, column.type)}
-      </Typography>
-    );
+    return formatCellValue(value, column.type);
   };
 
   const formatCellValue = (value, type) => {
@@ -104,112 +82,111 @@ const QueryResults = ({
     }
   };
 
-  const renderColumnHeader = (column) => (
-    <TableCell key={column.name} sx={{ fontWeight: 'bold' }}>
-      <Typography variant="subtitle2">
-        {column.label || column.name}
-      </Typography>
-    </TableCell>
-  );
+  // Create table structure for our custom Table component
+  const tableColumns = columns.map(column => ({
+    key: column.name,
+    title: column.label || column.name,
+    render: (value) => formatCellValue(value, column.type)
+  }));
 
   if (loading) {
     return (
-      <Paper sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
-          <Box sx={{ textAlign: 'center' }}>
+      <Card className="p-6">
+        <div className="flex justify-center items-center min-h-[200px]">
+          <div className="text-center">
             <CircularProgress sx={{ mb: 2 }} />
-            <Typography variant="body2" color="text.secondary">
+            <Text variant="caption" color="secondary">
               Loading query results...
-            </Typography>
-          </Box>
-        </Box>
-      </Paper>
+            </Text>
+          </div>
+        </div>
+      </Card>
     );
   }
 
   if (error) {
     return (
-      <Paper sx={{ p: 3 }}>
-        <Alert severity="error" sx={{ mb: 2 }}>
+      <Card>
+        <Alert variant="error" className="mb-4">
           {error}
         </Alert>
-        <Typography variant="body2" color="text.secondary">
+        <Text color="secondary">
           Unable to load query results. Please try again.
-        </Typography>
-      </Paper>
+        </Text>
+      </Card>
     );
   }
 
   if (!data || data.length === 0) {
     return (
-      <Paper sx={{ p: 3 }}>
-        <Box sx={{ textAlign: 'center', minHeight: 200, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <Typography variant="h6" color="text.secondary" gutterBottom>
+      <Card>
+        <div className="text-center min-h-[200px] flex flex-col justify-center">
+          <Text variant="h6" color="secondary" className="mb-2">
             No Results
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
+          </Text>
+          <Text color="secondary">
             Execute a query to see results here
-          </Typography>
-        </Box>
-      </Paper>
+          </Text>
+        </div>
+      </Card>
     );
   }
 
   const paginatedData = data.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  
+  const DownloadIcon = () => (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-4-4m4 4l4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
 
   return (
-    <Paper sx={{ width: '100%' }}>
+    <Card className="w-full h-full flex flex-col">
       {/* Header with actions */}
-      <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography variant="h6">Query Results</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {totalRows.toLocaleString()} rows, {columns.length} columns
-          </Typography>
-        </Box>
-        <Button
-          startIcon={<DownloadIcon />}
-          onClick={exportToCSV}
-          size="small"
-          variant="outlined"
-        >
-          Export CSV
-        </Button>
-      </Box>
+      <Card.Header className="flex-shrink-0">
+        <div className="flex justify-between items-center">
+          <div>
+            <Card.Title>Query Results</Card.Title>
+            <Text color="secondary">
+              {totalRows.toLocaleString()} rows, {columns.length} columns
+            </Text>
+          </div>
+          <Button
+            leftIcon={<DownloadIcon />}
+            onClick={exportToCSV}
+            size="sm"
+            variant="outline"
+          >
+            Export CSV
+          </Button>
+        </div>
+      </Card.Header>
 
-      {/* Table */}
-      <TableContainer sx={{ maxHeight: 600 }}>
-        <Table stickyHeader>
-          <TableHead>
-            <TableRow>
-              {columns.map(renderColumnHeader)}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {paginatedData.map((row, index) => (
-              <TableRow key={page * rowsPerPage + index} hover>
-                {columns.map((column) => (
-                  <TableCell key={column.name}>
-                    {renderCellContent(row, column, page * rowsPerPage + index)}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <Card.Body className="p-0 flex-1 flex flex-col overflow-hidden">
+        {/* Custom Table */}
+        <div className="flex-1 overflow-auto">
+          <Table
+            data={paginatedData}
+            columns={tableColumns}
+            striped
+            hoverable
+          />
+        </div>
 
-      {/* Pagination */}
-      <TablePagination
-        rowsPerPageOptions={[10, 25, 50, 100]}
-        component="div"
-        count={totalRows}
-        rowsPerPage={rowsPerPage}
-        page={page}
-        onPageChange={handleChangePage}
-        onRowsPerPageChange={handleChangeRowsPerPage}
-      />
-    </Paper>
+        {/* Pagination */}
+        <div className="flex-shrink-0 p-4 border-t border-gray-200 dark:border-gray-700">
+          <TablePagination
+            rowsPerPageOptions={[10, 25, 50, 100]}
+            component="div"
+            count={totalRows}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+          />
+        </div>
+      </Card.Body>
+    </Card>
   );
 };
 

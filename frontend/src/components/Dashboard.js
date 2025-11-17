@@ -14,8 +14,10 @@ import ChatInput from './ChatInput';
 import SqlQuery from './SqlQuery';
 import Chart from './Chart';
 import QueryResults from './QueryResults';
+import { useTheme } from '../contexts/ThemeContext';
 
 const Dashboard = () => {
+  const { isDark } = useTheme();
   // State for the SQL query
   const [sqlQuery, setSqlQuery] = useState("SELECT column1,column3\nFROM table_name\nWHERE column1='example'\nORDER BY column2;");
   // State for backend response
@@ -190,8 +192,10 @@ const Dashboard = () => {
             width: 250,
             boxSizing: 'border-box',
             position: 'relative',
-            borderRight: '1px solid rgba(0, 0, 0, 0.12)',
+            borderRight: isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(0, 0, 0, 0.12)',
             height: '100%',
+            backgroundColor: isDark ? '#1f2937' : '#fff',
+            color: isDark ? '#fff' : '#000',
           },
         }}
       >
@@ -244,17 +248,22 @@ const Dashboard = () => {
       {/* Main content */}
       <Box component="main" sx={{ flexGrow: 1, p: 0, overflow: 'hidden' }}>
         {/* Chat section */}
-        <Box sx={{ p: 2, backgroundColor: '#f5f5f5' }}>
+        <Box sx={{ 
+          p: 2, 
+          backgroundColor: isDark ? '#374151' : '#f5f5f5'
+        }}>
           <Box 
             sx={{ 
-              backgroundColor: '#e0e0e0', 
+              backgroundColor: isDark ? '#4b5563' : '#e0e0e0', 
               p: 2, 
               borderRadius: 1,
               display: 'inline-block',
               maxWidth: '60%'
             }}
           >
-            <Typography>Hello! How can I assist you today?</Typography>
+            <Typography sx={{ color: isDark ? '#fff' : 'inherit' }}>
+              Hello! How can I assist you today?
+            </Typography>
           </Box>
           <ChatInput onSubmit={handleChatSubmit} />
         </Box>

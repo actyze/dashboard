@@ -1,45 +1,45 @@
-{{- if and .Values.services.trino.enabled .Values.services.demo.enabled .Values.services.demo.postgres }}
+{{- if and .Values.services.trino.enabled .Values.services.postgres.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "dashboard.fullname" . }}-demo-postgres
+  name: {{ include "dashboard.fullname" . }}-postgres
   namespace: {{ .Values.global.namespace }}
   labels:
     {{- include "dashboard.labels" . | nindent 4 }}
-    app.kubernetes.io/component: demo-postgres
+    app.kubernetes.io/component: postgres
 spec:
   replicas: 1
   selector:
     matchLabels:
       {{- include "dashboard.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: demo-postgres
+      app.kubernetes.io/component: postgres
   template:
     metadata:
       labels:
         {{- include "dashboard.selectorLabels" . | nindent 8 }}
-        app.kubernetes.io/component: demo-postgres
+        app.kubernetes.io/component: postgres
     spec:
       containers:
       - name: postgres
-        image: "{{ .Values.demo.postgres.image.repository }}:{{ .Values.demo.postgres.image.tag }}"
-        imagePullPolicy: {{ .Values.demo.postgres.imagePullPolicy | default .Values.global.imagePullPolicy }}
+        image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
+        imagePullPolicy: {{ .Values.postgres.imagePullPolicy | default .Values.global.imagePullPolicy }}
         ports:
         - name: postgres
           containerPort: 5432
           protocol: TCP
         env:
         - name: POSTGRES_DB
-          value: {{ .Values.demo.postgres.database }}
+          value: {{ .Values.postgres.database }}
         - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
-              name: {{ include "dashboard.fullname" . }}-demo-credentials
-              key: postgres-username
+              name: {{ include "dashboard.fullname" . }}-postgres-credentials
+              key: username
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ include "dashboard.fullname" . }}-demo-credentials
-              key: postgres-password
+              name: {{ include "dashboard.fullname" . }}-postgres-credentials
+              key: password
         - name: PGDATA
           value: /var/lib/postgresql/data/pgdata
         - name: POSTGRES_HOST_AUTH_METHOD
@@ -47,7 +47,7 @@ spec:
         - name: POSTGRES_INITDB_ARGS
           value: "--auth-host=md5 --auth-local=trust"
         resources:
-          {{- toYaml .Values.demo.postgres.resources | nindent 10 }}
+          {{- toYaml .Values.postgres.resources | nindent 10 }}
         volumeMounts:
         - name: postgres-data
           mountPath: /var/lib/postgresql/data
@@ -59,7 +59,7 @@ spec:
             command:
             - pg_isready
             - -U
-            - {{ .Values.demo.postgres.user }}
+            - {{ .Values.postgres.user }}
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
@@ -67,7 +67,7 @@ spec:
             command:
             - pg_isready
             - -U
-            - {{ .Values.demo.postgres.user }}
+            - {{ .Values.postgres.user }}
           initialDelaySeconds: 5
           periodSeconds: 5
       volumes:
@@ -75,16 +75,16 @@ spec:
         emptyDir: {}
       - name: postgres-init
         configMap:
-          name: {{ include "dashboard.fullname" . }}-demo-postgres-init
+          name: {{ include "dashboard.fullname" . }}-postgres-init
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "dashboard.fullname" . }}-demo-postgres
+  name: {{ include "dashboard.fullname" . }}-postgres
   namespace: {{ .Values.global.namespace }}
   labels:
     {{- include "dashboard.labels" . | nindent 4 }}
-    app.kubernetes.io/component: demo-postgres
+    app.kubernetes.io/component: postgres
 spec:
   type: ClusterIP
   ports:
@@ -94,5 +94,5 @@ spec:
       name: postgres
   selector:
     {{- include "dashboard.selectorLabels" . | nindent 4 }}
-    app.kubernetes.io/component: demo-postgres
+    app.kubernetes.io/component: postgres
 {{- end }}

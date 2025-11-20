@@ -1,4 +1,5 @@
 import React from 'react';
+<<<<<<< Updated upstream
 import { Paper, TextField, Button, Box, Typography } from '@mui/material';
 
 const SqlQuery = ({ sqlQuery, setSqlQuery, backendResponse, onExecute }) => (
@@ -21,6 +22,20 @@ const SqlQuery = ({ sqlQuery, setSqlQuery, backendResponse, onExecute }) => (
     />
     <Button variant="contained" onClick={onExecute}>Execute</Button>
   </Paper>
+=======
+import { TextArea } from './ui';
+
+const SqlQuery = ({ sqlQuery, setSqlQuery, backendResponse }) => (
+  <div className="h-full w-full">
+    <TextArea
+      value={sqlQuery}
+      onChange={(e) => setSqlQuery(e.target.value)}
+      rows={8}
+      placeholder="Enter your SQL query here..."
+      className="font-mono text-sm w-full border-gray-200 dark:border-gray-700"
+    />
+  </div>
+>>>>>>> Stashed changes
 );
 
 export default SqlQuery;

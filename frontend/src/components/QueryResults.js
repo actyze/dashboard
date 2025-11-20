@@ -177,6 +177,7 @@ const QueryResults = ({
         </Button>
       </Box>
 
+<<<<<<< Updated upstream
       {/* Table */}
       <TableContainer sx={{ maxHeight: 600 }}>
         <Table stickyHeader>
@@ -198,6 +199,19 @@ const QueryResults = ({
           </TableBody>
         </Table>
       </TableContainer>
+=======
+      <Card.Body className="p-0 flex-1 flex flex-col overflow-hidden">
+        {/* Custom Table */}
+        <div className="flex-1 overflow-auto">
+          <Table
+            data={paginatedData}
+            columns={tableColumns}
+            striped
+            hoverable
+            size="sm"
+          />
+        </div>
+>>>>>>> Stashed changes
 
       {/* Pagination */}
       <TablePagination

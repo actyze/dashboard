@@ -32,15 +32,10 @@ secrets:
     username: ""  # ⚠️  MUST be provided in values-dev-secrets.yaml
     password: ""  # ⚠️  MUST be provided in values-dev-secrets.yaml
     
-  # Demo database credentials - LOADED FROM values-dev-secrets.yaml
-  demo:
-    postgres:
-      username: ""  # ⚠️  LOADED from values-dev-secrets.yaml
-      password: ""  # ⚠️  LOADED from values-dev-secrets.yaml
-    mysql:
-      username: ""  # ⚠️  LOADED from values-dev-secrets.yaml
-      password: ""  # ⚠️  LOADED from values-dev-secrets.yaml
-      rootPassword: ""  # ⚠️  LOADED from values-dev-secrets.yaml
+  # PostgreSQL database credentials - LOADED FROM values-dev-secrets.yaml
+  postgres:
+    username: ""  # ⚠️  LOADED from values-dev-secrets.yaml
+    password: ""  # ⚠️  LOADED from values-dev-secrets.yaml
 
 # ============================================================================
 # MODEL STRATEGY - Choose ONE approach for SQL generation
@@ -90,11 +85,9 @@ services:
   trino:
     enabled: true        # ← Embedded Trino pod enabled for local testing
   
-  # Demo Data (for development/testing)
-  demo:
-    enabled: true        # ← Demo databases with sample data
-    postgres: true       # ← PostgreSQL with e-commerce data
-    mysql: true          # ← MySQL with HRMS data
+  # PostgreSQL Database (operational database for user preferences, settings, etc.)
+  postgres:
+    enabled: true        # ← PostgreSQL operational database
 
 # Backend Spring Boot service
 backend:
@@ -225,10 +218,6 @@ trino:
     tpch:
       connector.name: "tpch"
       tpch.splits-per-node: "4"
-    mysql:
-      connector.name: "mysql"
-      connection-url: "jdbc:mysql://dashboard-demo-mysql:3306/hrms"
-      # Credentials loaded from dashboard-demo-credentials secret
   livenessProbe:
     initialDelaySeconds: 60
     periodSeconds: 30
@@ -240,34 +229,21 @@ trino:
     timeoutSeconds: 5
     failureThreshold: 3
 
-# Demo mode configuration (optional)
-demo:
-  postgres:
-    image:
-      repository: postgres
-      tag: "15-alpine"
-    database: "ecommerce_demo"
-    # Credentials loaded from dashboard-demo-credentials secret
-    resources:
-      requests:
-        memory: "256Mi"
-        cpu: "100m"
-      limits:
-        memory: "512Mi"
-        cpu: "250m"
-  mysql:
-    image:
-      repository: mysql
-      tag: "8.0"
-    database: "hrms"
-    # Credentials loaded from dashboard-demo-credentials secret
-    resources:
-      requests:
-        memory: "256Mi"
-        cpu: "100m"
-      limits:
-        memory: "512Mi"
-        cpu: "250m"
+# PostgreSQL operational database configuration
+postgres:
+  image:
+    repository: postgres
+    tag: "15-alpine"
+  database: "dashboard"
+  user: "dashboard_user"
+  # Credentials loaded from dashboard-postgres-credentials secret
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "250m"
 
 # FAISS Schema Service
 schemaService:

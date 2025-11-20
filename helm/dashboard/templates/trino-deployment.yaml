@@ -78,13 +78,9 @@ spec:
             path: {{ $name }}.properties
           {{- end }}
           {{- end }}
-          {{- if and .Values.services.demo.enabled .Values.services.demo.postgres }}
+          {{- if .Values.services.postgres.enabled }}
           - key: postgres.properties
             path: postgres.properties
-          {{- end }}
-          {{- if and .Values.services.demo.enabled .Values.services.demo.mysql }}
-          - key: mysql.properties
-            path: mysql.properties
           {{- end }}
       {{- end }}
 {{- end }}

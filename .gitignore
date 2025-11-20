@@ -88,7 +88,6 @@ pytorch_model.bin
 restart-all.sh
 
 # Local Kubernetes files (development/testing only)
-k8s/
 kind-config*.yaml
 *-local.sh
 *-test*.sh

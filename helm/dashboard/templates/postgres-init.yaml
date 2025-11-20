@@ -1,0 +1,418 @@
+{{- if and .Values.services.trino.enabled .Values.services.postgres.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dashboard.fullname" . }}-postgres-init
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+data:
+  01-create-tables.sql: |
+    -- Dashboard Operational Database
+    -- User preferences, settings, and sample e-commerce data for testing
+    
+    -- Dashboard operational schemas
+    CREATE SCHEMA IF NOT EXISTS dashboard;
+    CREATE SCHEMA IF NOT EXISTS ecommerce;
+    CREATE SCHEMA IF NOT EXISTS hrms;
+    
+    -- User management tables
+    CREATE TABLE dashboard.users (
+        user_id SERIAL PRIMARY KEY,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        email VARCHAR(100) UNIQUE NOT NULL,
+        full_name VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_active BOOLEAN DEFAULT true
+    );
+    
+    -- User preferences table
+    CREATE TABLE dashboard.user_preferences (
+        preference_id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES dashboard.users(user_id) ON DELETE CASCADE,
+        preference_key VARCHAR(100) NOT NULL,
+        preference_value TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, preference_key)
+    );
+    
+    -- Dashboard settings table
+    CREATE TABLE dashboard.settings (
+        setting_id SERIAL PRIMARY KEY,
+        setting_key VARCHAR(100) UNIQUE NOT NULL,
+        setting_value TEXT,
+        description TEXT,
+        setting_type VARCHAR(20) DEFAULT 'string', -- string, number, boolean, json
+        is_public BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    -- Query history table
+    CREATE TABLE dashboard.query_history (
+        query_id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES dashboard.users(user_id) ON DELETE CASCADE,
+        natural_language_query TEXT NOT NULL,
+        generated_sql TEXT,
+        execution_time_ms INTEGER,
+        result_count INTEGER,
+        status VARCHAR(20) DEFAULT 'success', -- success, error, timeout
+        error_message TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    -- Sample e-commerce data for testing and demos
+    
+    -- Customers table
+    CREATE TABLE ecommerce.customers (
+        customer_id SERIAL PRIMARY KEY,
+        first_name VARCHAR(50) NOT NULL,
+        last_name VARCHAR(50) NOT NULL,
+        email VARCHAR(100) UNIQUE NOT NULL,
+        phone VARCHAR(20),
+        address TEXT,
+        city VARCHAR(50),
+        state VARCHAR(50),
+        country VARCHAR(50),
+        postal_code VARCHAR(20),
+        registration_date DATE DEFAULT CURRENT_DATE,
+        customer_segment VARCHAR(20) DEFAULT 'Regular'
+    );
+    
+    -- Products table
+    CREATE TABLE ecommerce.products (
+        product_id SERIAL PRIMARY KEY,
+        product_name VARCHAR(200) NOT NULL,
+        category VARCHAR(50) NOT NULL,
+        subcategory VARCHAR(50),
+        brand VARCHAR(50),
+        price DECIMAL(10,2) NOT NULL,
+        cost DECIMAL(10,2) NOT NULL,
+        stock_quantity INTEGER DEFAULT 0,
+        description TEXT,
+        created_date DATE DEFAULT CURRENT_DATE
+    );
+    
+    -- Orders table
+    CREATE TABLE ecommerce.orders (
+        order_id SERIAL PRIMARY KEY,
+        customer_id INTEGER REFERENCES ecommerce.customers(customer_id),
+        order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        status VARCHAR(20) DEFAULT 'Pending',
+        total_amount DECIMAL(10,2) NOT NULL,
+        shipping_cost DECIMAL(10,2) DEFAULT 0,
+        tax_amount DECIMAL(10,2) DEFAULT 0,
+        discount_amount DECIMAL(10,2) DEFAULT 0,
+        payment_method VARCHAR(20),
+        shipping_address TEXT
+    );
+    
+    -- Order Items table
+    CREATE TABLE ecommerce.order_items (
+        order_item_id SERIAL PRIMARY KEY,
+        order_id INTEGER REFERENCES ecommerce.orders(order_id),
+        product_id INTEGER REFERENCES ecommerce.products(product_id),
+        quantity INTEGER NOT NULL,
+        unit_price DECIMAL(10,2) NOT NULL,
+        total_price DECIMAL(10,2) NOT NULL
+    );
+    
+    -- Sales Analytics Schema
+    CREATE SCHEMA IF NOT EXISTS analytics;
+    
+    -- Monthly Sales Summary
+    CREATE TABLE analytics.monthly_sales (
+        year INTEGER,
+        month INTEGER,
+        total_orders INTEGER,
+        total_revenue DECIMAL(12,2),
+        total_customers INTEGER,
+        avg_order_value DECIMAL(10,2),
+        PRIMARY KEY (year, month)
+    );
+    
+    -- Product Performance
+    CREATE TABLE analytics.product_performance (
+        product_id INTEGER,
+        product_name VARCHAR(200),
+        category VARCHAR(50),
+        total_sold INTEGER,
+        total_revenue DECIMAL(12,2),
+        avg_rating DECIMAL(3,2),
+        last_updated DATE DEFAULT CURRENT_DATE
+    );
+    
+    -- HRMS (Human Resources Management System) Tables
+    
+    -- Departments table
+    CREATE TABLE hrms.departments (
+        department_id SERIAL PRIMARY KEY,
+        department_name VARCHAR(100) NOT NULL,
+        manager_id INTEGER,
+        location VARCHAR(100),
+        budget DECIMAL(12,2),
+        created_date DATE DEFAULT CURRENT_DATE
+    );
+    
+    -- Employees table
+    CREATE TABLE hrms.employees (
+        employee_id SERIAL PRIMARY KEY,
+        first_name VARCHAR(50) NOT NULL,
+        last_name VARCHAR(50) NOT NULL,
+        email VARCHAR(100) UNIQUE NOT NULL,
+        phone VARCHAR(20),
+        hire_date DATE NOT NULL,
+        job_title VARCHAR(100) NOT NULL,
+        department_id INTEGER REFERENCES hrms.departments(department_id),
+        salary DECIMAL(10,2) NOT NULL,
+        manager_id INTEGER,
+        status VARCHAR(20) DEFAULT 'Active'
+    );
+    
+    -- Projects table
+    CREATE TABLE hrms.projects (
+        project_id SERIAL PRIMARY KEY,
+        project_name VARCHAR(200) NOT NULL,
+        description TEXT,
+        start_date DATE NOT NULL,
+        end_date DATE,
+        status VARCHAR(20) DEFAULT 'Planning',
+        budget DECIMAL(12,2),
+        department_id INTEGER REFERENCES hrms.departments(department_id),
+        project_manager_id INTEGER REFERENCES hrms.employees(employee_id)
+    );
+    
+    -- Employee Project Assignments
+    CREATE TABLE hrms.employee_projects (
+        assignment_id SERIAL PRIMARY KEY,
+        employee_id INTEGER REFERENCES hrms.employees(employee_id),
+        project_id INTEGER REFERENCES hrms.projects(project_id),
+        role VARCHAR(100),
+        allocation_percentage DECIMAL(5,2),
+        start_date DATE,
+        end_date DATE
+    );
+    
+    -- Attendance tracking
+    CREATE TABLE hrms.attendance (
+        attendance_id SERIAL PRIMARY KEY,
+        employee_id INTEGER REFERENCES hrms.employees(employee_id),
+        date DATE NOT NULL,
+        check_in_time TIME,
+        check_out_time TIME,
+        hours_worked DECIMAL(4,2),
+        status VARCHAR(20) DEFAULT 'Present'
+    );
+    
+    -- Performance Reviews
+    CREATE TABLE hrms.performance_reviews (
+        review_id SERIAL PRIMARY KEY,
+        employee_id INTEGER REFERENCES hrms.employees(employee_id),
+        reviewer_id INTEGER REFERENCES hrms.employees(employee_id),
+        review_period VARCHAR(50),
+        review_date DATE,
+        overall_rating DECIMAL(3,2),
+        goals_achievement DECIMAL(3,2),
+        technical_skills DECIMAL(3,2),
+        communication DECIMAL(3,2),
+        teamwork DECIMAL(3,2),
+        comments TEXT
+    );
+
+  02-insert-sample-data.sql: |
+    -- Insert sample operational data
+    
+    -- Insert sample users
+    INSERT INTO dashboard.users (username, email, full_name) VALUES
+    ('admin', 'admin@dashboard.local', 'Dashboard Administrator'),
+    ('demo_user', 'demo@dashboard.local', 'Demo User'),
+    ('analyst', 'analyst@dashboard.local', 'Data Analyst');
+    
+    -- Insert sample user preferences
+    INSERT INTO dashboard.user_preferences (user_id, preference_key, preference_value) VALUES
+    (1, 'theme', 'dark'),
+    (1, 'default_chart_type', 'bar'),
+    (1, 'results_per_page', '50'),
+    (2, 'theme', 'light'),
+    (2, 'default_chart_type', 'line'),
+    (2, 'results_per_page', '25'),
+    (3, 'theme', 'light'),
+    (3, 'default_chart_type', 'table'),
+    (3, 'results_per_page', '100');
+    
+    -- Insert sample dashboard settings
+    INSERT INTO dashboard.settings (setting_key, setting_value, description, setting_type, is_public) VALUES
+    ('app_name', 'Dashboard Analytics', 'Application display name', 'string', true),
+    ('max_query_timeout', '30000', 'Maximum query timeout in milliseconds', 'number', false),
+    ('enable_query_history', 'true', 'Enable query history tracking', 'boolean', false),
+    ('default_page_size', '25', 'Default number of results per page', 'number', true),
+    ('supported_chart_types', '["bar", "line", "pie", "table", "scatter"]', 'List of supported chart types', 'json', true);
+    
+    -- Insert sample query history
+    INSERT INTO dashboard.query_history (user_id, natural_language_query, generated_sql, execution_time_ms, result_count, status) VALUES
+    (1, 'Show me the top 5 customers by total orders', 'SELECT c.first_name, c.last_name, COUNT(o.order_id) as total_orders FROM ecommerce.customers c JOIN ecommerce.orders o ON c.customer_id = o.customer_id GROUP BY c.customer_id, c.first_name, c.last_name ORDER BY total_orders DESC LIMIT 5', 45, 5, 'success'),
+    (2, 'What are the monthly sales for 2024?', 'SELECT month, total_revenue FROM analytics.monthly_sales WHERE year = 2024 ORDER BY month', 23, 1, 'success'),
+    (3, 'Show me products with low stock', 'SELECT product_name, stock_quantity FROM ecommerce.products WHERE stock_quantity < 50 ORDER BY stock_quantity ASC', 18, 3, 'success');
+    
+    -- Insert sample e-commerce data
+    
+    -- Insert sample customers
+    INSERT INTO ecommerce.customers (first_name, last_name, email, phone, address, city, state, country, postal_code, customer_segment) VALUES
+    ('John', 'Smith', 'john.smith@email.com', '+1-555-0101', '123 Main St', 'New York', 'NY', 'USA', '10001', 'Premium'),
+    ('Sarah', 'Johnson', 'sarah.j@email.com', '+1-555-0102', '456 Oak Ave', 'Los Angeles', 'CA', 'USA', '90210', 'Regular'),
+    ('Michael', 'Brown', 'mike.brown@email.com', '+1-555-0103', '789 Pine St', 'Chicago', 'IL', 'USA', '60601', 'VIP'),
+    ('Emily', 'Davis', 'emily.davis@email.com', '+1-555-0104', '321 Elm St', 'Houston', 'TX', 'USA', '77001', 'Regular'),
+    ('David', 'Wilson', 'david.w@email.com', '+1-555-0105', '654 Maple Dr', 'Phoenix', 'AZ', 'USA', '85001', 'Premium'),
+    ('Lisa', 'Anderson', 'lisa.a@email.com', '+1-555-0106', '987 Cedar Ln', 'Philadelphia', 'PA', 'USA', '19101', 'Regular'),
+    ('James', 'Taylor', 'james.t@email.com', '+1-555-0107', '147 Birch Rd', 'San Antonio', 'TX', 'USA', '78201', 'VIP'),
+    ('Jennifer', 'Thomas', 'jen.thomas@email.com', '+1-555-0108', '258 Spruce St', 'San Diego', 'CA', 'USA', '92101', 'Regular'),
+    ('Robert', 'Jackson', 'rob.jackson@email.com', '+1-555-0109', '369 Willow Way', 'Dallas', 'TX', 'USA', '75201', 'Premium'),
+    ('Michelle', 'White', 'michelle.w@email.com', '+1-555-0110', '741 Aspen Ave', 'San Jose', 'CA', 'USA', '95101', 'Regular');
+    
+    -- Insert sample products
+    INSERT INTO ecommerce.products (product_name, category, subcategory, brand, price, cost, stock_quantity, description) VALUES
+    ('Wireless Bluetooth Headphones', 'Electronics', 'Audio', 'TechSound', 99.99, 45.00, 150, 'High-quality wireless headphones with noise cancellation'),
+    ('Smartphone Case', 'Electronics', 'Accessories', 'PhoneGuard', 24.99, 8.50, 500, 'Protective case for latest smartphone models'),
+    ('Laptop Stand', 'Electronics', 'Accessories', 'DeskPro', 49.99, 22.00, 75, 'Adjustable aluminum laptop stand for ergonomic working'),
+    ('Coffee Maker', 'Home & Kitchen', 'Appliances', 'BrewMaster', 129.99, 65.00, 45, 'Programmable coffee maker with thermal carafe'),
+    ('Yoga Mat', 'Sports & Fitness', 'Exercise', 'FlexFit', 39.99, 15.00, 200, 'Non-slip yoga mat with carrying strap'),
+    ('Running Shoes', 'Sports & Fitness', 'Footwear', 'SpeedRun', 89.99, 40.00, 120, 'Lightweight running shoes with cushioned sole'),
+    ('Desk Lamp', 'Home & Kitchen', 'Lighting', 'BrightLight', 34.99, 18.00, 80, 'LED desk lamp with adjustable brightness'),
+    ('Backpack', 'Fashion', 'Bags', 'TravelPro', 59.99, 25.00, 90, 'Durable backpack with laptop compartment'),
+    ('Water Bottle', 'Sports & Fitness', 'Accessories', 'HydroFlow', 19.99, 7.50, 300, 'Insulated stainless steel water bottle'),
+    ('Wireless Mouse', 'Electronics', 'Accessories', 'ClickPro', 29.99, 12.00, 180, 'Ergonomic wireless mouse with precision tracking');
+    
+    -- Insert sample orders
+    INSERT INTO ecommerce.orders (customer_id, order_date, status, total_amount, shipping_cost, tax_amount, payment_method, shipping_address) VALUES
+    (1, '2024-01-15 10:30:00', 'Delivered', 149.98, 9.99, 12.00, 'Credit Card', '123 Main St, New York, NY 10001'),
+    (2, '2024-01-16 14:22:00', 'Delivered', 74.98, 5.99, 6.40, 'PayPal', '456 Oak Ave, Los Angeles, CA 90210'),
+    (3, '2024-01-17 09:15:00', 'Shipped', 219.97, 0.00, 17.60, 'Credit Card', '789 Pine St, Chicago, IL 60601'),
+    (4, '2024-01-18 16:45:00', 'Processing', 89.99, 7.99, 7.84, 'Debit Card', '321 Elm St, Houston, TX 77001'),
+    (5, '2024-01-19 11:20:00', 'Delivered', 129.98, 8.99, 11.12, 'Credit Card', '654 Maple Dr, Phoenix, AZ 85001'),
+    (6, '2024-01-20 13:30:00', 'Delivered', 59.99, 5.99, 5.28, 'PayPal', '987 Cedar Ln, Philadelphia, PA 19101'),
+    (7, '2024-01-21 08:45:00', 'Cancelled', 0.00, 0.00, 0.00, 'Credit Card', '147 Birch Rd, San Antonio, TX 78201'),
+    (8, '2024-01-22 15:10:00', 'Delivered', 194.97, 9.99, 16.40, 'Credit Card', '258 Spruce St, San Diego, CA 92101'),
+    (9, '2024-01-23 12:00:00', 'Shipped', 49.99, 6.99, 4.56, 'Debit Card', '369 Willow Way, Dallas, TX 75201'),
+    (10, '2024-01-24 17:25:00', 'Processing', 29.99, 4.99, 2.80, 'PayPal', '741 Aspen Ave, San Jose, CA 95101');
+    
+    -- Insert order items
+    INSERT INTO ecommerce.order_items (order_id, product_id, quantity, unit_price, total_price) VALUES
+    (1, 1, 1, 99.99, 99.99),
+    (1, 2, 2, 24.99, 49.98),
+    (2, 3, 1, 49.99, 49.99),
+    (2, 2, 1, 24.99, 24.99),
+    (3, 4, 1, 129.99, 129.99),
+    (3, 5, 1, 39.99, 39.99),
+    (3, 2, 2, 24.99, 49.98),
+    (4, 6, 1, 89.99, 89.99),
+    (5, 1, 1, 99.99, 99.99),
+    (5, 9, 1, 19.99, 19.99),
+    (5, 7, 1, 34.99, 34.99),
+    (6, 8, 1, 59.99, 59.99),
+    (8, 1, 1, 99.99, 99.99),
+    (8, 6, 1, 89.99, 89.99),
+    (8, 10, 1, 29.99, 29.99),
+    (9, 3, 1, 49.99, 49.99),
+    (10, 10, 1, 29.99, 29.99);
+    
+    -- Insert analytics data
+    INSERT INTO analytics.monthly_sales (year, month, total_orders, total_revenue, total_customers, avg_order_value) VALUES
+    (2024, 1, 150, 15750.50, 89, 105.00),
+    (2023, 12, 180, 19200.75, 102, 106.67),
+    (2023, 11, 165, 17325.25, 95, 105.00),
+    (2023, 10, 142, 14890.80, 78, 104.86);
+    
+    INSERT INTO analytics.product_performance (product_id, product_name, category, total_sold, total_revenue, avg_rating) VALUES
+    (1, 'Wireless Bluetooth Headphones', 'Electronics', 45, 4499.55, 4.5),
+    (2, 'Smartphone Case', 'Electronics', 89, 2224.11, 4.2),
+    (3, 'Laptop Stand', 'Electronics', 23, 1149.77, 4.7),
+    (4, 'Coffee Maker', 'Home & Kitchen', 18, 2339.82, 4.3),
+    (5, 'Yoga Mat', 'Sports & Fitness', 34, 1359.66, 4.6),
+    (6, 'Running Shoes', 'Sports & Fitness', 28, 2519.72, 4.4),
+    (7, 'Desk Lamp', 'Home & Kitchen', 15, 524.85, 4.1),
+    (8, 'Backpack', 'Fashion', 22, 1319.78, 4.5),
+    (9, 'Water Bottle', 'Sports & Fitness', 67, 1339.33, 4.8),
+    (10, 'Wireless Mouse', 'Electronics', 41, 1229.59, 4.3);
+    
+    -- Insert HRMS sample data
+    
+    -- Insert departments
+    INSERT INTO hrms.departments (department_name, location, budget) VALUES
+    ('Engineering', 'San Francisco', 2000000.00),
+    ('Marketing', 'New York', 800000.00),
+    ('Sales', 'Chicago', 1200000.00),
+    ('Human Resources', 'Austin', 500000.00),
+    ('Finance', 'Boston', 750000.00),
+    ('Product Management', 'Seattle', 900000.00),
+    ('Customer Support', 'Denver', 400000.00),
+    ('Data Science', 'San Francisco', 1800000.00);
+    
+    -- Insert employees
+    INSERT INTO hrms.employees (first_name, last_name, email, phone, hire_date, job_title, department_id, salary, manager_id, status) VALUES
+    ('Alice', 'Johnson', 'alice.johnson@company.com', '+1-555-1001', '2020-01-15', 'VP Engineering', 1, 180000.00, NULL, 'Active'),
+    ('Bob', 'Smith', 'bob.smith@company.com', '+1-555-1002', '2020-03-20', 'Senior Software Engineer', 1, 140000.00, 1, 'Active'),
+    ('Carol', 'Davis', 'carol.davis@company.com', '+1-555-1003', '2021-06-10', 'Software Engineer', 1, 110000.00, 1, 'Active'),
+    ('David', 'Wilson', 'david.wilson@company.com', '+1-555-1004', '2019-08-05', 'Marketing Director', 2, 150000.00, NULL, 'Active'),
+    ('Eva', 'Brown', 'eva.brown@company.com', '+1-555-1005', '2021-02-14', 'Marketing Manager', 2, 95000.00, 4, 'Active'),
+    ('Frank', 'Miller', 'frank.miller@company.com', '+1-555-1006', '2020-11-30', 'Sales Director', 3, 160000.00, NULL, 'Active'),
+    ('Grace', 'Taylor', 'grace.taylor@company.com', '+1-555-1007', '2021-09-12', 'Sales Manager', 3, 105000.00, 6, 'Active'),
+    ('Henry', 'Anderson', 'henry.anderson@company.com', '+1-555-1008', '2019-04-22', 'HR Director', 4, 130000.00, NULL, 'Active'),
+    ('Ivy', 'Thomas', 'ivy.thomas@company.com', '+1-555-1009', '2022-01-08', 'HR Specialist', 4, 75000.00, 8, 'Active'),
+    ('Jack', 'Jackson', 'jack.jackson@company.com', '+1-555-1010', '2020-07-18', 'Finance Director', 5, 145000.00, NULL, 'Active'),
+    ('Kate', 'White', 'kate.white@company.com', '+1-555-1011', '2021-11-25', 'Financial Analyst', 5, 85000.00, 10, 'Active'),
+    ('Liam', 'Harris', 'liam.harris@company.com', '+1-555-1012', '2020-05-03', 'Product Manager', 6, 125000.00, NULL, 'Active'),
+    ('Mia', 'Clark', 'mia.clark@company.com', '+1-555-1013', '2022-03-15', 'Support Manager', 7, 90000.00, NULL, 'Active'),
+    ('Noah', 'Lewis', 'noah.lewis@company.com', '+1-555-1014', '2021-08-07', 'Data Scientist', 8, 135000.00, NULL, 'Active'),
+    ('Olivia', 'Walker', 'olivia.walker@company.com', '+1-555-1015', '2022-06-20', 'Junior Data Scientist', 8, 95000.00, 14, 'Active');
+    
+    -- Update department manager references
+    UPDATE hrms.departments SET manager_id = 1 WHERE department_id = 1;
+    UPDATE hrms.departments SET manager_id = 4 WHERE department_id = 2;
+    UPDATE hrms.departments SET manager_id = 6 WHERE department_id = 3;
+    UPDATE hrms.departments SET manager_id = 8 WHERE department_id = 4;
+    UPDATE hrms.departments SET manager_id = 10 WHERE department_id = 5;
+    UPDATE hrms.departments SET manager_id = 12 WHERE department_id = 6;
+    UPDATE hrms.departments SET manager_id = 13 WHERE department_id = 7;
+    UPDATE hrms.departments SET manager_id = 14 WHERE department_id = 8;
+    
+    -- Insert projects
+    INSERT INTO hrms.projects (project_name, description, start_date, end_date, status, budget, department_id, project_manager_id) VALUES
+    ('Mobile App Redesign', 'Complete redesign of mobile application UI/UX', '2024-01-01', '2024-06-30', 'In Progress', 500000.00, 1, 2),
+    ('Customer Analytics Platform', 'Build analytics platform for customer insights', '2024-02-15', '2024-08-15', 'In Progress', 750000.00, 8, 14),
+    ('Q1 Marketing Campaign', 'Launch new product marketing campaign', '2024-01-01', '2024-03-31', 'Completed', 200000.00, 2, 5),
+    ('Sales CRM Integration', 'Integrate new CRM system with existing tools', '2024-03-01', '2024-05-31', 'Planning', 300000.00, 3, 7),
+    ('HR Portal Upgrade', 'Upgrade employee self-service portal', '2024-04-01', '2024-07-31', 'Planning', 150000.00, 4, 9);
+    
+    -- Insert employee project assignments
+    INSERT INTO hrms.employee_projects (employee_id, project_id, role, allocation_percentage, start_date, end_date) VALUES
+    (2, 1, 'Tech Lead', 80.00, '2024-01-01', '2024-06-30'),
+    (3, 1, 'Frontend Developer', 100.00, '2024-01-15', '2024-06-30'),
+    (14, 2, 'Project Manager', 60.00, '2024-02-15', '2024-08-15'),
+    (15, 2, 'Data Analyst', 100.00, '2024-02-15', '2024-08-15'),
+    (5, 3, 'Campaign Manager', 100.00, '2024-01-01', '2024-03-31'),
+    (7, 4, 'Implementation Lead', 75.00, '2024-03-01', '2024-05-31'),
+    (9, 5, 'Business Analyst', 50.00, '2024-04-01', '2024-07-31');
+    
+    -- Insert sample attendance records
+    INSERT INTO hrms.attendance (employee_id, date, check_in_time, check_out_time, hours_worked, status) VALUES
+    (2, '2024-01-15', '09:00:00', '18:00:00', 8.00, 'Present'),
+    (2, '2024-01-16', '09:15:00', '18:30:00', 8.25, 'Present'),
+    (2, '2024-01-17', '08:45:00', '17:45:00', 8.00, 'Present'),
+    (3, '2024-01-15', '09:30:00', '18:15:00', 7.75, 'Present'),
+    (3, '2024-01-16', NULL, NULL, 0.00, 'Sick Leave'),
+    (3, '2024-01-17', '09:00:00', '18:00:00', 8.00, 'Present'),
+    (5, '2024-01-15', '08:30:00', '17:30:00', 8.00, 'Present'),
+    (5, '2024-01-16', '09:00:00', '18:00:00', 8.00, 'Present'),
+    (5, '2024-01-17', '08:45:00', '17:45:00', 8.00, 'Present');
+    
+    -- Insert performance reviews
+    INSERT INTO hrms.performance_reviews (employee_id, reviewer_id, review_period, review_date, overall_rating, goals_achievement, technical_skills, communication, teamwork, comments) VALUES
+    (2, 1, '2023 Annual', '2024-01-15', 4.5, 4.8, 4.7, 4.2, 4.6, 'Excellent technical leadership and project delivery'),
+    (3, 1, '2023 Annual', '2024-01-20', 4.2, 4.0, 4.5, 4.1, 4.3, 'Strong technical skills, good team collaboration'),
+    (5, 4, '2023 Annual', '2024-01-25', 4.6, 4.8, 4.0, 4.9, 4.7, 'Outstanding marketing campaign results'),
+    (7, 6, '2023 Annual', '2024-01-30', 4.3, 4.2, 3.8, 4.5, 4.4, 'Good sales performance, excellent client relationships'),
+    (9, 8, '2023 Annual', '2024-02-05', 4.1, 3.9, 4.2, 4.3, 4.0, 'Solid HR operations, room for process improvement');
+{{- end }}

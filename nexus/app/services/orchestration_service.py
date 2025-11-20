@@ -7,7 +7,7 @@ from app.config import settings
 from app.services.schema_service import SchemaService
 from app.services.llm_service import LLMService
 from app.services.trino_service import TrinoService
-from app.services.cache_service import CacheService
+from app.services.cache_factory import cache_service
 from app.services.user_service import UserService
 
 logger = structlog.get_logger()
@@ -20,7 +20,7 @@ class OrchestrationService:
         self.schema_service = SchemaService()
         self.llm_service = LLMService()
         self.trino_service = TrinoService()
-        self.cache_service = CacheService()
+        self.cache_service = cache_service
         self.user_service = UserService()
         self.logger = logger.bind(service="orchestration-service")
     

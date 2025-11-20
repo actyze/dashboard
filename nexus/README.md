@@ -76,34 +76,93 @@ uvicorn main:app --host 0.0.0.0 --port 8002 --reload
 - **ReDoc**: `http://localhost:8002/redoc`
 - **OpenAPI Schema**: `http://localhost:8002/openapi.json`
 
-## Environment Variables
+## Configuration
+
+### Helm-Driven Configuration Pattern
+
+Nexus follows the same configuration pattern as the Java backend, where all values are provided via Helm charts in production environments. The configuration uses the `${VARIABLE_NAME:default_value}` pattern for environment variable substitution.
+
+### Environment Variables
+
+Copy `env.example` to `.env` for local development:
 
 ```bash
-# Service Configuration
-NEXUS_HOST=0.0.0.0
-NEXUS_PORT=8002
-DEBUG=false
+cp env.example .env
+```
 
-# PostgreSQL Configuration (for user data)
-POSTGRES_HOST=dashboard-postgres
-POSTGRES_PORT=5432
-POSTGRES_DATABASE=dashboard
-POSTGRES_USER=dashboard_user
-POSTGRES_PASSWORD=dashboard_password
+**Key Configuration Sections:**
 
-# Redis Configuration
-REDIS_URL=redis://localhost:6379
-CACHE_TTL=300
+#### Service Configuration
+```bash
+NEXUS_HOST=${NEXUS_HOST:0.0.0.0}
+NEXUS_PORT=${NEXUS_PORT:8002}
+DEBUG=${DEBUG:false}
+```
 
-# External Services
-SCHEMA_SERVICE_URL=http://dashboard-schema-service:8001
-LLM_SERVICE_URL=http://dashboard-fastapi:8000
-TRINO_HOST=dashboard-trino
-TRINO_PORT=8080
+#### Database Configuration
+```bash
+# PostgreSQL (User Data Persistence)
+POSTGRES_HOST=${POSTGRES_HOST:dashboard-postgres}
+POSTGRES_PORT=${POSTGRES_PORT:5432}
+POSTGRES_DATABASE=${POSTGRES_DATABASE:dashboard}
+POSTGRES_USER=${POSTGRES_USER:dashboard_user}
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD:dashboard_password}
 
-# Retry Configuration
-MAX_RETRIES=3
-RETRY_DELAY=1.0
+# Trino (Query Execution)
+TRINO_HOST=${TRINO_HOST:dashboard-trino}
+TRINO_PORT=${TRINO_PORT:8080}
+TRINO_CATALOG=${TRINO_CATALOG:postgres}
+TRINO_SCHEMA=${TRINO_SCHEMA:public}
+```
+
+#### External Services
+```bash
+# Schema Service (FAISS)
+SCHEMA_SERVICE_URL=${SCHEMA_SERVICE_URL:http://dashboard-schema-service:8001}
+SCHEMA_SERVICE_TIMEOUT=${SCHEMA_SERVICE_TIMEOUT:30}
+SCHEMA_SERVICE_RETRIES=${SCHEMA_SERVICE_RETRIES:3}
+
+# LLM Service
+LLM_SERVICE_URL=${LLM_SERVICE_URL:http://dashboard-fastapi:8000}
+LLM_SERVICE_TIMEOUT=${LLM_SERVICE_TIMEOUT:30}
+
+# External LLM (OpenAI, Perplexity, etc.)
+EXTERNAL_LLM_ENABLED=${EXTERNAL_LLM_ENABLED:false}
+EXTERNAL_LLM_PROVIDER=${EXTERNAL_LLM_PROVIDER:}
+EXTERNAL_LLM_API_KEY=${EXTERNAL_LLM_API_KEY:}
+```
+
+#### Feature Flags
+```bash
+FEATURE_USER_MANAGEMENT=${FEATURE_USER_MANAGEMENT:true}
+FEATURE_CONVERSATION_HISTORY=${FEATURE_CONVERSATION_HISTORY:true}
+FEATURE_QUERY_CACHING=${FEATURE_QUERY_CACHING:true}
+FEATURE_SCHEMA_RECOMMENDATIONS=${FEATURE_SCHEMA_RECOMMENDATIONS:true}
+```
+
+### Production Deployment
+
+In production, all environment variables are provided via Helm charts, following the same pattern as the Java backend:
+
+```yaml
+# values.yaml
+nexus:
+  config:
+    nexusHost: "0.0.0.0"
+    nexusPort: 8002
+    debug: false
+    
+    postgres:
+      host: "dashboard-postgres"
+      port: 5432
+      database: "dashboard"
+      
+    redis:
+      url: "redis://dashboard-redis:6379"
+      
+    external:
+      schemaServiceUrl: "http://dashboard-schema-service:8001"
+      llmServiceUrl: "http://dashboard-fastapi:8000"
 ```
 
 ## API Examples

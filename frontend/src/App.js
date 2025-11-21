@@ -7,7 +7,9 @@ import {
   Box
 } from '@mui/material';
 import axios from 'axios';
-import ModernDashboard from './components/ModernDashboard';
+import QueryPage from './components/QueryPage';
+import QueriesList from './components/QueriesList';
+import Sidebar from './components/Sidebar';
 import { Alert } from './components/ui';
 import ThemeToggle from './components/ThemeToggle';
 import { useTheme } from './contexts/ThemeContext';
@@ -17,6 +19,9 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [apiStatus, setApiStatus] = useState(null);
+  const [currentView, setCurrentView] = useState('queries-list'); // 'queries-list' or 'query-page'
+  const [selectedQuery, setSelectedQuery] = useState(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
   // Check backend API status on component mount - DISABLED FOR FRONTEND-ONLY DEVELOPMENT
   useEffect(() => {
@@ -25,6 +30,26 @@ function App() {
     setError(null);
     setLoading(false);
   }, []);
+
+  // Handle query selection from the queries list
+  const handleQuerySelect = (query) => {
+    setSelectedQuery(query);
+    setCurrentView('query-page');
+  };
+
+  // Handle going back to queries list
+  const handleBackToQueriesList = () => {
+    setCurrentView('queries-list');
+    setSelectedQuery(null);
+  };
+
+  // Handle sidebar navigation
+  const handleSidebarNavigation = (view) => {
+    setCurrentView(view);
+    if (view === 'queries-list') {
+      setSelectedQuery(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -60,14 +85,31 @@ function App() {
   }
 
   return (
-    <div className={`${isDark ? 'dark' : ''}`}>
-      {/* Global header with theme toggle */}
-      <div className="fixed top-4 right-4 z-50">
-        <ThemeToggle />
+    <div className={`${isDark ? 'dark' : ''} h-screen flex`}>
+      {/* Sidebar */}
+      <Sidebar 
+        isCollapsed={sidebarCollapsed} 
+        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        currentView={currentView}
+        onNavigate={handleSidebarNavigation}
+      />
+      
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Global header with theme toggle */}
+        <div className="fixed top-4 right-4 z-50">
+          <ThemeToggle />
+        </div>
+        
+        {currentView === 'queries-list' ? (
+          <QueriesList onQuerySelect={handleQuerySelect} />
+        ) : (
+          <QueryPage 
+            selectedQuery={selectedQuery}
+            onBackToQueriesList={handleBackToQueriesList}
+          />
+        )}
       </div>
-      
-      
-      <ModernDashboard />
     </div>
   );
 }

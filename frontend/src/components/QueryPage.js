@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import Sidebar from './Sidebar';
 import DatabaseSchemaPanel from './DatabaseSchemaPanel';
 import AIQueryInput from './AIQueryInput';
 import SqlQuery from './SqlQuery';
@@ -10,14 +9,16 @@ import ViewToggle from './ViewToggle';
 import ChartTypeSelector from './ChartTypeSelector';
 import { Card, Text, Button } from './ui';
 
-const ModernDashboard = () => {
+const QueryPage = ({ selectedQuery, onBackToQueriesList }) => {
   const { isDark } = useTheme();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [databasePanelCollapsed, setDatabasePanelCollapsed] = useState(false);
+  const [databasePanelCollapsed, setDatabasePanelCollapsed] = useState(true);
   const [aiPanelCollapsed, setAiPanelCollapsed] = useState(false);
   const [selectedTable, setSelectedTable] = useState(null);
   const [activeView, setActiveView] = useState('results'); // 'results' or 'chart'
-  const [sqlQuery, setSqlQuery] = useState("SELECT customer_name, order_total, order_date\nFROM orders\nWHERE order_date >= '2024-01-01'\nORDER BY order_total DESC\nLIMIT 10;");
+  const [sqlQuery, setSqlQuery] = useState(
+    selectedQuery?.query || 
+    "SELECT customer_name, order_total, order_date\nFROM orders\nWHERE order_date >= '2024-01-01'\nORDER BY order_total DESC\nLIMIT 10;"
+  );
   const [queryLoading, setQueryLoading] = useState(false);
   const [queryError, setQueryError] = useState(null);
   const [queryResults, setQueryResults] = useState(null);
@@ -100,62 +101,72 @@ const ModernDashboard = () => {
 
 
   return (
-    <div className={`h-screen flex ${isDark ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
-      {/* Sidebar */}
-      <Sidebar 
-        isCollapsed={sidebarCollapsed} 
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} 
-      />
-      
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className={`${isDark ? 'bg-gray-900/95 border-gray-800/60' : 'bg-white/95 border-gray-200/60'} border-b px-4 py-2 backdrop-blur-sm`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+    <div className={`h-full flex flex-col ${isDark ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
+      {/* Header */}
+      <div className={`${isDark ? 'bg-gray-900/95 border-gray-800/60' : 'bg-white/95 border-gray-200/60'} border-b px-4 py-2 backdrop-blur-sm`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center space-x-3">
+              {/* Back Button */}
+              {onBackToQueriesList && (
+                <button
+                  onClick={onBackToQueriesList}
+                  className={`
+                    p-2 rounded-lg transition-colors
+                    ${isDark 
+                      ? 'hover:bg-gray-700 text-gray-300 hover:text-white' 
+                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
+                    }
+                  `}
+                  title="Back to Queries"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
-                </div>
-                <div>
-                  <Text variant="h5" className="font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent dark:from-white dark:to-gray-300">
-                    Analytics Dashboard
-                  </Text>
-                  <Text color="secondary" className="mt-0.5 text-sm">
-                    Explore your data with AI-powered natural language queries
-                  </Text>
-                </div>
+                </button>
+              )}
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <div>
+                <Text variant="h5" className="font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent dark:from-white dark:to-gray-300">
+                  {selectedQuery ? selectedQuery.title : 'Analytics Dashboard'}
+                </Text>
+                <Text color="secondary" className="mt-0.5 text-sm">
+                  {selectedQuery ? selectedQuery.description : 'Explore your data with AI-powered natural language queries'}
+                </Text>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Content Area */}
-        <div className="flex-1 flex overflow-hidden relative">
-          {/* Database Schema Panel */}
-          <DatabaseSchemaPanel 
-            isCollapsed={databasePanelCollapsed}
-            onToggle={() => setDatabasePanelCollapsed(!databasePanelCollapsed)}
-            onTableSelect={setSelectedTable}
-            selectedTable={selectedTable}
-          />
-          
-          {/* Main Dashboard */}
-          <div className="flex-1 flex flex-col">
-            <div className="flex-1 overflow-auto p-4 space-y-4">
-              {/* SQL Query Editor */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Text variant="h6" className="font-medium text-sm text-gray-700 dark:text-gray-300">
-                    SQL Query
-                  </Text>
-                  
-                  {/* Control Buttons */}
-                  <div className="flex items-center space-x-2">
-                    {/* Execute Query Button */}
-                    <div className="relative group">
+      {/* Content Area */}
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Database Schema Panel */}
+        <DatabaseSchemaPanel 
+          isCollapsed={databasePanelCollapsed}
+          onToggle={() => setDatabasePanelCollapsed(!databasePanelCollapsed)}
+          onTableSelect={setSelectedTable}
+          selectedTable={selectedTable}
+        />
+        
+        {/* Main Dashboard */}
+        <div className="flex-1 flex flex-col">
+          <div className="flex-1 overflow-auto p-4 space-y-4">
+            {/* SQL Query Editor */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Text variant="h6" className="font-medium text-sm text-gray-700 dark:text-gray-300">
+                  SQL Query
+                </Text>
+                
+                {/* Control Buttons */}
+                <div className="flex items-center space-x-2">
+                  {/* Execute Query Button */}
+                  <div className="relative group">
                       <button
                         onClick={handleExecuteQuery}
                         disabled={queryLoading}
@@ -231,11 +242,10 @@ const ModernDashboard = () => {
                   </div>
                 </div>
                 
-                <SqlQuery 
-                  sqlQuery={sqlQuery}
-                  setSqlQuery={setSqlQuery}
-                />
-              </div>
+              <SqlQuery 
+                sqlQuery={sqlQuery}
+                setSqlQuery={setSqlQuery}
+              />
 
               {/* View Toggle and Chart Controls */}
               <div className="flex items-center justify-between">
@@ -290,11 +300,10 @@ const ModernDashboard = () => {
               </div>
             </div>
           </div>
+        </div>
 
-
-          {/* Right Panel - AI Query Input */}
-          <div className={`${aiPanelCollapsed ? 'w-0' : 'w-80'} transition-all duration-300 overflow-hidden ${isDark ? 'bg-gray-800/50 border-gray-700/50 backdrop-blur-sm' : 'bg-white/50 border-gray-200/50 backdrop-blur-sm'} border-l flex flex-col`}>
-
+        {/* Right Panel - AI Query Input */}
+        <div className={`${aiPanelCollapsed ? 'w-0' : 'w-80'} transition-all duration-300 overflow-hidden ${isDark ? 'bg-gray-800/50 border-gray-700/50 backdrop-blur-sm' : 'bg-white/50 border-gray-200/50 backdrop-blur-sm'} border-l flex flex-col`}>
             <div className={`${aiPanelCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'} transition-opacity duration-300 flex-1 flex flex-col`}>
               <div className="p-3 border-b border-gray-200/50 dark:border-gray-700/50">
                 <div className="flex items-center space-x-2 mb-1">
@@ -358,7 +367,6 @@ const ModernDashboard = () => {
                   </div>
                 </div>
               </div>
-            </div>
           </div>
         </div>
       </div>
@@ -366,4 +374,4 @@ const ModernDashboard = () => {
   );
 };
 
-export default ModernDashboard;
+export default QueryPage;

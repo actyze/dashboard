@@ -1,16 +1,21 @@
 import React, { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import Sidebar from './Sidebar';
+import DatabaseSchemaPanel from './DatabaseSchemaPanel';
 import AIQueryInput from './AIQueryInput';
 import SqlQuery from './SqlQuery';
 import QueryResults from './QueryResults';
 import Chart from './Chart';
 import ViewToggle from './ViewToggle';
+import ChartTypeSelector from './ChartTypeSelector';
 import { Card, Text, Button } from './ui';
 
 const ModernDashboard = () => {
   const { isDark } = useTheme();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [databasePanelCollapsed, setDatabasePanelCollapsed] = useState(false);
+  const [aiPanelCollapsed, setAiPanelCollapsed] = useState(false);
+  const [selectedTable, setSelectedTable] = useState(null);
   const [activeView, setActiveView] = useState('results'); // 'results' or 'chart'
   const [sqlQuery, setSqlQuery] = useState("SELECT customer_name, order_total, order_date\nFROM orders\nWHERE order_date >= '2024-01-01'\nORDER BY order_total DESC\nLIMIT 10;");
   const [queryLoading, setQueryLoading] = useState(false);
@@ -95,7 +100,7 @@ const ModernDashboard = () => {
 
 
   return (
-    <div className={`h-screen flex ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    <div className={`h-screen flex ${isDark ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
       {/* Sidebar */}
       <Sidebar 
         isCollapsed={sidebarCollapsed} 
@@ -105,51 +110,170 @@ const ModernDashboard = () => {
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b px-6 py-4`}>
+        <div className={`${isDark ? 'bg-gray-900/95 border-gray-800/60' : 'bg-white/95 border-gray-200/60'} border-b px-4 py-2 backdrop-blur-sm`}>
           <div className="flex items-center justify-between">
             <div>
-              <Text variant="h5" className="font-semibold">
-                Analytics Dashboard
-              </Text>
-              <Text color="secondary" className="mt-1">
-                Explore your data with natural language queries
-              </Text>
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </div>
+                <div>
+                  <Text variant="h5" className="font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent dark:from-white dark:to-gray-300">
+                    Analytics Dashboard
+                  </Text>
+                  <Text color="secondary" className="mt-0.5 text-sm">
+                    Explore your data with AI-powered natural language queries
+                  </Text>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Left Panel - Main Dashboard */}
+        <div className="flex-1 flex overflow-hidden relative">
+          {/* Database Schema Panel */}
+          <DatabaseSchemaPanel 
+            isCollapsed={databasePanelCollapsed}
+            onToggle={() => setDatabasePanelCollapsed(!databasePanelCollapsed)}
+            onTableSelect={setSelectedTable}
+            selectedTable={selectedTable}
+          />
+          
+          {/* Main Dashboard */}
           <div className="flex-1 flex flex-col">
-            <div className="flex-1 overflow-auto p-6 space-y-6">
+            <div className="flex-1 overflow-auto p-4 space-y-4">
               {/* SQL Query Editor */}
-              <div className="space-y-4">
-                <Text variant="h6" className="font-semibold">
-                  SQL Query Editor
-                </Text>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Text variant="h6" className="font-medium text-sm text-gray-700 dark:text-gray-300">
+                    SQL Query
+                  </Text>
+                  
+                  {/* Control Buttons */}
+                  <div className="flex items-center space-x-2">
+                    {/* Execute Query Button */}
+                    <div className="relative group">
+                      <button
+                        onClick={handleExecuteQuery}
+                        disabled={queryLoading}
+                        className={`
+                          p-2 rounded-md transition-all duration-300 flex items-center justify-center
+                          ${queryLoading
+                            ? 'bg-blue-400 cursor-not-allowed'
+                            : 'bg-blue-600 hover:bg-blue-700'
+                          }
+                          text-white shadow-md hover:shadow-lg
+                        `}
+                        title="Execute Query"
+                      >
+                        {queryLoading ? (
+                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M8 5v14l11-7z"/>
+                          </svg>
+                        )}
+                      </button>
+                      
+                      {/* Hover Tooltip */}
+                      <div className="absolute top-full mt-2 left-1/2 transform -translate-x-1/2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-30">
+                        {queryLoading ? 'Executing...' : 'Execute Query'}
+                      </div>
+                    </div>
+
+                    {/* Database Panel Toggle Button */}
+                    <button
+                      onClick={() => setDatabasePanelCollapsed(!databasePanelCollapsed)}
+                      className={`
+                        p-1.5 rounded-md transition-all duration-300
+                        ${isDark 
+                          ? 'bg-gray-700 hover:bg-gray-600 text-gray-300 border border-gray-600' 
+                          : 'bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 shadow-sm'
+                        }
+                        hover:shadow-md
+                      `}
+                      title={databasePanelCollapsed ? 'Show Database Schema' : 'Hide Database Schema'}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                      </svg>
+                    </button>
+
+                    {/* AI Panel Toggle Button */}
+                    <button
+                      onClick={() => setAiPanelCollapsed(!aiPanelCollapsed)}
+                      className={`
+                        p-1.5 rounded-md transition-all duration-300
+                        ${isDark 
+                          ? 'bg-gray-700 hover:bg-gray-600 text-gray-300 border border-gray-600' 
+                          : 'bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 shadow-sm'
+                        }
+                        hover:shadow-md
+                      `}
+                      title={aiPanelCollapsed ? 'Show AI Assistant' : 'Hide AI Assistant'}
+                    >
+                      {aiPanelCollapsed ? (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      ) : (
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                
                 <SqlQuery 
                   sqlQuery={sqlQuery}
                   setSqlQuery={setSqlQuery}
-                  onExecute={handleExecuteQuery}
                 />
               </div>
 
-              {/* View Toggle */}
+              {/* View Toggle and Chart Controls */}
               <div className="flex items-center justify-between">
                 <ViewToggle 
                   activeView={activeView}
                   onViewChange={setActiveView}
                 />
                 
-                {/* Optional: Add export or other action buttons here */}
-                <div className="flex items-center space-x-2">
-                  {/* Placeholder for future actions */}
-                </div>
+                {/* Chart Type Selector - only show when chart view is active */}
+                {activeView === 'chart' && chartData && (
+                  <div className="flex items-center space-x-3">
+                    <Text color="secondary" className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                      Chart Type
+                    </Text>
+                    <ChartTypeSelector 
+                      currentType={chartData?.chart?.type || 'bar'}
+                      onTypeChange={(type) => {
+                        if (chartData) {
+                          // Create a completely new object to ensure React detects the change
+                          const newChartData = {
+                            ...chartData,
+                            chart: {
+                              ...chartData.chart,
+                              type: type
+                            },
+                            // Add a timestamp to force re-render
+                            _timestamp: Date.now()
+                          };
+                          setChartData(newChartData);
+                        }
+                      }}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Dynamic Content Area - Results or Chart */}
-              <div className="min-h-[600px]">
+              <div className="w-full">
                 {activeView === 'results' ? (
                   <QueryResults 
                     queryData={queryResults}
@@ -167,49 +291,71 @@ const ModernDashboard = () => {
             </div>
           </div>
 
+
           {/* Right Panel - AI Query Input */}
-          <div className={`w-96 ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-l flex flex-col`}>
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <Text variant="h6" className="font-semibold">
-                Ask Your Data
-              </Text>
-              <Text color="secondary" className="mt-1 text-sm">
-                Use natural language to query your database
-              </Text>
-            </div>
-            
-            <div className="flex-1 p-6 overflow-y-auto">
-              <AIQueryInput 
-                onSubmit={handleAIQuery}
-                loading={queryLoading}
-              />
-              
-              {/* Recent Queries */}
-              <div className="mt-8">
-                <Text variant="subtitle2" className="font-semibold mb-4">
-                  Recent Queries
+          <div className={`${aiPanelCollapsed ? 'w-0' : 'w-80'} transition-all duration-300 overflow-hidden ${isDark ? 'bg-gray-800/50 border-gray-700/50 backdrop-blur-sm' : 'bg-white/50 border-gray-200/50 backdrop-blur-sm'} border-l flex flex-col`}>
+
+            <div className={`${aiPanelCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'} transition-opacity duration-300 flex-1 flex flex-col`}>
+              <div className="p-3 border-b border-gray-200/50 dark:border-gray-700/50">
+                <div className="flex items-center space-x-2 mb-1">
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
+                    <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </div>
+                  <Text variant="h6" className="font-bold text-sm">
+                    AI Assistant
+                  </Text>
+                </div>
+                <Text color="secondary" className="text-xs">
+                  Ask questions about your data in natural language
                 </Text>
-                <div className="space-y-3">
-                  {[
-                    "Show me top customers by revenue",
-                    "What are the sales trends this quarter?",
-                    "List products with low inventory",
-                  ].map((query, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleAIQuery(query)}
-                      className={`
-                        w-full text-left p-3 rounded-lg border transition-all duration-200
-                        ${isDark 
-                          ? 'bg-gray-700 border-gray-600 hover:bg-gray-600 text-gray-200' 
-                          : 'bg-gray-50 border-gray-200 hover:bg-gray-100 text-gray-700'
-                        }
-                        hover:shadow-sm
-                      `}
-                    >
-                      <Text className="text-sm">{query}</Text>
-                    </button>
-                  ))}
+              </div>
+              
+              <div className="flex-1 p-3 overflow-y-auto">
+                <AIQueryInput 
+                  onSubmit={handleAIQuery}
+                  loading={queryLoading}
+                />
+                
+                {/* Recent Queries */}
+                <div className="mt-3">
+                  <Text variant="subtitle2" className="font-medium mb-2 text-xs text-gray-600 dark:text-gray-400">
+                    Recent Queries
+                  </Text>
+                  <div className="space-y-1">
+                    {[
+                      "Show me sales data from the last quarter",
+                      "Create a chart of customer demographics",
+                      "Find all orders over $1000 this month",
+                      "Compare revenue by region",
+                    ].map((query, index) => (
+                      <button
+                        key={index}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (!queryLoading) {
+                            handleAIQuery(query);
+                          }
+                        }}
+                        disabled={queryLoading}
+                        className={`
+                          w-full text-left p-1.5 rounded border transition-all duration-200 cursor-pointer relative z-10
+                          ${queryLoading 
+                            ? 'opacity-50 cursor-not-allowed pointer-events-none'
+                            : isDark
+                              ? 'bg-gray-800/60 border-gray-700/60 hover:bg-gray-700/70 text-gray-200 hover:border-gray-600/70' 
+                              : 'bg-white/80 border-gray-200/60 hover:bg-white text-gray-700 hover:border-gray-300/80'
+                          }
+                          hover:shadow-md text-xs pointer-events-auto
+                        `}
+                        type="button"
+                      >
+                        {query}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>

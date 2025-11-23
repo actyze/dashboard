@@ -23,6 +23,7 @@ fi
 # Parse arguments
 NO_BUILD_FLAG=""
 LOGS_FLAG=""
+PROFILE="local"  # Default profile
 
 for arg in "$@"; do
     case $arg in
@@ -34,23 +35,38 @@ for arg in "$@"; do
             LOGS_FLAG="--follow"
             shift
             ;;
+        --profile)
+            PROFILE="$2"
+            shift 2
+            ;;
+        --profile=*)
+            PROFILE="${arg#*=}"
+            shift
+            ;;
         *)
-            echo "Usage: $0 [--no-build] [--logs]"
-            echo "  --no-build: Skip building images (use existing)"
-            echo "  --logs:     Follow logs after starting"
+            echo "Usage: $0 [--no-build] [--logs] [--profile PROFILE]"
+            echo "  --no-build:        Skip building images (use existing)"
+            echo "  --logs:            Follow logs after starting"
+            echo "  --profile PROFILE: Docker compose profile to use"
+            echo ""
+            echo "Available profiles:"
+            echo "  local         - Local PostgreSQL + Trino (default)"
+            echo "  external      - External PostgreSQL + Trino only"
+            echo "  postgres-only - Local PostgreSQL + External Trino"
+            echo "  trino-only    - External PostgreSQL + Local Trino"
             exit 1
             ;;
     esac
 done
 
 # Start services
-echo "📦 Starting all services..."
+echo "📦 Starting services with profile: $PROFILE"
 if [ -z "$NO_BUILD_FLAG" ]; then
     echo "🔨 Building images locally..."
-    docker-compose up -d --build
+    docker-compose --profile $PROFILE up -d --build
 else
     echo "⚡ Using existing images..."
-    docker-compose up -d
+    docker-compose --profile $PROFILE up -d
 fi
 
 echo ""

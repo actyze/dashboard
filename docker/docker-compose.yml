@@ -1,11 +1,16 @@
 version: '3.8'
 
 # Dashboard Local Development Environment
-# Complete stack: PostgreSQL + Trino + Frontend + Nexus + Schema Service
+# Flexible setup: Use local or external PostgreSQL + Trino
 # Based on helm/dashboard/values-dev.yaml configuration
+#
+# Usage:
+# - Local databases:  ./start.sh
+# - External only:    ./start.sh --profile external
+# - Mixed setup:      ./start.sh --profile postgres-only (local PG + external Trino)
 
 services:
-  # PostgreSQL Database with Demo Data
+  # PostgreSQL Database with Demo Data (OPTIONAL - use profile to enable/disable)
   postgres:
     image: postgres:15-alpine
     container_name: dashboard-postgres
@@ -27,8 +32,11 @@ services:
     networks:
       - dashboard
     restart: unless-stopped
+    profiles:
+      - local
+      - postgres-only
 
-  # Trino Query Engine
+  # Trino Query Engine (OPTIONAL - use profile to enable/disable)
   trino:
     image: trinodb/trino:477
     container_name: dashboard-trino
@@ -40,6 +48,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+        required: false  # Don't require postgres if using external
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/v1/info || exit 1"]
       interval: 30s
@@ -48,6 +57,9 @@ services:
     networks:
       - dashboard
     restart: unless-stopped
+    profiles:
+      - local
+      - trino-only
 
   # Schema Service (FAISS-based table recommendations)
   schema-service:
@@ -68,6 +80,7 @@ services:
     depends_on:
       trino:
         condition: service_healthy
+        required: false  # Optional - can use external Trino
     volumes:
       - schema_models:/app/models
     healthcheck:
@@ -89,13 +102,13 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # Database Configuration
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DATABASE: nexus
+      # Database Configuration (can be local or external)
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DATABASE: ${POSTGRES_DATABASE:-nexus}
       POSTGRES_USER: ${POSTGRES_USER:-nexus_service}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-PostgreActyze123$}
-      # Trino Configuration
+      # Trino Configuration (can be local or external)
       TRINO_HOST: ${TRINO_HOST:-trino}
       TRINO_PORT: ${TRINO_PORT:-8080}
       TRINO_CATALOG: ${TRINO_CATALOG:-postgres}
@@ -123,8 +136,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+        required: false  # Optional - can use external PostgreSQL
       trino:
         condition: service_healthy
+        required: false  # Optional - can use external Trino
       schema-service:
         condition: service_healthy
     healthcheck:

@@ -10,9 +10,9 @@ services:
     image: postgres:15-alpine
     container_name: dashboard-postgres
     environment:
-      POSTGRES_DB: dashboard
-      POSTGRES_USER: nexus_service
-      POSTGRES_PASSWORD: secure_dev_password
+      POSTGRES_DB: ${POSTGRES_DB:-dashboard}
+      POSTGRES_USER: ${POSTGRES_USER:-nexus_service}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-PostgreActyze123$}
       POSTGRES_HOST_AUTH_METHOD: md5
     ports:
       - "5432:5432"
@@ -20,7 +20,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ../helm/dashboard/sql:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nexus_service -d dashboard"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nexus_service} -d ${POSTGRES_DB:-dashboard}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -58,13 +58,13 @@ services:
     ports:
       - "8001:8000"
     environment:
-      TRINO_HOST: trino
-      TRINO_PORT: 8080
-      TRINO_USER: admin
-      TRINO_CATALOG: postgres
-      TRINO_SCHEMA: demo_ecommerce
-      TRINO_SSL: false
-      LOG_LEVEL: INFO
+      TRINO_HOST: ${TRINO_HOST:-trino}
+      TRINO_PORT: ${TRINO_PORT:-8080}
+      TRINO_USER: ${TRINO_USER:-admin}
+      TRINO_CATALOG: ${TRINO_CATALOG:-postgres}
+      TRINO_SCHEMA: ${TRINO_SCHEMA:-demo_ecommerce}
+      TRINO_SSL: ${TRINO_SSL:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
       trino:
         condition: service_healthy
@@ -93,32 +93,33 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DATABASE: nexus
-      POSTGRES_USER: nexus_service
-      POSTGRES_PASSWORD: secure_dev_password
+      POSTGRES_USER: ${POSTGRES_USER:-nexus_service}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-PostgreActyze123$}
       # Trino Configuration
-      TRINO_HOST: trino
-      TRINO_PORT: 8080
-      TRINO_CATALOG: postgres
-      TRINO_SCHEMA: demo_ecommerce
-      TRINO_USER: admin
-      TRINO_SSL: false
+      TRINO_HOST: ${TRINO_HOST:-trino}
+      TRINO_PORT: ${TRINO_PORT:-8080}
+      TRINO_CATALOG: ${TRINO_CATALOG:-postgres}
+      TRINO_SCHEMA: ${TRINO_SCHEMA:-demo_ecommerce}
+      TRINO_USER: ${TRINO_USER:-admin}
+      TRINO_PASSWORD: ${TRINO_PASSWORD:-}
+      TRINO_SSL: ${TRINO_SSL:-false}
       # Schema Service Configuration
-      SCHEMA_SERVICE_URL: http://schema-service:8000
-      # External LLM Configuration (Override with your API key)
-      EXTERNAL_LLM_ENABLED: true
-      EXTERNAL_LLM_PROVIDER: perplexity
-      EXTERNAL_LLM_BASE_URL: https://api.perplexity.ai/chat/completions
+      SCHEMA_SERVICE_URL: http://${SCHEMA_SERVICE_HOST:-schema-service}:${SCHEMA_SERVICE_PORT:-8000}
+      # External LLM Configuration
+      EXTERNAL_LLM_ENABLED: ${EXTERNAL_LLM_ENABLED:-true}
+      EXTERNAL_LLM_PROVIDER: ${EXTERNAL_LLM_PROVIDER:-perplexity}
+      EXTERNAL_LLM_BASE_URL: ${EXTERNAL_LLM_BASE_URL:-https://api.perplexity.ai/chat/completions}
       EXTERNAL_LLM_API_KEY: ${PERPLEXITY_API_KEY:-your-api-key-here}
-      EXTERNAL_LLM_MODEL: sonar-reasoning-pro
-      EXTERNAL_LLM_MAX_TOKENS: 1000
-      EXTERNAL_LLM_TEMPERATURE: 0.1
+      EXTERNAL_LLM_MODEL: ${EXTERNAL_LLM_MODEL:-sonar-reasoning-pro}
+      EXTERNAL_LLM_MAX_TOKENS: ${EXTERNAL_LLM_MAX_TOKENS:-1000}
+      EXTERNAL_LLM_TEMPERATURE: ${EXTERNAL_LLM_TEMPERATURE:-0.1}
       # Cache Configuration
-      CACHE_ENABLED: true
-      CACHE_QUERY_MAX_SIZE: 100
-      CACHE_QUERY_TTL: 1800
+      CACHE_ENABLED: ${CACHE_ENABLED:-true}
+      CACHE_QUERY_MAX_SIZE: ${CACHE_QUERY_MAX_SIZE:-100}
+      CACHE_QUERY_TTL: ${CACHE_QUERY_TTL:-1800}
       # Development Settings
-      DEBUG: true
-      LOG_LEVEL: INFO
+      DEBUG: ${DEBUG:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
       postgres:
         condition: service_healthy

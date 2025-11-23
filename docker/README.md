@@ -65,21 +65,57 @@ TRINO_PASSWORD=your-password
 4. **Debug**: Check logs with `docker-compose logs -f`
 5. **Reset**: `./stop.sh --clean && ./start.sh` for fresh start
 
-### Quick Commands
-```bash
-# Rebuild specific service after code changes
-docker-compose build nexus
-docker-compose up -d nexus
+## 📋 Commands
 
-# Rebuild everything
+### **Flexible Database Setup**
+```bash
+# Local databases (PostgreSQL + Trino) - Default
 ./start.sh
 
-# View logs
-docker-compose logs -f nexus     # Specific service
-docker-compose logs -f           # All services
+# External databases only (bring your own)
+./start.sh --profile external
 
-# Restart specific service
-docker-compose restart nexus
+# Mixed: Local PostgreSQL + External Trino
+./start.sh --profile postgres-only
+
+# Other options
+./start.sh --no-build      # Skip building, use existing images
+./start.sh --logs          # Build, start and follow logs
+```
+
+### **External Database Configuration**
+```bash
+# 1. Copy template and configure external databases
+cp env.example .env
+vim .env
+
+# 2. Update for external PostgreSQL
+POSTGRES_HOST=your-external-postgres-host
+POSTGRES_PORT=5432
+POSTGRES_USER=your-username
+POSTGRES_PASSWORD=your-password
+
+# 3. Update for external Trino
+TRINO_HOST=your-external-trino-host
+TRINO_PORT=443
+TRINO_USER=your-trino-username
+TRINO_PASSWORD=your-trino-password
+TRINO_SSL=true
+
+# 4. Start with external profile
+./start.sh --profile external
+```
+
+### **Service Management**
+```bash
+# Stop services  
+./stop.sh                  # Stop (preserve data)
+./stop.sh --clean          # Stop and remove all data
+
+# Monitor services
+docker-compose ps          # Service status
+docker-compose logs -f     # Follow all logs
+docker-compose logs nexus  # Specific service logs
 ```
 
 ## 🔍 **Service Ports**

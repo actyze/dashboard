@@ -9,6 +9,7 @@ from app.services.llm_service import LLMService
 from app.services.trino_service import TrinoService
 from app.services.cache_factory import cache_service
 from app.services.user_service import UserService
+from app.services.sql_error_analysis_service import SqlErrorAnalysisService
 
 logger = structlog.get_logger()
 
@@ -22,6 +23,7 @@ class OrchestrationService:
         self.trino_service = TrinoService()
         self.cache_service = cache_service
         self.user_service = UserService()
+        self.error_analysis_service = SqlErrorAnalysisService()
         self.logger = logger.bind(service="orchestration-service")
     
     async def initialize(self):
@@ -50,12 +52,21 @@ class OrchestrationService:
         Flow: NL Query → Schema Service → LLM Service → SQL Execution Service
         """
         
+        # Ensure conversation_history is always a list
+        conversation_history = conversation_history or []
+        
         self.logger.info("Processing natural language workflow", query=nl_query)
         start_time = asyncio.get_event_loop().time()
         
         try:
             # Step 1: Get schema recommendations from FAISS service
-            self.logger.info("=== STEP 1: SCHEMA RECOMMENDATIONS ===")
+            self.logger.info("=== STEP 1: FAISS SCHEMA SERVICE ===")
+            self.logger.info("Input NL Query", query=nl_query)
+            self.logger.info("Input Query History", history=conversation_history if conversation_history else "None")
+            self.logger.debug("=== ORCHESTRATION DEBUG - STEP 1 ===")
+            self.logger.debug("Request timestamp", timestamp=int(start_time * 1000))
+            self.logger.debug("Query length", characters=len(nl_query))
+            self.logger.debug("History entries", count=len(conversation_history))
             
             # Check cache first
             cached_schema = await self.cache_service.get_schema_recommendations(
@@ -72,7 +83,7 @@ class OrchestrationService:
                 
                 # Cache the result if successful
                 if schema_recommendations.get("success"):
-                    await self.cache_service.set_schema_recommendations(
+                    await self.cache_service.cache_schema_recommendations(
                         nl_query, conversation_history, schema_recommendations
                     )
             
@@ -83,20 +94,42 @@ class OrchestrationService:
                     error_msg, "SCHEMA_SERVICE_ERROR", start_time
                 )
             
-            recommendations = schema_recommendations.get("recommendations", [])
-            self.logger.info(f"Found {len(recommendations)} schema recommendations")
+            recommendations = schema_recommendations.get("recommendations", []) or []
+            
+            # Detailed schema recommendations logging (matching Java backend)
+            self.logger.info("FAISS Output - Success", success=schema_recommendations.get("success"))
+            if recommendations:
+                self.logger.info("FAISS Output - Found schema recommendations", count=len(recommendations))
+                # Log top 3 recommendations with details
+                for i, rec in enumerate(recommendations[:3]):
+                    self.logger.info(
+                        f"  Schema {i+1}",
+                        full_name=rec.get("full_name", "unknown"),
+                        confidence=rec.get("confidence", 0.0)
+                    )
+            else:
+                self.logger.warning("FAISS Output - No schema recommendations found")
             
             # Step 2: Generate SQL using LLM with schema context
-            self.logger.info("=== STEP 2: SQL GENERATION ===")
+            self.logger.info("=== STEP 2: SQL GENERATION (LLM) ===")
+            self.logger.info("LLM Input - NL Query", query=nl_query)
+            self.logger.info("LLM Input - Schema Context", recommendation_count=len(recommendations))
             
-            # Check cache first
-            cached_sql = await self.cache_service.get_sql_generation(
-                nl_query, conversation_history, schema_recommendations
+            # Check cache first (using LLM cache for SQL generation)
+            cache_key = f"{nl_query}_{len(conversation_history)}_{len(recommendations)}"
+            cached_sql = await self.cache_service.get_llm_response(
+                cache_key, {"type": "sql_generation"}
             )
             
-            if cached_sql:
+            if cached_sql and isinstance(cached_sql, str):
                 self.logger.info("Using cached SQL generation")
-                sql_generation = cached_sql
+                # Parse cached string back to dict format
+                sql_generation = {
+                    "success": True,
+                    "sql": cached_sql,
+                    "confidence": 0.85,
+                    "reasoning": "Retrieved from cache"
+                }
             else:
                 sql_generation = await self.llm_service.generate_sql(
                     nl_query, conversation_history, schema_recommendations
@@ -104,15 +137,27 @@ class OrchestrationService:
                 
                 # Cache the result if successful
                 if sql_generation.get("success"):
-                    await self.cache_service.set_sql_generation(
-                        nl_query, conversation_history, schema_recommendations, sql_generation
+                    await self.cache_service.cache_llm_response(
+                        cache_key, {"type": "sql_generation"}, str(sql_generation)
                     )
+            
+            # Detailed LLM output logging (matching Java backend)
+            self.logger.info("LLM Output - Success", success=sql_generation.get("success") if sql_generation else "null response")
+            if sql_generation:
+                generated_sql = sql_generation.get("sql", "")
+                self.logger.info("LLM Output - SQL", sql=generated_sql[:200] + "..." if len(generated_sql) > 200 else generated_sql)
+                self.logger.info("LLM Output - Confidence", confidence=sql_generation.get("confidence"))
+                self.logger.info("LLM Output - Reasoning", reasoning=sql_generation.get("reasoning", ""))
             
             if not sql_generation.get("success"):
                 error_msg = sql_generation.get("error", "SQL generation failed")
                 error_type = sql_generation.get("error_type", "SQL_GENERATION_ERROR")
-                self.logger.error("SQL generation failed", error=error_msg, error_type=error_type)
-                return self._create_error_response(error_msg, error_type, start_time)
+                
+                # Get user-friendly error message
+                user_friendly_error = self.error_analysis_service.get_user_friendly_error(error_type, error_msg)
+                
+                self.logger.error("SQL generation failed", error=error_msg, error_type=error_type, user_friendly=user_friendly_error)
+                return self._create_error_response(user_friendly_error, error_type, start_time)
             
             generated_sql = sql_generation.get("sql", "").strip()
             if not generated_sql:
@@ -125,6 +170,8 @@ class OrchestrationService:
             
             # Step 3: Execute SQL with retry logic
             self.logger.info("=== STEP 3: SQL EXECUTION WITH RETRY ===")
+            self.logger.info("Initial SQL to execute", sql=generated_sql)
+            self.logger.info("Max retry attempts", max_retries=settings.max_retries)
             
             # Check cache first
             cache_params = {
@@ -148,7 +195,7 @@ class OrchestrationService:
                 
                 # Cache successful results
                 if sql_result.get("success"):
-                    await self.cache_service.set_query_result(
+                    await self.cache_service.cache_query_result(
                         generated_sql, cache_params, sql_result
                     )
             
@@ -174,6 +221,16 @@ class OrchestrationService:
                     "error": sql_result.get("error"),
                     "error_type": sql_result.get("error_type")
                 })
+            else:
+                # Log successful completion (matching Java backend)
+                final_sql = sql_result.get("final_sql", generated_sql)
+                retry_attempts = sql_result.get("retry_attempts", 0)
+                self.logger.info(
+                    "Natural language workflow completed successfully",
+                    attempts=retry_attempts,
+                    nl_query=nl_query,
+                    final_sql=final_sql[:100] + "..." if len(final_sql) > 100 else final_sql
+                )
             
             # Step 5: Save to user history if user_id and session_id provided
             if user_id and session_id:
@@ -239,13 +296,34 @@ class OrchestrationService:
             )
     
     def _create_correction_callback(self, schema_recommendations, conversation_history):
-        """Create callback function for SQL error correction."""
+        """Create callback function for SQL error correction with enhanced analysis."""
         async def correction_callback(
             original_query, failed_sql, sql_error, error_type, error_history
         ):
-            return await self.llm_service.generate_corrected_sql(
-                original_query, failed_sql, sql_error, error_type,
-                schema_recommendations, conversation_history, error_history
+            # Analyze error type for better correction strategy
+            analyzed_error_type = self.error_analysis_service.analyze_error_type(sql_error)
+            
+            # Check if this error type should be retried
+            if not self.error_analysis_service.should_retry_error(analyzed_error_type):
+                self.logger.warning("Error type not suitable for retry", error_type=analyzed_error_type)
+                return {
+                    "success": False,
+                    "error": f"Cannot automatically fix {analyzed_error_type.lower().replace('_', ' ')}",
+                    "error_type": analyzed_error_type
+                }
+            
+            # Build enhanced error correction prompt
+            enhanced_prompt = self.error_analysis_service.build_enhanced_error_prompt(
+                original_query, failed_sql, sql_error, analyzed_error_type, error_history
+            )
+            
+            self.logger.debug("Using enhanced error correction", 
+                            original_error_type=error_type, 
+                            analyzed_error_type=analyzed_error_type)
+            
+            # Generate corrected SQL using enhanced prompt
+            return await self.llm_service.generate_sql(
+                enhanced_prompt, conversation_history, schema_recommendations
             )
         return correction_callback
     
@@ -287,7 +365,7 @@ class OrchestrationService:
         
         # Cache successful results
         if result.get("success"):
-            await self.cache_service.set_query_result(sql, cache_params, result)
+            await self.cache_service.cache_query_result(sql, cache_params, result)
         
         return {
             "success": result.get("success", False),

@@ -1,26 +1,26 @@
-{{- if and .Values.services.backend.enabled .Values.autoscaling.backend.enabled }}
+{{- if and .Values.services.nexus.enabled .Values.autoscaling.nexus.enabled }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: {{ include "dashboard.fullname" . }}-backend-hpa
+  name: {{ include "dashboard.fullname" . }}-nexus-hpa
   namespace: {{ .Values.global.namespace }}
   labels:
-    {{- include "dashboard.backend.labels" . | nindent 4 }}
+    {{- include "dashboard.nexus.labels" . | nindent 4 }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: {{ include "dashboard.fullname" . }}-backend
-  minReplicas: {{ .Values.autoscaling.backend.minReplicas }}
-  maxReplicas: {{ .Values.autoscaling.backend.maxReplicas }}
+    name: {{ include "dashboard.fullname" . }}-nexus
+  minReplicas: {{ .Values.autoscaling.nexus.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.nexus.maxReplicas }}
   metrics:
   - type: Resource
     resource:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: {{ .Values.autoscaling.backend.targetCPUUtilizationPercentage }}
+        averageUtilization: {{ .Values.autoscaling.nexus.targetCPUUtilizationPercentage }}
 {{- end }}
 
 {{- if and .Values.services.frontend.enabled .Values.autoscaling.frontend.enabled }}

@@ -5,7 +5,8 @@ from typing import List, Optional
 from datetime import datetime
 from app.models import (
     ConversationInputGQL, SQLInputGQL, WorkflowResponseGQL, 
-    SQLResponseGQL, HealthCheckResponseGQL
+    SQLResponseGQL, HealthCheckResponseGQL, QueryResultsGQL,
+    SchemaRecommendationGQL
 )
 from app.models_extended import (
     UserCreateGQL, UserResponseGQL, UserPreferenceInputGQL,
@@ -131,14 +132,11 @@ class Mutation:
         query_results = None
         if result.get("query_results"):
             qr = result["query_results"]
-            query_results = strawberry.type(
-                name="QueryResultsGQL",
-                fields={
-                    "columns": qr.get("columns", []),
-                    "rows": qr.get("rows", []),
-                    "row_count": qr.get("row_count", 0)
-                }
-            )()
+            query_results = QueryResultsGQL(
+                columns=qr.get("columns", []),
+                rows=qr.get("rows", []),
+                row_count=qr.get("row_count", 0)
+            )
         
         # Convert schema recommendations if present
         schema_recommendations = None
@@ -146,37 +144,31 @@ class Mutation:
             schema_recs = []
             for rec in result["schema_recommendations"]:
                 schema_recs.append(
-                    strawberry.type(
-                        name="SchemaRecommendationGQL",
-                        fields={
-                            "full_name": rec.get("full_name", ""),
-                            "confidence": rec.get("confidence", 0.0),
-                            "table_name": rec.get("table_name", ""),
-                            "schema_name": rec.get("schema_name", ""),
-                            "columns": rec.get("columns")
-                        }
-                    )()
+                    SchemaRecommendationGQL(
+                        full_name=rec.get("full_name", ""),
+                        confidence=rec.get("confidence", 0.0),
+                        table_name=rec.get("table_name", ""),
+                        schema_name=rec.get("schema_name", ""),
+                        columns=rec.get("columns")
+                    )
                 )
             schema_recommendations = schema_recs
         
-        return strawberry.type(
-            name="WorkflowResponseGQL",
-            fields={
-                "success": result.get("success", False),
-                "nl_query": result.get("nl_query", ""),
-                "generated_sql": result.get("generated_sql"),
-                "query_results": query_results,
-                "schema_recommendations": schema_recommendations,
-                "model_confidence": result.get("model_confidence"),
-                "model_reasoning": result.get("model_reasoning"),
-                "processing_time": result.get("processing_time", 0.0),
-                "execution_time": result.get("execution_time"),
-                "retry_attempts": result.get("retry_attempts", 0),
-                "error_history": result.get("error_history"),
-                "error": result.get("error"),
-                "error_type": result.get("error_type")
-            }
-        )()
+        return WorkflowResponseGQL(
+            success=result.get("success", False),
+            nl_query=result.get("nl_query", ""),
+            generated_sql=result.get("generated_sql"),
+            query_results=query_results,
+            schema_recommendations=schema_recommendations,
+            model_confidence=result.get("model_confidence"),
+            model_reasoning=result.get("model_reasoning"),
+            processing_time=result.get("processing_time", 0.0),
+            execution_time=result.get("execution_time"),
+            retry_attempts=result.get("retry_attempts", 0),
+            error_history=result.get("error_history"),
+            error=result.get("error"),
+            error_type=result.get("error_type")
+        )
     
     @strawberry.mutation(description="Execute SQL query directly")
     async def execute_sql(
@@ -278,6 +270,5 @@ class Mutation:
 # Create the GraphQL schema
 schema = strawberry.Schema(
     query=Query,
-    mutation=Mutation,
-    description="Nexus GraphQL API - Central Hub for Natural Language to SQL Workflows"
+    mutation=Mutation
 )

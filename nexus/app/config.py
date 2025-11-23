@@ -29,29 +29,25 @@ class Settings(BaseSettings):
     postgres_pool_timeout: int = 30
     
     # =============================================================================
-    # Cache Configuration - Redis
+    # Cache Configuration - In-Memory (Enterprise-Grade)
     # =============================================================================
-    redis_url: str = "redis://dashboard-redis:6379"
-    redis_password: str = ""
-    redis_db: int = 0
-    redis_ssl: bool = False
-    redis_pool_size: int = 10
-    cache_ttl: int = 300
     cache_enabled: bool = True
+    cache_ttl: int = 300  # Default TTL for query cache (5 minutes)
     cache_key_prefix: str = "nexus:"
     cache_stats_log_interval: int = 300
     
-    # Memory Cache Configuration (Alternative to Redis)
-    cache_type: str = "memory"  # "memory" or "redis"
-    cache_query_max_size: int = 1000
-    cache_metadata_max_size: int = 200
-    cache_longterm_max_size: int = 100
-    cache_schema_max_size: int = 500
-    cache_llm_max_size: int = 200
-    cache_metadata_ttl: int = 600  # 10 minutes
-    cache_longterm_ttl: int = 3600  # 1 hour
-    cache_schema_ttl: int = 1800  # 30 minutes
-    cache_llm_ttl: int = 7200  # 2 hours
+    # Memory Cache Sizes (Different cache types for different use cases)
+    cache_query_max_size: int = 1000      # SQL query results
+    cache_metadata_max_size: int = 200    # Schema metadata
+    cache_longterm_max_size: int = 100    # Expensive operations
+    cache_schema_max_size: int = 500      # FAISS recommendations
+    cache_llm_max_size: int = 200         # ML model responses
+    
+    # Memory Cache TTL (Time-To-Live in seconds)
+    cache_metadata_ttl: int = 600         # 10 minutes
+    cache_longterm_ttl: int = 3600        # 1 hour
+    cache_schema_ttl: int = 1800          # 30 minutes
+    cache_llm_ttl: int = 7200             # 2 hours
     
     # =============================================================================
     # External Services Configuration

@@ -6,18 +6,20 @@ services:
     ports:
       - "8002:8002"
     environment:
-      - REDIS_URL=redis://redis:6379
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_DATABASE=dashboard
       - POSTGRES_USER=dashboard_user
       - POSTGRES_PASSWORD=dashboard_password
-      - SCHEMA_SERVICE_URL=http://schema-service:8001
-      - LLM_SERVICE_URL=http://llm-service:8000
+      - SCHEMA_SERVICE_URL=http://dashboard-schema-service:8001
+      - LLM_SERVICE_URL=http://dashboard-fastapi:8000
+      - TRINO_HOST=dashboard-trino
+      - TRINO_PORT=8080
+      - CACHE_ENABLED=true
+      - CACHE_QUERY_MAX_SIZE=1000
       - DEBUG=true
       - LOG_LEVEL=DEBUG
     depends_on:
-      - redis
       - postgres
     networks:
       - nexus-network
@@ -37,33 +39,7 @@ services:
       - nexus-network
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - nexus-network
-    restart: unless-stopped
-    command: redis-server --appendonly yes
-
-  # Optional: Redis Commander for cache management
-  redis-commander:
-    image: rediscommander/redis-commander:latest
-    environment:
-      - REDIS_HOSTS=local:redis:6379
-    ports:
-      - "8081:8081"
-    depends_on:
-      - redis
-    networks:
-      - nexus-network
-    profiles:
-      - tools
-
 volumes:
-  redis_data:
   postgres_data:
 
 networks:

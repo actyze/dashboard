@@ -46,11 +46,15 @@ modelStrategy:
     enabled: true              # ← Toggle: Use external LLM (OpenAI, Perplexity, Claude, etc.)
     provider: "perplexity"     # Options: openai, perplexity, anthropic, groq, together
     model: "sonar-reasoning-pro"
-    baseUrl: "https://api.perplexity.ai"
+    baseUrl: "https://api.perplexity.ai/chat/completions"  # Complete endpoint URL
+    # Examples for other providers:
+    # OpenAI: "https://api.openai.com/v1/chat/completions"
+    # Groq: "https://api.groq.com/openai/v1/chat/completions"  
+    # Together: "https://api.together.xyz/v1/chat/completions"
     # apiKey loaded from secret: dashboard-external-llm
     maxTokens: 1000
     temperature: 0.1
-    timeout: 30s
+    timeout: 30
     fallbackToLocal: false     # Don't fallback to local model if external fails
     
   # Option 2: Local Phi-4 LoRA Model (configuration in phiSqlLora section below)
@@ -74,31 +78,35 @@ serviceAccount:
 # ============================================================================
 services:
   # Core Services (required)
-  backend:
-    enabled: true        # ← Spring Boot orchestration service (REQUIRED)
-  
-  # Optional Services
+  nexus:
+    enabled: true        # Nexus orchestration service (REQUIRED) - replaces backend
   frontend:
-    enabled: true        # ← React UI (can disable for API-only testing)
+    enabled: true        # React frontend (REQUIRED)
   schemaService:
-    enabled: true        # ← FAISS-based schema recommendations (enhances SQL quality)
-  trino:
-    enabled: true        # ← Embedded Trino pod enabled for local testing
+    enabled: true        # FAISS schema recommendations (REQUIRED)
   
-  # PostgreSQL Database (operational database for user preferences, settings, etc.)
+  # Database Services (required)
   postgres:
-    enabled: true        # ← PostgreSQL operational database
+    enabled: true        # PostgreSQL database (REQUIRED)
+  trino:
+    enabled: true        # Trino query engine (REQUIRED)
+  
+  # Disabled Services
+  backend:
+    enabled: false       # Old Java backend (DISABLED) - replaced by nexus
+  phiSqlLora:
+    enabled: false       # Local LLM service (DISABLED) - using external LLM
 
-# Backend Spring Boot service
-backend:
+# Nexus FastAPI service (replaces Spring Boot backend)
+nexus:
   replicaCount: 1
   image:
-    repository: dashboard-backend
+    repository: dashboard-nexus  # Nexus service image
     tag: latest
     pullPolicy: Never  # Use local images for Kind
   service:
     type: ClusterIP
-    port: 8080
+    port: 8002  # FastAPI Nexus service runs on port 8002
   resources:
     requests:
       memory: "512Mi"
@@ -107,20 +115,40 @@ backend:
       memory: "1Gi"
       cpu: "500m"
   env:
-    phiSqlLora:
-      url: "http://dashboard-phi-sql-lora:8000"
+    # Database Configuration
+    postgres:
+      host: "dashboard-postgres"
+      port: 5432
+      database: "dashboard"
+      # user and password loaded from values-dev-secrets.yaml
+    # Cache Configuration (In-Memory - No Redis)
+    cache:
+      enabled: true
+      type: "memory"
+      queryMaxSize: 1000
+      llmMaxSize: 200
+      llmTtl: 7200
+    # External Services
     schemaService:
       url: "http://dashboard-schema-service:8001"
+    phiSqlLora:
+      url: "http://dashboard-phi-sql-lora:8000"  # Available but disabled
     trino:
       # All Trino connection details loaded from values-dev-secrets.yaml
       # host, port, catalog, schema, user, password
+    # ML Service Configuration
     mlService:
       modelType: "external-llm"
+    # SQL Execution Configuration
     sqlExecution:
       defaultMaxResults: 100
       defaultTimeoutSeconds: 30
-    cache:
+    # LLM Configuration
+    externalLlm:
       enabled: true
+      provider: "perplexity"
+      model: "sonar-reasoning-pro"
+      # apiKey loaded from secret
 
 # Frontend React service
 frontend:
@@ -155,7 +183,7 @@ ingress:
           service: frontend
         - path: /api
           pathType: Prefix
-          service: backend
+          service: nexus
   tls: []
 
 # Service Monitor for Prometheus (optional)
@@ -166,7 +194,7 @@ serviceMonitor:
 
 # Horizontal Pod Autoscaler (disabled for dev)
 autoscaling:
-  backend:
+  nexus:
     enabled: false
     minReplicas: 1
     maxReplicas: 3
@@ -176,8 +204,8 @@ autoscaling:
     minReplicas: 1
     maxReplicas: 3
     targetCPUUtilizationPercentage: 80
-  fastapi:
-    enabled: false  # ML service typically doesn't need autoscaling
+  schemaService:
+    enabled: false  # Schema service typically doesn't need autoscaling in dev
 
 # Network Policies
 networkPolicy:
@@ -213,6 +241,11 @@ trino:
   config:
     enabled: true
   catalogs:
+    postgres:
+      connector.name: "postgresql"
+      connection-url: "jdbc:postgresql://dashboard-postgres:5432/dashboard"
+      connection-user: "nexus_service"
+      connection-password: "${ENV:POSTGRES_PASSWORD}"
     memory:
       connector.name: "memory"
     tpch:
@@ -235,8 +268,7 @@ postgres:
     repository: postgres
     tag: "15-alpine"
   database: "dashboard"
-  user: "dashboard_user"
-  # Credentials loaded from dashboard-postgres-credentials secret
+  # user and password loaded from values-dev-secrets.yaml
   resources:
     requests:
       memory: "256Mi"

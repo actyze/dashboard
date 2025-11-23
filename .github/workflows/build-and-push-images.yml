@@ -49,18 +49,17 @@ jobs:
       - name: Obfuscate JavaScript code
         working-directory: ./frontend
         run: |
-          # Install obfuscation tool
-          npm install -g javascript-obfuscator
-          
-          # Obfuscate JavaScript files in build directory
-          find build/static/js -name "*.js" -not -name "*.map" | while read file; do
+          # Obfuscate JavaScript files with increased memory limit
+          echo "Obfuscating JavaScript files..."
+          find build/static/js -name "*.js" | while read file; do
             echo "Obfuscating: $file"
-            javascript-obfuscator "$file" --output "$file" \
+            # Use Node.js with increased memory limit (4GB)
+            node --max-old-space-size=4096 $(which javascript-obfuscator) "$file" --output "$file" \
               --compact true \
               --control-flow-flattening true \
-              --control-flow-flattening-threshold 0.75 \
+              --control-flow-flattening-threshold 0.5 \
               --dead-code-injection true \
-              --dead-code-injection-threshold 0.4 \
+              --dead-code-injection-threshold 0.3 \
               --debug-protection false \
               --disable-console-output true \
               --identifier-names-generator hexadecimal \
@@ -69,7 +68,7 @@ jobs:
               --string-array true \
               --self-defending true \
               --string-array-encoding base64 \
-              --string-array-threshold 0.75 \
+              --string-array-threshold 0.5 \
               --transform-object-keys true \
               --unicode-escape-sequence false
           done

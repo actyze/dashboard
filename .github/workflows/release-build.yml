@@ -99,10 +99,10 @@ jobs:
               # Build with production optimizations (disable ESLint warnings as errors)
               CI=false NODE_ENV=production npm run build
               
-              # Advanced JavaScript obfuscation
+              # Advanced JavaScript obfuscation with increased memory limit
               find build/static/js -name "*.js" -not -name "*.map" | while read file; do
                 echo "Advanced obfuscation: $file"
-                javascript-obfuscator "$file" --output "$file" \
+                node --max-old-space-size=4096 $(which javascript-obfuscator) "$file" --output "$file" \
                   --compact true \
                   --control-flow-flattening true \
                   --control-flow-flattening-threshold 1 \

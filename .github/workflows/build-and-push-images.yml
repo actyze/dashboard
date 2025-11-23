@@ -66,9 +66,8 @@ jobs:
               --identifier-names-generator hexadecimal \
               --log false \
               --rename-globals false \
-              --rotate-string-array true \
-              --self-defending true \
               --string-array true \
+              --self-defending true \
               --string-array-encoding base64 \
               --string-array-threshold 0.75 \
               --transform-object-keys true \
@@ -132,40 +131,27 @@ jobs:
 
       - name: Install obfuscation dependencies
         run: |
-          pip install pyarmor
-          pip install pyinstaller
+          pip install python-minifier
 
       - name: Obfuscate Python code
         working-directory: ./nexus
         run: |
-          # Create obfuscated version of the code
-          mkdir -p obfuscated
+          # Minify Python files
+          echo "Minifying Python source code..."
           
-          # Copy non-Python files
-          cp -r requirements.txt Dockerfile obfuscated/ 2>/dev/null || true
+          # Find all Python files and minify them
+          find . -name "*.py" | while read file; do
+            echo "Minifying: $file"
+            # Create backup
+            cp "$file" "$file.bak"
+            # Minify (remove comments, docstrings, extra whitespace)
+            python-minifier "$file.bak" > "$file" || cp "$file.bak" "$file"
+            # Remove backup
+            rm "$file.bak"
+          done
           
-          # Obfuscate Python files
-          echo "Obfuscating Python source code..."
-          
-          # Initialize pyarmor
-          pyarmor gen --output obfuscated/app app/
-          
-          # Copy main.py and obfuscate
-          cp main.py obfuscated/
-          pyarmor gen --output obfuscated/ main.py
-          
-          # Create new requirements with obfuscation support
-          echo "pyarmor" >> obfuscated/requirements.txt
-          
-          # Update imports in obfuscated main.py to use obfuscated modules
-          sed -i 's/from app\./from pyarmor_runtime_000000; from app\./g' obfuscated/main.py || true
-          
-          # Remove original source files from obfuscated directory
-          find obfuscated -name "*.py" -path "*/app/*" -delete || true
-          
-          # Move obfuscated files to replace originals
-          cp -r obfuscated/* .
-          rm -rf obfuscated
+          # Add python-minifier to requirements for runtime
+          echo "python-minifier" >> requirements.txt
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -218,35 +204,27 @@ jobs:
 
       - name: Install obfuscation dependencies
         run: |
-          pip install pyarmor
-          pip install cython
+          pip install python-minifier
 
       - name: Obfuscate Schema Service code
         working-directory: ./models/schema-service
         run: |
-          # Create obfuscated version
-          mkdir -p obfuscated
+          # Create backup and minify Python files
+          echo "Minifying Schema Service Python code..."
           
-          # Copy non-Python files
-          cp -r requirements.txt Dockerfile *.md obfuscated/ 2>/dev/null || true
-          
-          # Obfuscate Python files
-          echo "Obfuscating Schema Service Python code..."
-          
-          # Find all Python files and obfuscate them
-          find . -name "*.py" -not -path "./obfuscated/*" | while read file; do
-            dir=$(dirname "$file")
-            mkdir -p "obfuscated/$dir"
-            echo "Obfuscating: $file"
-            pyarmor gen --output "obfuscated/$dir" "$file"
+          # Find all Python files and minify them
+          find . -name "*.py" | while read file; do
+            echo "Minifying: $file"
+            # Create backup
+            cp "$file" "$file.bak"
+            # Minify (remove comments, docstrings, extra whitespace)
+            python-minifier "$file.bak" > "$file" || cp "$file.bak" "$file"
+            # Remove backup
+            rm "$file.bak"
           done
           
-          # Copy obfuscated files back
-          cp -r obfuscated/* .
-          rm -rf obfuscated
-          
-          # Add pyarmor to requirements
-          echo "pyarmor" >> requirements.txt
+          # Add python-minifier to requirements for runtime
+          echo "python-minifier" >> requirements.txt
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

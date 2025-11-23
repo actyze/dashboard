@@ -94,44 +94,19 @@ jobs:
               cd frontend
               npm ci
               # Install advanced obfuscation tools
-              npm install -g javascript-obfuscator terser webpack-obfuscator
+              npm install -g terser webpack-obfuscator
               
               # Build with production optimizations (disable ESLint warnings as errors)
               CI=false NODE_ENV=production npm run build
               
-              # Advanced JavaScript obfuscation with increased memory limit
+              # Advanced JavaScript obfuscation using terser (memory efficient)
               find build/static/js -name "*.js" -not -name "*.map" | while read file; do
-                echo "Advanced obfuscation: $file"
-                node --max-old-space-size=4096 $(which javascript-obfuscator) "$file" --output "$file" \
-                  --compact true \
-                  --control-flow-flattening true \
-                  --control-flow-flattening-threshold 1 \
-                  --dead-code-injection true \
-                  --dead-code-injection-threshold 0.5 \
-                  --debug-protection true \
-                  --debug-protection-interval 2000 \
-                  --disable-console-output true \
-                  --domain-lock '["dashboard.company.com"]' \
-                  --identifier-names-generator mangled-shuffled \
-                  --log false \
-                  --numbers-to-expressions true \
-                  --rename-globals true \
-                  --rename-properties true \
-                  --rotate-string-array true \
-                  --seed 42 \
-                  --self-defending true \
-                  --shuffle-string-array true \
-                  --split-strings true \
-                  --split-strings-chunk-length 3 \
-                  --string-array true \
-                  --string-array-calls-transform true \
-                  --string-array-encoding rc4 \
-                  --string-array-index-shift true \
-                  --string-array-rotate true \
-                  --string-array-shuffle true \
-                  --string-array-threshold 1 \
-                  --transform-object-keys true \
-                  --unicode-escape-sequence true
+                echo "Advanced processing: $file"
+                # Use terser with advanced settings for production
+                npx terser "$file" \
+                  --compress drop_console=true,drop_debugger=true,pure_funcs=['console.log','console.info','console.warn','console.error'],passes=3 \
+                  --mangle toplevel=true,properties=true \
+                  --output "$file"
               done
               
               # Remove all debugging information

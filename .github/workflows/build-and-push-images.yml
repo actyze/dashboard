@@ -49,28 +49,15 @@ jobs:
       - name: Obfuscate JavaScript code
         working-directory: ./frontend
         run: |
-          # Obfuscate JavaScript files with increased memory limit
-          echo "Obfuscating JavaScript files..."
+          # Lightweight JavaScript obfuscation to avoid memory issues
+          echo "Applying lightweight JavaScript obfuscation..."
           find build/static/js -name "*.js" | while read file; do
-            echo "Obfuscating: $file"
-            # Use Node.js with increased memory limit (4GB)
-            node --max-old-space-size=4096 $(which javascript-obfuscator) "$file" --output "$file" \
-              --compact true \
-              --control-flow-flattening true \
-              --control-flow-flattening-threshold 0.5 \
-              --dead-code-injection true \
-              --dead-code-injection-threshold 0.3 \
-              --debug-protection false \
-              --disable-console-output true \
-              --identifier-names-generator hexadecimal \
-              --log false \
-              --rename-globals false \
-              --string-array true \
-              --self-defending true \
-              --string-array-encoding base64 \
-              --string-array-threshold 0.5 \
-              --transform-object-keys true \
-              --unicode-escape-sequence false
+            echo "Processing: $file"
+            # Use terser for lightweight minification and basic obfuscation
+            npx terser "$file" \
+              --compress drop_console=true,drop_debugger=true,pure_funcs=['console.log','console.info','console.warn'] \
+              --mangle \
+              --output "$file"
           done
           
           # Remove source maps for security

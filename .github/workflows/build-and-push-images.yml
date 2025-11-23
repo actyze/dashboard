@@ -1,0 +1,386 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      force_build:
+        description: 'Force build all images'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  REGISTRY: docker.io
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
+jobs:
+  build-frontend:
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Obfuscate JavaScript code
+        working-directory: ./frontend
+        run: |
+          # Install obfuscation tool
+          npm install -g javascript-obfuscator
+          
+          # Create obfuscated build
+          npm run build
+          
+          # Obfuscate JavaScript files in build directory
+          find build/static/js -name "*.js" -not -name "*.map" | while read file; do
+            echo "Obfuscating: $file"
+            javascript-obfuscator "$file" --output "$file" \
+              --compact true \
+              --control-flow-flattening true \
+              --control-flow-flattening-threshold 0.75 \
+              --dead-code-injection true \
+              --dead-code-injection-threshold 0.4 \
+              --debug-protection false \
+              --disable-console-output true \
+              --identifier-names-generator hexadecimal \
+              --log false \
+              --rename-globals false \
+              --rotate-string-array true \
+              --self-defending true \
+              --string-array true \
+              --string-array-encoding base64 \
+              --string-array-threshold 0.75 \
+              --transform-object-keys true \
+              --unicode-escape-sequence false
+          done
+          
+          # Remove source maps for security
+          find build -name "*.map" -delete
+          
+          # Remove console.log statements
+          find build -name "*.js" -exec sed -i 's/console\.log([^;]*);*//g' {} \;
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/actyze/dashboard-frontend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.frontend
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+  build-nexus:
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install obfuscation dependencies
+        run: |
+          pip install pyarmor
+          pip install pyinstaller
+
+      - name: Obfuscate Python code
+        working-directory: ./nexus
+        run: |
+          # Create obfuscated version of the code
+          mkdir -p obfuscated
+          
+          # Copy non-Python files
+          cp -r requirements.txt Dockerfile obfuscated/ 2>/dev/null || true
+          
+          # Obfuscate Python files
+          echo "Obfuscating Python source code..."
+          
+          # Initialize pyarmor
+          pyarmor gen --output obfuscated/app app/
+          
+          # Copy main.py and obfuscate
+          cp main.py obfuscated/
+          pyarmor gen --output obfuscated/ main.py
+          
+          # Create new requirements with obfuscation support
+          echo "pyarmor" >> obfuscated/requirements.txt
+          
+          # Update imports in obfuscated main.py to use obfuscated modules
+          sed -i 's/from app\./from pyarmor_runtime_000000; from app\./g' obfuscated/main.py || true
+          
+          # Remove original source files from obfuscated directory
+          find obfuscated -name "*.py" -path "*/app/*" -delete || true
+          
+          # Move obfuscated files to replace originals
+          cp -r obfuscated/* .
+          rm -rf obfuscated
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/actyze/dashboard-nexus
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./nexus
+          file: ./nexus/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+  build-schema-service:
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install obfuscation dependencies
+        run: |
+          pip install pyarmor
+          pip install cython
+
+      - name: Obfuscate Schema Service code
+        working-directory: ./models/schema-service
+        run: |
+          # Create obfuscated version
+          mkdir -p obfuscated
+          
+          # Copy non-Python files
+          cp -r requirements.txt Dockerfile *.md obfuscated/ 2>/dev/null || true
+          
+          # Obfuscate Python files
+          echo "Obfuscating Schema Service Python code..."
+          
+          # Find all Python files and obfuscate them
+          find . -name "*.py" -not -path "./obfuscated/*" | while read file; do
+            dir=$(dirname "$file")
+            mkdir -p "obfuscated/$dir"
+            echo "Obfuscating: $file"
+            pyarmor gen --output "obfuscated/$dir" "$file"
+          done
+          
+          # Copy obfuscated files back
+          cp -r obfuscated/* .
+          rm -rf obfuscated
+          
+          # Add pyarmor to requirements
+          echo "pyarmor" >> requirements.txt
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/actyze/dashboard-schema-service
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./models/schema-service
+          file: ./models/schema-service/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+  update-deployment-configs:
+    runs-on: ubuntu-latest
+    needs: [build-frontend, build-nexus, build-schema-service]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Docker Compose files
+        run: |
+          # Extract image tags
+          FRONTEND_TAG=$(echo "${{ needs.build-frontend.outputs.image-tag }}" | head -n1)
+          NEXUS_TAG=$(echo "${{ needs.build-nexus.outputs.image-tag }}" | head -n1)
+          SCHEMA_TAG=$(echo "${{ needs.build-schema-service.outputs.image-tag }}" | head -n1)
+          
+          echo "Updating Docker Compose files with new image tags:"
+          echo "Frontend: $FRONTEND_TAG"
+          echo "Nexus: $NEXUS_TAG"
+          echo "Schema: $SCHEMA_TAG"
+          
+          # Update docker-compose files to use Docker Hub images instead of building locally
+          sed -i "s|build:|# build:|g" docker/docker-compose.*.yml
+          sed -i "s|context:|# context:|g" docker/docker-compose.*.yml
+          sed -i "s|dockerfile:|# dockerfile:|g" docker/docker-compose.*.yml
+          
+          # Add image references
+          sed -i "/dashboard-frontend:/a\\    image: $FRONTEND_TAG" docker/docker-compose.*.yml
+          sed -i "/dashboard-nexus:/a\\    image: $NEXUS_TAG" docker/docker-compose.*.yml
+          sed -i "/dashboard-schema-service:/a\\    image: $SCHEMA_TAG" docker/docker-compose.*.yml
+
+      - name: Update Helm values
+        run: |
+          # Extract image tags without registry prefix
+          FRONTEND_TAG=$(echo "${{ needs.build-frontend.outputs.image-tag }}" | head -n1 | sed 's|docker.io/||')
+          NEXUS_TAG=$(echo "${{ needs.build-nexus.outputs.image-tag }}" | head -n1 | sed 's|docker.io/||')
+          SCHEMA_TAG=$(echo "${{ needs.build-schema-service.outputs.image-tag }}" | head -n1 | sed 's|docker.io/||')
+          
+          echo "Updating Helm values with new image tags:"
+          echo "Frontend: $FRONTEND_TAG"
+          echo "Nexus: $NEXUS_TAG"
+          echo "Schema: $SCHEMA_TAG"
+          
+          # Update Helm values files
+          find helm -name "values*.yaml" -exec sed -i "s|repository: dashboard-frontend|repository: actyze/dashboard-frontend|g" {} \;
+          find helm -name "values*.yaml" -exec sed -i "s|repository: dashboard-nexus|repository: actyze/dashboard-nexus|g" {} \;
+          find helm -name "values*.yaml" -exec sed -i "s|repository: dashboard-schema-service|repository: actyze/dashboard-schema-service|g" {} \;
+          
+          # Update pull policy to Always for latest images
+          find helm -name "values*.yaml" -exec sed -i "s|pullPolicy: Never|pullPolicy: Always|g" {} \;
+          find helm -name "values*.yaml" -exec sed -i "s|pullPolicy: IfNotPresent|pullPolicy: Always|g" {} \;
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update deployment configs with new Docker images"
+          title: "Update deployment configs with new Docker images"
+          body: |
+            This PR updates the deployment configurations with newly built Docker images:
+            
+            - Frontend: ${{ needs.build-frontend.outputs.image-tag }}
+            - Nexus: ${{ needs.build-nexus.outputs.image-tag }}
+            - Schema Service: ${{ needs.build-schema-service.outputs.image-tag }}
+            
+            Changes:
+            - Updated Docker Compose files to use Docker Hub images
+            - Updated Helm values to use Docker Hub repositories
+            - Set pull policy to Always for latest images
+            
+            Auto-generated by GitHub Actions.
+          branch: update-docker-images-${{ github.run_number }}
+          delete-branch: true
+
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: [build-frontend, build-nexus, build-schema-service]
+    steps:
+      - name: Run Trivy vulnerability scanner - Frontend
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ needs.build-frontend.outputs.image-tag }}
+          format: 'sarif'
+          output: 'trivy-frontend.sarif'
+
+      - name: Run Trivy vulnerability scanner - Nexus
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ needs.build-nexus.outputs.image-tag }}
+          format: 'sarif'
+          output: 'trivy-nexus.sarif'
+
+      - name: Run Trivy vulnerability scanner - Schema Service
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ needs.build-schema-service.outputs.image-tag }}
+          format: 'sarif'
+          output: 'trivy-schema.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: '.'

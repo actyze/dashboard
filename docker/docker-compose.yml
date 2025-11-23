@@ -1,0 +1,173 @@
+version: '3.8'
+
+# Dashboard Local Development Environment
+# Complete stack: PostgreSQL + Trino + Frontend + Nexus + Schema Service
+# Based on helm/dashboard/values-dev.yaml configuration
+
+services:
+  # PostgreSQL Database with Demo Data
+  postgres:
+    image: postgres:15-alpine
+    container_name: dashboard-postgres
+    environment:
+      POSTGRES_DB: dashboard
+      POSTGRES_USER: nexus_service
+      POSTGRES_PASSWORD: secure_dev_password
+      POSTGRES_HOST_AUTH_METHOD: md5
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../helm/dashboard/sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexus_service -d dashboard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dashboard
+    restart: unless-stopped
+
+  # Trino Query Engine
+  trino:
+    image: trinodb/trino:477
+    container_name: dashboard-trino
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./trino/catalog:/etc/trino/catalog:ro
+      - ./trino/config.properties:/etc/trino/config.properties:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/v1/info || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - dashboard
+    restart: unless-stopped
+
+  # Schema Service (FAISS-based table recommendations)
+  schema-service:
+    build:
+      context: ../models/schema-service
+      dockerfile: Dockerfile
+    container_name: dashboard-schema-service
+    ports:
+      - "8001:8000"
+    environment:
+      TRINO_HOST: trino
+      TRINO_PORT: 8080
+      TRINO_USER: admin
+      TRINO_CATALOG: postgres
+      TRINO_SCHEMA: demo_ecommerce
+      TRINO_SSL: false
+      LOG_LEVEL: INFO
+    depends_on:
+      trino:
+        condition: service_healthy
+    volumes:
+      - schema_models:/app/models
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s  # Allow time for model download
+    networks:
+      - dashboard
+    restart: unless-stopped
+
+  # Nexus Service (Main FastAPI Backend)
+  nexus:
+    build:
+      context: ../nexus
+      dockerfile: Dockerfile
+    container_name: dashboard-nexus
+    ports:
+      - "8000:8000"
+    environment:
+      # Database Configuration
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DATABASE: nexus
+      POSTGRES_USER: nexus_service
+      POSTGRES_PASSWORD: secure_dev_password
+      # Trino Configuration
+      TRINO_HOST: trino
+      TRINO_PORT: 8080
+      TRINO_CATALOG: postgres
+      TRINO_SCHEMA: demo_ecommerce
+      TRINO_USER: admin
+      TRINO_SSL: false
+      # Schema Service Configuration
+      SCHEMA_SERVICE_URL: http://schema-service:8000
+      # External LLM Configuration (Override with your API key)
+      EXTERNAL_LLM_ENABLED: true
+      EXTERNAL_LLM_PROVIDER: perplexity
+      EXTERNAL_LLM_BASE_URL: https://api.perplexity.ai/chat/completions
+      EXTERNAL_LLM_API_KEY: ${PERPLEXITY_API_KEY:-your-api-key-here}
+      EXTERNAL_LLM_MODEL: sonar-reasoning-pro
+      EXTERNAL_LLM_MAX_TOKENS: 1000
+      EXTERNAL_LLM_TEMPERATURE: 0.1
+      # Cache Configuration
+      CACHE_ENABLED: true
+      CACHE_QUERY_MAX_SIZE: 100
+      CACHE_QUERY_TTL: 1800
+      # Development Settings
+      DEBUG: true
+      LOG_LEVEL: INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      trino:
+        condition: service_healthy
+      schema-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - dashboard
+    restart: unless-stopped
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ../
+      dockerfile: Dockerfile
+      target: frontend
+    container_name: dashboard-frontend
+    ports:
+      - "3000:80"
+    environment:
+      REACT_APP_API_BASE_URL: http://localhost:8000
+      REACT_APP_NEXUS_API_URL: http://localhost:8000
+    depends_on:
+      nexus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - dashboard
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  schema_models:
+    driver: local
+
+networks:
+  dashboard:
+    driver: bridge
+    name: dashboard-local

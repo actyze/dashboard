@@ -1,55 +1,19 @@
-# Docker Configuration Files
+# Docker Local Development
 
-This directory contains all Docker-related configuration files for the Dashboard application.
+This directory contains a **simplified Docker setup** for local development and testing.
 
-## 📁 File Structure
+## 🚀 Quick Start
 
-### 🐳 **Docker Compose Files**
-
-#### **Primary Deployment Files**
-- **`docker-compose.local.yml`** - Local development environment
-  - PostgreSQL + Nexus + Frontend
-  - Uses PostgreSQL as mock Trino
-  - Minimal external dependencies
-  - **Use for**: Daily development, testing, demos
-
-- **`docker-compose.full.yml`** - Full production-like environment
-  - PostgreSQL + Schema Service + Nexus + Frontend
-  - Connects to external Trino and LLM services
-  - Complete feature set
-  - **Use for**: Integration testing, staging
-
-#### **Reference Files**
-- **`docker-compose.legacy.yml`** - Original Java backend setup (deprecated)
-- **`docker-compose.nexus-only.yml`** - Nexus service only (for testing)
-
-### 🏗️ **Dockerfiles**
-- **`Dockerfile.frontend`** - React frontend with nginx
-- **`Dockerfile.fastapi`** - FastAPI service (legacy, use nexus/Dockerfile)
-
-### ⚙️ **Configuration Files**
-- **`docker.env.example`** - Environment variables template
-- **`nginx.conf`** - Nginx configuration for frontend service
-
-## 🚀 **Quick Start**
-
-### Local Development
 ```bash
-# From repository root
-./scripts/docker-start.sh local -d
-```
+# 1. Setup environment
+cp env.example .env
+# Edit .env with your API keys (especially PERPLEXITY_API_KEY)
 
-### Full Environment
-```bash
-# From repository root
-cp docker/docker.env.example .env.docker
-# Edit .env.docker with your API keys
-./scripts/docker-start.sh full -d
-```
+# 2. Start all services (builds images locally)
+./start.sh
 
-## 🔧 **Service Architecture**
-
-### Local Environment (`docker-compose.local.yml`)
+# 3. Access the dashboard
+open http://localhost:3000
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │   Frontend      │    │   Nexus API      │    │   PostgreSQL    │
@@ -60,9 +24,6 @@ cp docker/docker.env.example .env.docker
 ### Full Environment (`docker-compose.full.yml`)
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Nexus API      │    │   PostgreSQL    │
-│   (nginx:3000)  │───▶│   (FastAPI:8002) │───▶│   (postgres:5432)│
-└─────────────────┘    └──────────────────┘    └─────────────────┘
                               │
                               ▼
                        ┌──────────────────┐
@@ -75,7 +36,6 @@ cp docker/docker.env.example .env.docker
                        │  External Trino  │
                        │  (PepsiCo:443)   │
                        └──────────────────┘
-```
 
 ## 📋 **Environment Variables**
 
@@ -97,32 +57,29 @@ TRINO_USER=your-username
 TRINO_PASSWORD=your-password
 ```
 
-## 🛠️ **Development Workflow**
+## 🔄 Development Workflow
 
-### 1. Start Development Environment
+1. **Code Changes**: Edit source code in your IDE
+2. **Rebuild**: `./start.sh` (automatically rebuilds changed services)
+3. **Test**: Use frontend or API directly
+4. **Debug**: Check logs with `docker-compose logs -f`
+5. **Reset**: `./stop.sh --clean && ./start.sh` for fresh start
+
+### Quick Commands
 ```bash
-./scripts/docker-start.sh local -d
-```
+# Rebuild specific service after code changes
+docker-compose build nexus
+docker-compose up -d nexus
 
-### 2. Make Code Changes
-```bash
-# Rebuild specific service
-docker-compose -f docker/docker-compose.local.yml build nexus
-docker-compose -f docker/docker-compose.local.yml up -d nexus
+# Rebuild everything
+./start.sh
 
-# Or rebuild everything
-./scripts/docker-start.sh build
-./scripts/docker-start.sh restart
-```
+# View logs
+docker-compose logs -f nexus     # Specific service
+docker-compose logs -f           # All services
 
-### 3. View Logs
-```bash
-./scripts/docker-start.sh logs -f
-```
-
-### 4. Stop Services
-```bash
-./scripts/docker-start.sh stop
+# Restart specific service
+docker-compose restart nexus
 ```
 
 ## 🔍 **Service Ports**

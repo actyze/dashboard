@@ -40,14 +40,17 @@ jobs:
         working-directory: ./frontend
         run: npm ci
 
+      - name: Build React app
+        run: |
+          cd frontend
+          # Disable ESLint warnings as errors for production build
+          CI=false npm run build
+
       - name: Obfuscate JavaScript code
         working-directory: ./frontend
         run: |
           # Install obfuscation tool
           npm install -g javascript-obfuscator
-          
-          # Create obfuscated build
-          npm run build
           
           # Obfuscate JavaScript files in build directory
           find build/static/js -name "*.js" -not -name "*.map" | while read file; do

@@ -51,7 +51,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-Backend labels
+Backend labels (deprecated - use nexus)
 */}}
 {{- define "dashboard.backend.labels" -}}
 {{ include "dashboard.labels" . }}
@@ -59,11 +59,27 @@ app.kubernetes.io/component: backend
 {{- end }}
 
 {{/*
-Backend selector labels
+Backend selector labels (deprecated - use nexus)
 */}}
 {{- define "dashboard.backend.selectorLabels" -}}
 {{ include "dashboard.selectorLabels" . }}
 app.kubernetes.io/component: backend
+{{- end }}
+
+{{/*
+Nexus labels
+*/}}
+{{- define "dashboard.nexus.labels" -}}
+{{ include "dashboard.labels" . }}
+app.kubernetes.io/component: nexus
+{{- end }}
+
+{{/*
+Nexus selector labels
+*/}}
+{{- define "dashboard.nexus.selectorLabels" -}}
+{{ include "dashboard.selectorLabels" . }}
+app.kubernetes.io/component: nexus
 {{- end }}
 
 {{/*

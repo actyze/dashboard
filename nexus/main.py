@@ -24,9 +24,8 @@ async def lifespan(app: FastAPI):
     
     # Initialize database
     await db_manager.initialize()
-    if settings.debug:
-        # Create tables in debug mode (use Alembic in production)
-        await db_manager.create_tables()
+    # Create tables automatically on startup
+    await db_manager.create_tables()
     
     # Initialize orchestration service
     await orchestration_service.initialize()

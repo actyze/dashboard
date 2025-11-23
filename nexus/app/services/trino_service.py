@@ -30,11 +30,12 @@ class TrinoService:
         """Execute SQL query against Trino."""
         
         self.logger.info(
-            "Executing SQL query",
+            "Processing SQL execution request",
             sql=sql[:200] + "..." if len(sql) > 200 else sql,
             max_results=max_results,
             timeout=timeout_seconds
         )
+        self.logger.debug("Full SQL query", sql=sql)
         
         start_time = asyncio.get_event_loop().time()
         
@@ -143,15 +144,18 @@ class TrinoService:
         
         for attempt in range(max_retries + 1):
             self.logger.info(
-                "SQL execution attempt",
-                attempt=attempt + 1,
-                max_attempts=max_retries + 1,
-                sql=current_sql[:100] + "..." if len(current_sql) > 100 else current_sql
+                f"--- RETRY ATTEMPT {attempt + 1}/{max_retries + 1} ---"
             )
+            self.logger.info(
+                "Executing SQL",
+                sql=current_sql[:200] + "..." if len(current_sql) > 200 else current_sql
+            )
+            self.logger.debug("Cleaned SQL", sql=current_sql)
             
             result = await self.execute_query(current_sql, max_results, timeout_seconds)
             
             if result["success"]:
+                self.logger.info(f"✅ SQL EXECUTION SUCCESSFUL on attempt {attempt + 1}")
                 result.update({
                     "retry_attempts": attempt,
                     "error_history": error_history,

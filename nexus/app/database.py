@@ -13,7 +13,8 @@ logger = structlog.get_logger()
 
 class Base(DeclarativeBase):
     """Base class for all database models."""
-    pass
+    # Use nexus schema for all Nexus service tables
+    __table_args__ = {'schema': 'nexus'}
 
 
 class User(Base):
@@ -50,7 +51,7 @@ class ConversationHistory(Base):
     session_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     message_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'user' or 'assistant'
     message_content: Mapped[str] = mapped_column(Text, nullable=False)
-    metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON)
+    message_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -126,7 +127,7 @@ class DatabaseManager:
             raise
     
     async def create_tables(self):
-        """Create all tables (for development - use Alembic in production)."""
+        """Create all tables automatically."""
         try:
             async with self.engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)

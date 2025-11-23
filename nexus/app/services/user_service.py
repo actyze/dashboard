@@ -217,7 +217,7 @@ class UserService:
                     session_id=session_id,
                     message_type=message_type,
                     message_content=message_content,
-                    metadata=metadata or {}
+                    message_metadata=metadata or {}
                 )
                 session.add(conversation)
                 await session.commit()
@@ -262,7 +262,7 @@ class UserService:
                         "id": msg.id,
                         "message_type": msg.message_type,
                         "message_content": msg.message_content,
-                        "metadata": msg.metadata,
+                        "metadata": msg.message_metadata,
                         "created_at": msg.created_at.isoformat()
                     })
                 

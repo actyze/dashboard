@@ -44,13 +44,6 @@ const AIQueryInput = ({ onSubmit, loading = false }) => {
     }
   };
 
-  // Sample suggestions
-  const suggestions = [
-    "Show me sales data from the last quarter",
-    "Create a chart of customer demographics", 
-    "Find all orders over $1000 this month",
-    "Compare revenue by region",
-  ];
 
   const SparkleIcon = () => (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -72,97 +65,72 @@ const AIQueryInput = ({ onSubmit, loading = false }) => {
   );
 
   return (
-    <div className="w-full max-w-2xl mx-auto">
+    <div className="w-full mx-auto">
       {/* Main Input Container */}
       <div 
         className={`
-          relative rounded-2xl border transition-all duration-300 ease-out
+          relative rounded-lg border transition-all duration-300 ease-out
           ${isExpanded 
-            ? 'shadow-xl ring-2 ring-blue-500/20 border-blue-300 dark:border-blue-600' 
-            : 'shadow-lg border-gray-200 dark:border-gray-700 hover:shadow-xl hover:border-gray-300 dark:hover:border-gray-600'
+            ? 'shadow-lg ring-1 ring-blue-500/20 border-blue-400/40 dark:border-blue-500/40' 
+            : 'shadow-sm border-gray-200/60 dark:border-gray-700/60 hover:shadow-md hover:border-gray-300/70 dark:hover:border-gray-600/70'
           }
-          ${isDark ? 'bg-gray-800' : 'bg-white'}
+          ${isDark ? 'bg-gray-800/60 backdrop-blur-sm' : 'bg-white/60 backdrop-blur-sm'}
         `}
         onFocus={handleFocus}
         onBlur={handleBlur}
         tabIndex={-1}
       >
-        {/* AI Badge */}
-        <div className="absolute -top-3 left-4">
-          <div className="flex items-center space-x-2 px-3 py-1 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 text-white text-xs font-semibold shadow-lg">
-            <SparkleIcon />
-            <span>AI SQL Assistant</span>
-          </div>
-        </div>
-
         {/* Input Area */}
-        <div className="pt-6 p-4">
+        <div className="p-3">
           <textarea
             ref={textAreaRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask me anything about your data... (e.g., 'Show sales by region')"
+            placeholder="✨ Ask me anything about your data... (e.g., 'Show sales by region')"
             className={`
-              w-full resize-none border-none outline-none text-base leading-relaxed
-              ${isDark ? 'bg-gray-800 text-white placeholder-gray-400' : 'bg-white text-gray-900 placeholder-gray-500'}
-              min-h-[60px] max-h-[200px] overflow-y-auto
+              w-full resize-none border-none outline-none text-sm leading-relaxed
+              ${isDark ? 'bg-gray-800/60 text-white placeholder-gray-400' : 'bg-white/60 text-gray-900 placeholder-gray-500'}
+              min-h-[40px] max-h-[120px] overflow-y-auto
             `}
-            rows={isExpanded ? 3 : 1}
+            rows={isExpanded ? 2 : 1}
           />
           
           {/* Action Bar */}
-          <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
-              <span>Press Enter to send, Shift+Enter for new line</span>
+          <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-200/50 dark:border-gray-700/50">
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              <span>⏎ Send</span>
             </div>
             
-            <Button
+            <button
               onClick={handleSubmit}
               disabled={!query.trim() || loading}
-              variant="primary"
-              size="sm"
-              className="ml-3"
-              leftIcon={loading ? <LoadingSpinner /> : <SendIcon />}
+              className={`
+                px-2 py-1 text-xs font-medium rounded transition-all duration-200 flex items-center space-x-1
+                ${!query.trim() || loading
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white'
+                }
+              `}
             >
-              {loading ? 'Processing...' : 'Send'}
-            </Button>
+              {loading ? <LoadingSpinner /> : <SendIcon />}
+              <span>{loading ? 'Processing...' : 'Send'}</span>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Suggestions */}
-      {isExpanded && !query && (
-        <div className="mt-4 space-y-2 animate-fade-in">
-          <p className="text-sm font-medium text-gray-600 dark:text-gray-300 mb-3">
-            Try asking:
-          </p>
-          <div className="grid gap-2">
-            {suggestions.map((suggestion, index) => (
-              <button
-                key={index}
-                onClick={() => setQuery(suggestion)}
-                className={`
-                  text-left p-3 rounded-lg border transition-all duration-200
-                  ${isDark 
-                    ? 'bg-gray-700 border-gray-600 hover:bg-gray-600 text-gray-200' 
-                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100 text-gray-700'
-                  }
-                  hover:shadow-md hover:scale-[1.01]
-                `}
-              >
-                <span className="text-sm">{suggestion}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Status Indicators */}
       {loading && (
-        <div className="mt-4 flex items-center space-x-2 text-sm text-blue-600 dark:text-blue-400">
-          <LoadingSpinner />
-          <span>Analyzing your query and generating SQL...</span>
+        <div className="mt-3 p-2 rounded-md bg-blue-50/60 dark:bg-blue-900/20 border border-blue-200/40 dark:border-blue-800/40 backdrop-blur-sm">
+          <div className="flex items-center space-x-2 text-xs text-blue-700 dark:text-blue-300">
+            <LoadingSpinner />
+            <div>
+              <div className="font-medium">Processing...</div>
+              <div className="text-xs text-blue-600 dark:text-blue-400">Generating SQL query</div>
+            </div>
+          </div>
         </div>
       )}
     </div>

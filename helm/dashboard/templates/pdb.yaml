@@ -3,15 +3,15 @@
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: {{ include "dashboard.fullname" . }}-backend-pdb
+  name: {{ include "dashboard.fullname" . }}-nexus-pdb
   namespace: {{ .Values.global.namespace }}
   labels:
-    {{- include "dashboard.backend.labels" . | nindent 4 }}
+    {{- include "dashboard.nexus.labels" . | nindent 4 }}
 spec:
   minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
   selector:
     matchLabels:
-      {{- include "dashboard.backend.selectorLabels" . | nindent 6 }}
+      {{- include "dashboard.nexus.selectorLabels" . | nindent 6 }}
 
 ---
 apiVersion: policy/v1

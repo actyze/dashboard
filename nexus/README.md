@@ -16,16 +16,15 @@ Natural Language Query → Schema Service → LLM Service → SQL Execution → 
 2. **Orchestration Engine** - Coordinates workflow between services
 3. **Service Clients** - HTTP clients for external services (Schema, LLM, Trino)
 4. **Error Handling** - Comprehensive retry logic and error analysis
-5. **Caching Layer** - Redis-based caching for performance
-6. **Health Monitoring** - Service health checks and metrics
+5. **Health Monitoring** - Service health checks and metrics
 
 ## Technology Stack
 
-- **FastAPI** - High-performance async web framework
-- **Strawberry GraphQL** - Modern GraphQL library with type safety
-- **Pydantic** - Data validation and serialization
-- **httpx** - Async HTTP client
-- **Redis** - Caching and session storage
+- **FastAPI** - Modern async Python web framework
+- **Strawberry GraphQL** - Type-safe GraphQL API layer
+- **SQLAlchemy + AsyncPG** - Async PostgreSQL integration
+- **In-Memory Caching** - Enterprise-grade caching with no external dependencies
+- **Structured Logging** - Comprehensive observability
 - **Tenacity** - Retry logic with exponential backoff
 - **Structlog** - Structured logging
 - **Prometheus** - Metrics and monitoring
@@ -113,6 +112,16 @@ TRINO_HOST=${TRINO_HOST:dashboard-trino}
 TRINO_PORT=${TRINO_PORT:8080}
 TRINO_CATALOG=${TRINO_CATALOG:postgres}
 TRINO_SCHEMA=${TRINO_SCHEMA:public}
+```
+
+#### Cache Configuration
+```bash
+# Enterprise-Grade In-Memory Cache (No External Dependencies)
+CACHE_ENABLED=${CACHE_ENABLED:true}
+CACHE_QUERY_MAX_SIZE=${CACHE_QUERY_MAX_SIZE:1000}      # SQL query results
+CACHE_SCHEMA_MAX_SIZE=${CACHE_SCHEMA_MAX_SIZE:500}      # FAISS recommendations
+CACHE_LLM_MAX_SIZE=${CACHE_LLM_MAX_SIZE:200}            # ML model responses
+CACHE_LLM_TTL=${CACHE_LLM_TTL:7200}                     # 2 hours for expensive calls
 ```
 
 #### External Services

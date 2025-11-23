@@ -104,8 +104,8 @@ serviceAccount:
 # ============================================================================
 services:
   # Core Services (required)
-  backend:
-    enabled: true        # ← Spring Boot orchestration service (REQUIRED)
+  nexus:
+    enabled: true        # ← Nexus orchestration service (REQUIRED) - replaces backend
   
   # Optional Services
   frontend:
@@ -119,16 +119,16 @@ services:
   postgres:
     enabled: true        # ← PostgreSQL operational database
 
-# Backend Spring Boot service
-backend:
+# Nexus FastAPI service (replaces Spring Boot backend)
+nexus:
   replicaCount: 3        # High availability
   image:
-    repository: yourusername/dashboard-backend  # Replace yourusername with your Docker Hub username
+    repository: yourusername/dashboard-nexus  # Replace yourusername with your Docker Hub username
     tag: latest  # Always pull latest
     pullPolicy: Always
   service:
     type: ClusterIP
-    port: 8080
+    port: 8002  # Nexus runs on port 8002
   resources:
     requests:
       memory: "512Mi"
@@ -136,6 +136,29 @@ backend:
     limits:
       memory: "1Gi"
       cpu: "500m"
+  env:
+    # Database Configuration
+    postgres:
+      host: "dashboard-postgres"
+      port: 5432
+      database: "dashboard"
+      # user and password loaded from Kubernetes secrets
+    # Cache Configuration (In-Memory - Enterprise Grade)
+    cache:
+      enabled: true
+      type: "memory"
+      queryMaxSize: 1000
+      llmMaxSize: 200
+      llmTtl: 7200
+    # External Services
+    schemaService:
+      url: "http://dashboard-schema-service:8001"
+    # LLM Configuration
+    externalLlm:
+      enabled: true
+      provider: "perplexity"
+      model: "sonar-reasoning-pro"
+      # apiKey loaded from secret
 
 # Frontend React service
 frontend:
@@ -202,7 +225,7 @@ ingress:
           service: frontend
         - path: /api
           pathType: Prefix
-          service: backend
+          service: nexus
   tls:
     - secretName: dashboard-tls
       hosts:
@@ -210,7 +233,7 @@ ingress:
 
 # Autoscaling
 autoscaling:
-  backend:
+  nexus:
     enabled: true
     minReplicas: 3
     maxReplicas: 10

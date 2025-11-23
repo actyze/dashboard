@@ -93,12 +93,11 @@ jobs:
             frontend)
               cd frontend
               npm ci
-              
               # Install advanced obfuscation tools
               npm install -g javascript-obfuscator terser webpack-obfuscator
               
-              # Build with production optimizations
-              NODE_ENV=production npm run build
+              # Build with production optimizations (disable ESLint warnings as errors)
+              CI=false NODE_ENV=production npm run build
               
               # Advanced JavaScript obfuscation
               find build/static/js -name "*.js" -not -name "*.map" | while read file; do

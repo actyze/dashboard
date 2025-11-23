@@ -9,7 +9,7 @@ const ChatInput = ({ onSubmit }) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
     try {
-      const res = await fetch('http://localhost:8080/api/query', {
+      const res = await fetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

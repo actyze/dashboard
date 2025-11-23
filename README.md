@@ -17,6 +17,35 @@ A comprehensive dashboard application that converts natural language queries to 
 
 ## 📋 **Quick Start**
 
+### **Deployment Options:**
+
+#### 🐳 **Docker Compose (Recommended for Local Development)**
+```bash
+# Quick start with local environment
+./scripts/docker-start.sh local -d
+
+# Access at http://localhost:3000
+```
+📖 **[Complete Docker Deployment Guide](DOCKER_DEPLOYMENT.md)**
+
+#### ☸️ **Kubernetes with Helm (Production)**
+```bash
+# Deploy to Kubernetes cluster
+helm install dashboard ./helm/dashboard -f ./helm/dashboard/values-dev.yaml -n dashboard
+```
+
+#### 🚀 **Pre-built Docker Images (Docker Hub)**
+```bash
+# Use pre-built images (no build time required)
+docker pull actyze/dashboard-frontend:latest
+docker pull actyze/dashboard-nexus:latest
+docker pull actyze/dashboard-schema-service:latest
+
+# Deploy with pre-built images
+./scripts/docker-start.sh local -d
+```
+📖 **[CI/CD Pipeline Documentation](.github/workflows/README.md)**
+
 ### **Prerequisites:**
 - Docker & Kubernetes (Kind/AKS)
 - Helm 3.x

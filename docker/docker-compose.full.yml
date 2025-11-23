@@ -1,0 +1,172 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: dashboard-postgres
+    environment:
+      POSTGRES_DB: dashboard
+      POSTGRES_USER: dashboard_user
+      POSTGRES_PASSWORD: dashboard_password
+      POSTGRES_MULTIPLE_DATABASES: nexus
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./helm/dashboard/sql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dashboard_user -d dashboard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dashboard-network
+    restart: unless-stopped
+
+  # FAISS Schema Service
+  dashboard-schema-service:
+    build:
+      context: ./models/schema-service
+      dockerfile: Dockerfile
+    container_name: dashboard-schema-service
+    ports:
+      - "8001:8001"
+    environment:
+      # Trino Configuration (External PepsiCo Trino)
+      TRINO_HOST: b2b-trinodb-preprod.dps.gw01.aks01.scus.preprod.azure.intra.pepsico.com
+      TRINO_PORT: 443
+      TRINO_CATALOG: hive
+      TRINO_SCHEMA: default
+      TRINO_USER: pepconndb01
+      TRINO_PASSWORD: NgN6w@k8mKM1
+      # Service Configuration
+      SCHEMA_REFRESH_HOURS: 3
+      SERVICE_HOST: 0.0.0.0
+      SERVICE_PORT: 8001
+      LOG_LEVEL: INFO
+    volumes:
+      - schema_models:/app/models
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 180s  # Allow time for model loading
+    networks:
+      - dashboard-network
+    restart: unless-stopped
+
+  # FastAPI Nexus Service (Main Backend)
+  dashboard-nexus:
+    build:
+      context: ./nexus
+      dockerfile: Dockerfile
+    container_name: dashboard-nexus
+    ports:
+      - "8002:8002"
+    environment:
+      # Database Configuration
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DATABASE: nexus
+      POSTGRES_USER: dashboard_user
+      POSTGRES_PASSWORD: dashboard_password
+      # External Services
+      SCHEMA_SERVICE_URL: http://dashboard-schema-service:8001
+      # Trino Configuration (External PepsiCo Trino)
+      TRINO_HOST: b2b-trinodb-preprod.dps.gw01.aks01.scus.preprod.azure.intra.pepsico.com
+      TRINO_PORT: 443
+      TRINO_CATALOG: hive
+      TRINO_SCHEMA: default
+      TRINO_USER: pepconndb01
+      TRINO_PASSWORD: NgN6w@k8mKM1
+      # External LLM Configuration
+      EXTERNAL_LLM_ENABLED: true
+      EXTERNAL_LLM_PROVIDER: perplexity
+      EXTERNAL_LLM_BASE_URL: https://api.perplexity.ai/chat/completions
+      EXTERNAL_LLM_API_KEY: ${PERPLEXITY_API_KEY:-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}
+      EXTERNAL_LLM_MODEL: sonar-reasoning-pro
+      EXTERNAL_LLM_MAX_TOKENS: 1000
+      EXTERNAL_LLM_TEMPERATURE: 0.1
+      EXTERNAL_LLM_TIMEOUT: 30
+      # Cache Configuration
+      CACHE_ENABLED: true
+      CACHE_QUERY_MAX_SIZE: 1000
+      CACHE_QUERY_TTL: 3600
+      CACHE_LLM_MAX_SIZE: 200
+      CACHE_LLM_TTL: 7200
+      CACHE_SCHEMA_MAX_SIZE: 50
+      CACHE_SCHEMA_TTL: 86400
+      # Service Configuration
+      DEBUG: true
+      LOG_LEVEL: INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dashboard-schema-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - dashboard-network
+    restart: unless-stopped
+
+  # React Frontend
+  dashboard-frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    container_name: dashboard-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # API Configuration (handled by nginx proxy)
+      REACT_APP_API_BASE_URL: http://localhost:3000/api
+    depends_on:
+      dashboard-nexus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - dashboard-network
+    restart: unless-stopped
+
+  # Optional: Local Trino for Development (Uncomment if needed)
+  # dashboard-trino:
+  #   image: trinodb/trino:latest
+  #   container_name: dashboard-trino
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     - TRINO_ENVIRONMENT=development
+  #   volumes:
+  #     - ./docker/trino:/etc/trino
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/v1/info"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 60s
+  #   networks:
+  #     - dashboard-network
+  #   restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  schema_models:
+    driver: local
+
+networks:
+  dashboard-network:
+    driver: bridge
+    name: dashboard-network

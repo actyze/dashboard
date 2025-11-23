@@ -1,0 +1,400 @@
+name: Update Configs for Docker Hub Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      update_type:
+        description: 'Type of update'
+        required: true
+        default: 'latest'
+        type: choice
+        options:
+        - latest
+        - stable
+        - specific_version
+      version:
+        description: 'Specific version (only if specific_version selected)'
+        required: false
+        type: string
+
+jobs:
+  update-docker-compose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine image tags
+        id: tags
+        run: |
+          case "${{ github.event.inputs.update_type }}" in
+            latest)
+              TAG="latest"
+              ;;
+            stable)
+              TAG="stable"
+              ;;
+            specific_version)
+              TAG="${{ github.event.inputs.version }}"
+              if [ -z "$TAG" ]; then
+                echo "Error: Version must be specified for specific_version update type"
+                exit 1
+              fi
+              ;;
+          esac
+          
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Using image tag: $TAG"
+
+      - name: Update Docker Compose files
+        run: |
+          TAG="${{ steps.tags.outputs.tag }}"
+          
+          echo "Updating Docker Compose files to use Docker Hub images with tag: $TAG"
+          
+          # Update docker-compose.local.yml
+          cat > docker/docker-compose.local.yml << EOF
+          version: '3.8'
+          
+          # Simplified Docker Compose for Local Development
+          # Uses Docker Hub images instead of building locally
+          
+          services:
+            # PostgreSQL Database with Demo Data
+            postgres:
+              image: postgres:15
+              container_name: dashboard-postgres-local
+              environment:
+                POSTGRES_DB: dashboard
+                POSTGRES_USER: dashboard_user
+                POSTGRES_PASSWORD: dashboard_password
+              ports:
+                - "5432:5432"
+              volumes:
+                - postgres_local_data:/var/lib/postgresql/data
+                - ./helm/dashboard/sql:/docker-entrypoint-initdb.d
+              healthcheck:
+                test: ["CMD-SHELL", "pg_isready -U dashboard_user -d dashboard"]
+                interval: 10s
+                timeout: 5s
+                retries: 5
+              networks:
+                - dashboard-local
+              restart: unless-stopped
+          
+            # FastAPI Nexus Service (Main Backend) - Docker Hub Image
+            dashboard-nexus:
+              image: roman1887/dashboard-nexus:$TAG
+              container_name: dashboard-nexus-local
+              ports:
+                - "8002:8002"
+              environment:
+                # Database Configuration
+                POSTGRES_HOST: postgres
+                POSTGRES_PORT: 5432
+                POSTGRES_DATABASE: nexus
+                POSTGRES_USER: dashboard_user
+                POSTGRES_PASSWORD: dashboard_password
+                # Local Trino Configuration (using PostgreSQL demo data)
+                TRINO_HOST: postgres
+                TRINO_PORT: 5432
+                TRINO_CATALOG: postgres
+                TRINO_SCHEMA: demo_ecommerce
+                TRINO_USER: dashboard_user
+                TRINO_PASSWORD: dashboard_password
+                # External LLM Configuration
+                EXTERNAL_LLM_ENABLED: true
+                EXTERNAL_LLM_PROVIDER: perplexity
+                EXTERNAL_LLM_BASE_URL: https://api.perplexity.ai/chat/completions
+                EXTERNAL_LLM_API_KEY: \${PERPLEXITY_API_KEY:-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}
+                EXTERNAL_LLM_MODEL: sonar-reasoning-pro
+                EXTERNAL_LLM_MAX_TOKENS: 1000
+                EXTERNAL_LLM_TEMPERATURE: 0.1
+                # Cache Configuration
+                CACHE_ENABLED: true
+                CACHE_QUERY_MAX_SIZE: 100
+                CACHE_QUERY_TTL: 1800
+                # Service Configuration
+                DEBUG: true
+                LOG_LEVEL: DEBUG
+              depends_on:
+                postgres:
+                  condition: service_healthy
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+                start_period: 60s
+              networks:
+                - dashboard-local
+              restart: unless-stopped
+          
+            # React Frontend - Docker Hub Image
+            dashboard-frontend:
+              image: roman1887/dashboard-frontend:$TAG
+              container_name: dashboard-frontend-local
+              ports:
+                - "3000:3000"
+              depends_on:
+                dashboard-nexus:
+                  condition: service_healthy
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+                start_period: 30s
+              networks:
+                - dashboard-local
+              restart: unless-stopped
+          
+          volumes:
+            postgres_local_data:
+              driver: local
+          
+          networks:
+            dashboard-local:
+              driver: bridge
+              name: dashboard-local
+          EOF
+          
+          # Update docker-compose.full.yml
+          cat > docker/docker-compose.full.yml << EOF
+          version: '3.8'
+          
+          services:
+            # PostgreSQL Database
+            postgres:
+              image: postgres:15
+              container_name: dashboard-postgres
+              environment:
+                POSTGRES_DB: dashboard
+                POSTGRES_USER: dashboard_user
+                POSTGRES_PASSWORD: dashboard_password
+                POSTGRES_MULTIPLE_DATABASES: nexus
+              ports:
+                - "5432:5432"
+              volumes:
+                - postgres_data:/var/lib/postgresql/data
+                - ./helm/dashboard/sql:/docker-entrypoint-initdb.d
+              healthcheck:
+                test: ["CMD-SHELL", "pg_isready -U dashboard_user -d dashboard"]
+                interval: 10s
+                timeout: 5s
+                retries: 5
+              networks:
+                - dashboard-network
+              restart: unless-stopped
+          
+            # FAISS Schema Service - Docker Hub Image
+            dashboard-schema-service:
+              image: actyze/dashboard-schema-service:$TAG
+              container_name: dashboard-schema-service
+              ports:
+                - "8001:8001"
+              environment:
+                # Trino Configuration (External PepsiCo Trino)
+                TRINO_HOST: b2b-trinodb-preprod.dps.gw01.aks01.scus.preprod.azure.intra.pepsico.com
+                TRINO_PORT: 443
+                TRINO_CATALOG: hive
+                TRINO_SCHEMA: default
+                TRINO_USER: pepconndb01
+                TRINO_PASSWORD: NgN6w@k8mKM1
+                # Service Configuration
+                SCHEMA_REFRESH_HOURS: 3
+                SERVICE_HOST: 0.0.0.0
+                SERVICE_PORT: 8001
+                LOG_LEVEL: INFO
+              volumes:
+                - schema_models:/app/models
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+                interval: 60s
+                timeout: 15s
+                retries: 3
+                start_period: 180s  # Allow time for model loading
+              networks:
+                - dashboard-network
+              restart: unless-stopped
+          
+            # FastAPI Nexus Service (Main Backend) - Docker Hub Image
+            dashboard-nexus:
+              image: roman1887/dashboard-nexus:$TAG
+              container_name: dashboard-nexus
+              ports:
+                - "8002:8002"
+              environment:
+                # Database Configuration
+                POSTGRES_HOST: postgres
+                POSTGRES_PORT: 5432
+                POSTGRES_DATABASE: nexus
+                POSTGRES_USER: dashboard_user
+                POSTGRES_PASSWORD: dashboard_password
+                # External Services
+                SCHEMA_SERVICE_URL: http://dashboard-schema-service:8001
+                # Trino Configuration (External PepsiCo Trino)
+                TRINO_HOST: b2b-trinodb-preprod.dps.gw01.aks01.scus.preprod.azure.intra.pepsico.com
+                TRINO_PORT: 443
+                TRINO_CATALOG: hive
+                TRINO_SCHEMA: default
+                TRINO_USER: pepconndb01
+                TRINO_PASSWORD: NgN6w@k8mKM1
+                # External LLM Configuration
+                EXTERNAL_LLM_ENABLED: true
+                EXTERNAL_LLM_PROVIDER: perplexity
+                EXTERNAL_LLM_BASE_URL: https://api.perplexity.ai/chat/completions
+                EXTERNAL_LLM_API_KEY: \${PERPLEXITY_API_KEY:-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}
+                EXTERNAL_LLM_MODEL: sonar-reasoning-pro
+                EXTERNAL_LLM_MAX_TOKENS: 1000
+                EXTERNAL_LLM_TEMPERATURE: 0.1
+                EXTERNAL_LLM_TIMEOUT: 30
+                # Cache Configuration
+                CACHE_ENABLED: true
+                CACHE_QUERY_MAX_SIZE: 1000
+                CACHE_QUERY_TTL: 3600
+                CACHE_LLM_MAX_SIZE: 200
+                CACHE_LLM_TTL: 7200
+                CACHE_SCHEMA_MAX_SIZE: 50
+                CACHE_SCHEMA_TTL: 86400
+                # Service Configuration
+                DEBUG: true
+                LOG_LEVEL: INFO
+              depends_on:
+                postgres:
+                  condition: service_healthy
+                dashboard-schema-service:
+                  condition: service_healthy
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+                start_period: 60s
+              networks:
+                - dashboard-network
+              restart: unless-stopped
+          
+            # React Frontend - Docker Hub Image
+            dashboard-frontend:
+              image: roman1887/dashboard-frontend:$TAG
+              container_name: dashboard-frontend
+              ports:
+                - "3000:3000"
+              environment:
+                # API Configuration (handled by nginx proxy)
+                REACT_APP_API_BASE_URL: http://localhost:3000/api
+              depends_on:
+                dashboard-nexus:
+                  condition: service_healthy
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+                start_period: 30s
+              networks:
+                - dashboard-network
+              restart: unless-stopped
+          
+          volumes:
+            postgres_data:
+              driver: local
+            schema_models:
+              driver: local
+          
+          networks:
+            dashboard-network:
+              driver: bridge
+              name: dashboard-network
+          EOF
+
+      - name: Update Helm values
+        run: |
+          TAG="${{ steps.tags.outputs.tag }}"
+          
+          echo "Updating Helm values to use Docker Hub images with tag: $TAG"
+          
+          # Update values-dev.yaml
+          sed -i "s|repository: dashboard-frontend|repository: actyze/dashboard-frontend|g" helm/dashboard/values-dev.yaml
+          sed -i "s|repository: dashboard-nexus|repository: actyze/dashboard-nexus|g" helm/dashboard/values-dev.yaml
+          sed -i "s|repository: dashboard-schema-service|repository: actyze/dashboard-schema-service|g" helm/dashboard/values-dev.yaml
+          
+          # Update image tags
+          sed -i "s|tag: latest|tag: $TAG|g" helm/dashboard/values-dev.yaml
+          sed -i "s|tag: \"latest\"|tag: \"$TAG\"|g" helm/dashboard/values-dev.yaml
+          
+          # Update pull policy
+          sed -i "s|pullPolicy: Never|pullPolicy: Always|g" helm/dashboard/values-dev.yaml
+          sed -i "s|pullPolicy: IfNotPresent|pullPolicy: Always|g" helm/dashboard/values-dev.yaml
+          
+          # Update values-production.yaml if it exists
+          if [ -f helm/dashboard/values-production.yaml ]; then
+            sed -i "s|repository: dashboard-frontend|repository: actyze/dashboard-frontend|g" helm/dashboard/values-production.yaml
+            sed -i "s|repository: dashboard-nexus|repository: actyze/dashboard-nexus|g" helm/dashboard/values-production.yaml
+            sed -i "s|repository: dashboard-schema-service|repository: actyze/dashboard-schema-service|g" helm/dashboard/values-production.yaml
+            
+            sed -i "s|tag: latest|tag: $TAG|g" helm/dashboard/values-production.yaml
+            sed -i "s|tag: \"latest\"|tag: \"$TAG\"|g" helm/dashboard/values-production.yaml
+            
+            sed -i "s|pullPolicy: Never|pullPolicy: Always|g" helm/dashboard/values-production.yaml
+            sed -i "s|pullPolicy: IfNotPresent|pullPolicy: Always|g" helm/dashboard/values-production.yaml
+          fi
+
+      - name: Update documentation
+        run: |
+          TAG="${{ steps.tags.outputs.tag }}"
+          
+          # Update Docker deployment documentation
+          sed -i "s|actyze/dashboard-.*:latest|actyze/dashboard-frontend:$TAG|g" DOCKER_DEPLOYMENT.md
+          sed -i "s|actyze/dashboard-.*:stable|actyze/dashboard-nexus:$TAG|g" DOCKER_DEPLOYMENT.md
+          
+          # Update README
+          cat >> README.md << EOF
+          
+          ## 🐳 Docker Hub Images
+          
+          Pre-built Docker images are available on Docker Hub:
+          
+          - **Frontend**: \`actyze/dashboard-frontend:$TAG\`
+          - **Nexus API**: \`actyze/dashboard-nexus:$TAG\`
+          - **Schema Service**: \`actyze/dashboard-schema-service:$TAG\`
+          
+          These images include advanced code obfuscation and security hardening.
+          EOF
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update configs to use Docker Hub images (${{ steps.tags.outputs.tag }})"
+          title: "Update deployment configs to use Docker Hub images"
+          body: |
+            This PR updates all deployment configurations to use pre-built Docker Hub images instead of building locally.
+            
+            **Changes:**
+            - Updated Docker Compose files to use \`roman1887/*:${{ steps.tags.outputs.tag }}\` images
+            - Updated Helm values to use Docker Hub repositories
+            - Set image pull policy to Always
+            - Updated documentation with Docker Hub image references
+            
+            **Benefits:**
+            - Faster deployment (no build time)
+            - Consistent images across environments
+            - Advanced code obfuscation and security hardening
+            - Multi-architecture support (amd64, arm64)
+            
+            **Usage:**
+            ```bash
+            # Docker Compose (no build required)
+            ./scripts/docker-start.sh local -d
+            
+            # Helm (pulls from Docker Hub)
+            helm install dashboard ./helm/dashboard -f ./helm/dashboard/values-dev.yaml -n dashboard
+            ```
+            
+            Auto-generated by GitHub Actions.
+          branch: update-dockerhub-configs-${{ github.run_number }}
+          delete-branch: true

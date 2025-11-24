@@ -26,7 +26,7 @@ A comprehensive dashboard application that converts natural language queries to 
 
 # Access at http://localhost:3000
 ```
-📖 **[Complete Docker Deployment Guide](DOCKER_DEPLOYMENT.md)**
+📖 **[Complete Docker Deployment Guide](docker/DEPLOYMENT.md)**
 
 #### ☸️ **Kubernetes with Helm (Production)**
 ```bash
@@ -89,12 +89,12 @@ helm install dashboard ./helm/dashboard \
 ```
 dashboard/
 ├── backend/                 # Spring Boot orchestration service
-├── frontend/               # React dashboard application  
-├── helm/dashboard/         # Kubernetes deployment charts
-├── models/
-│   ├── phi-sql-lora/      # T4 GPU Phi-4 LoRA service
-│   └── schema-service/    # FAISS schema recommendations
-└── docs/                  # Documentation and guides
+├── frontend/               # React dashboard application
+├── docker/                 # Docker Compose setup & documentation
+├── helm/                   # Kubernetes charts & documentation
+└── models/
+    ├── phi-sql-lora/      # T4 GPU Phi-4 LoRA service
+    └── schema-service/    # FAISS schema recommendations
 ```
 
 ## 🔧 **Configuration**

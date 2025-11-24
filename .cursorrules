@@ -1,0 +1,123 @@
+# Cursor Rules for Dashboard Project
+
+## Project Overview
+This is a full-stack dashboard application that converts natural language queries to SQL using AI models. The architecture includes:
+- **Backend**: Spring Boot (Java) orchestration service
+- **Frontend**: React with Material-UI and Tailwind CSS
+- **Nexus**: FastAPI (Python) GraphQL service
+- **Schema Service**: Python service with FAISS and spaCy
+- **Trino**: Distributed SQL query engine
+- **Docker/Kubernetes**: Containerized deployment
+
+## Code Style & Standards
+
+### Frontend (React)
+- Use functional components with hooks
+- Follow React best practices (useState, useEffect, useContext)
+- Use Material-UI components where appropriate
+- Tailwind CSS for styling (use dark mode classes: `dark:bg-gray-900`)
+- File naming: PascalCase for components (e.g., `ThemeContext.js`)
+- Keep components focused and single-purpose
+- Use context API for theme management (ThemeContext)
+
+### Backend (Java/Spring Boot)
+- Follow Spring Boot conventions
+- Use proper package structure: `com.dashboard.*`
+- RESTful API design
+- Proper error handling and logging
+
+### Python Services (Nexus, Schema Service)
+- Follow PEP 8 style guide
+- Use type hints where appropriate
+- FastAPI for Nexus service
+- Proper async/await usage for async operations
+- Use proper logging instead of print statements
+
+## File Organization
+
+### Documentation
+- **Docker documentation**: Place in `docker/` directory
+- **Helm/Kubernetes documentation**: Place in `helm/` directory
+- **General documentation**: Root directory (README.md, CONTRIBUTING.md, etc.)
+
+### Code Structure
+- Frontend: `frontend/src/`
+  - Components: `frontend/src/components/`
+  - Services: `frontend/src/services/`
+  - Contexts: `frontend/src/contexts/`
+- Backend: `backend/src/main/java/com/dashboard/`
+- Nexus: `nexus/app/`
+- Schema Service: `models/schema-service/`
+
+## Best Practices
+
+### General
+- Always check for syntax errors before committing (especially in JavaScript/JSX)
+- Use meaningful variable and function names
+- Add comments for complex logic
+- Keep functions small and focused
+- Handle errors gracefully with proper error messages
+
+### React Specific
+- Avoid trailing backslashes in object literals (they cause syntax errors)
+- Use proper prop validation or TypeScript if available
+- Implement proper loading and error states
+- Use React.memo() for expensive components when needed
+
+### Docker
+- Use multi-stage builds for production images
+- Keep Dockerfiles minimal and efficient
+- Use `.dockerignore` to exclude unnecessary files
+- Follow the existing Docker Compose profile structure
+
+### Environment Variables
+- Use `.env` files for local development
+- Never commit `.env` files with secrets
+- Use `env.example` as templates
+
+## Common Patterns
+
+### Theme Management
+- Use `ThemeContext` for theme state
+- Support both light and dark modes
+- Use Tailwind's `dark:` prefix for dark mode styles
+
+### API Calls
+- Use axios for HTTP requests
+- Centralize API configuration in `services/apiConfig.js`
+- Handle errors consistently across services
+
+### SQL Query Generation
+- Support both local T4 GPU inference and external LLM APIs
+- Implement proper fallback mechanisms
+- Validate SQL before execution
+
+## Testing
+- Write tests for critical functionality
+- Use proper test structure matching source code
+- Test both success and error cases
+
+## Security
+- Never hardcode API keys or secrets
+- Use environment variables for sensitive data
+- Implement SQL injection prevention
+- Validate user inputs
+
+## Performance
+- Optimize Docker builds (use layer caching)
+- Minimize bundle size for frontend
+- Use proper indexing for database queries
+- Implement caching where appropriate
+
+## Git & Version Control
+- Write clear commit messages
+- Keep commits focused and atomic
+- Follow the existing branch structure
+
+## When Making Changes
+1. Check existing code patterns and follow them
+2. Ensure syntax is correct (especially watch for trailing backslashes, missing commas, etc.)
+3. Test locally before committing
+4. Update documentation if needed
+5. Consider backward compatibility
+

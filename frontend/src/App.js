@@ -9,6 +9,7 @@ import {
 import axios from 'axios';
 import QueryPage from './components/QueryPage';
 import QueriesList from './components/QueriesList';
+import CombinedDashboard from './components/CombinedDashboard';
 import Sidebar from './components/Sidebar';
 import { Alert } from './components/ui';
 import ThemeToggle from './components/ThemeToggle';
@@ -19,7 +20,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [apiStatus, setApiStatus] = useState(null);
-  const [currentView, setCurrentView] = useState('queries-list'); // 'queries-list' or 'query-page'
+  const [currentView, setCurrentView] = useState('combined-dashboard'); // 'combined-dashboard', 'research-dashboard', 'queries-list' or 'query-page'
   const [selectedQuery, setSelectedQuery] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
@@ -103,6 +104,8 @@ function App() {
         
         {currentView === 'queries-list' ? (
           <QueriesList onQuerySelect={handleQuerySelect} />
+        ) : currentView === 'combined-dashboard' ? (
+          <CombinedDashboard />
         ) : (
           <QueryPage 
             selectedQuery={selectedQuery}

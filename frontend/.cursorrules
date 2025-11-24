@@ -1,0 +1,202 @@
+# Frontend Cursor Rules
+
+## Project Overview
+React dashboard application with Material-UI and Tailwind CSS for natural language to SQL query interface.
+
+## Technology Stack
+- **React 18.2.0** - Functional components with hooks
+- **Material-UI (MUI) 5.14.5** - Component library
+- **Tailwind CSS 3.4.18** - Utility-first CSS framework
+- **Axios** - HTTP client
+- **React Plotly.js** - Charting library
+
+## Code Style & Standards
+
+### Component Structure
+- Use functional components exclusively (no class components)
+- File naming: PascalCase for components (e.g., `ThemeContext.js`, `QueryPage.js`)
+- One component per file
+- Keep components focused and single-purpose
+- Extract reusable logic into custom hooks
+
+### React Hooks
+- Prefer `useState` for local component state
+- Use `useEffect` for side effects (API calls, subscriptions, DOM manipulation)
+- Use `useContext` for theme and global state (ThemeContext)
+- Create custom hooks for reusable stateful logic
+- Always include dependencies in `useEffect` dependency arrays
+- Clean up subscriptions and timers in `useEffect` return functions
+
+### Component Patterns
+```javascript
+// Preferred component structure
+import React, { useState, useEffect } from 'react';
+import { SomeMUIComponent } from '@mui/material';
+
+export const ComponentName = ({ prop1, prop2 }) => {
+  const [state, setState] = useState(initialValue);
+  
+  useEffect(() => {
+    // Side effects
+    return () => {
+      // Cleanup
+    };
+  }, [dependencies]);
+
+  return (
+    <SomeMUIComponent>
+      {/* Component JSX */}
+    </SomeMUIComponent>
+  );
+};
+```
+
+### Styling Guidelines
+
+#### Tailwind CSS
+- Use Tailwind utility classes for styling
+- Support dark mode with `dark:` prefix (e.g., `dark:bg-gray-900`)
+- Use responsive prefixes when needed (`sm:`, `md:`, `lg:`)
+- Prefer Tailwind over inline styles
+- Use Tailwind for spacing, colors, typography, and layout
+
+#### Material-UI
+- Use MUI components for complex UI elements (dialogs, menus, tables)
+- Combine MUI with Tailwind for custom styling
+- Use MUI's `sx` prop sparingly (prefer Tailwind classes)
+- Follow MUI component patterns and props
+
+#### Dark Mode
+- Always support both light and dark themes
+- Use `ThemeContext` for theme state management
+- Apply dark mode classes: `dark:bg-gray-900`, `dark:text-white`, etc.
+- Test components in both themes
+
+### File Organization
+```
+frontend/src/
+├── components/          # React components
+│   ├── ui/             # Reusable UI components
+│   └── ...             # Feature components
+├── contexts/           # React contexts (ThemeContext)
+├── services/           # API and business logic
+│   ├── apiConfig.js    # Centralized API configuration
+│   ├── AIService.js    # AI-related API calls
+│   └── ...             # Other services
+└── index.js            # Entry point
+```
+
+### Services & API Calls
+- Use `axios` for all HTTP requests
+- Centralize API configuration in `services/apiConfig.js`
+- Create service files for different API domains (AIService, QueriesService, etc.)
+- Always handle errors with try/catch or `.catch()`
+- Show loading states during API calls
+- Display user-friendly error messages
+
+### State Management
+- Use `useState` for component-local state
+- Use `useContext` for shared state (theme, user preferences)
+- Consider lifting state up when multiple components need it
+- Avoid prop drilling - use context when appropriate
+
+### Error Handling
+- Always implement error boundaries for critical sections
+- Show user-friendly error messages
+- Log errors to console for debugging
+- Handle loading states properly
+- Provide fallback UI for error states
+
+### Performance Optimization
+- Use `React.memo()` for expensive components that re-render frequently
+- Memoize callbacks with `useCallback` when passing to child components
+- Memoize computed values with `useMemo` for expensive calculations
+- Lazy load routes with `React.lazy()` and `Suspense`
+- Optimize images and assets
+
+### Common Patterns
+
+#### Theme Management
+```javascript
+import { useTheme } from '../contexts/ThemeContext';
+
+const MyComponent = () => {
+  const { isDark, toggleTheme, colors } = useTheme();
+  
+  return (
+    <div className={isDark ? colors.dark.bg : colors.light.bg}>
+      {/* Component content */}
+    </div>
+  );
+};
+```
+
+#### API Calls
+```javascript
+import axios from 'axios';
+import { apiConfig } from '../services/apiConfig';
+
+const fetchData = async () => {
+  try {
+    const response = await axios.get('/api/endpoint', apiConfig);
+    return response.data;
+  } catch (error) {
+    console.error('API Error:', error);
+    throw error;
+  }
+};
+```
+
+### Syntax Rules
+- Always use semicolons
+- Use single quotes for strings (or be consistent)
+- Use template literals for string interpolation
+- Destructure props at the function signature
+- Use arrow functions for component definitions
+
+### Props & Validation
+- Destructure props in function parameters
+- Use default parameters for optional props
+- Consider using PropTypes or TypeScript for prop validation
+- Document complex props with JSDoc comments
+
+### Testing Considerations
+- Write testable components (pure functions when possible)
+- Extract business logic from components for easier testing
+- Use data-testid attributes for testing
+- Keep components small and focused for easier unit testing
+
+### Accessibility
+- Use semantic HTML elements
+- Include proper ARIA labels when needed
+- Ensure keyboard navigation works
+- Maintain proper focus management
+- Test with screen readers when possible
+
+### Code Quality
+- Keep functions small and focused (single responsibility)
+- Extract complex logic into separate functions or hooks
+- Use meaningful variable and function names
+- Add comments for complex business logic
+- Remove unused imports and variables
+- Format code consistently
+
+### Common Mistakes to Avoid
+1. ❌ Trailing backslashes in object literals: `{ key: 'value',\ }`
+2. ❌ Missing dependencies in useEffect
+3. ❌ Forgetting to clean up subscriptions
+4. ❌ Mutating state directly
+5. ❌ Not handling loading/error states
+6. ❌ Prop drilling instead of using context
+7. ❌ Creating functions inside render without useCallback
+
+### Best Practices
+1. ✅ Always check for syntax errors before committing
+2. ✅ Test components in both light and dark modes
+3. ✅ Handle all async operations properly
+4. ✅ Implement proper loading states
+5. ✅ Use error boundaries for critical sections
+6. ✅ Optimize re-renders with React.memo when needed
+7. ✅ Keep components under 200 lines when possible
+8. ✅ Extract reusable logic into custom hooks
+

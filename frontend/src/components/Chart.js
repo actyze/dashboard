@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Paper, Typography, Box, CircularProgress, Chip, Stack } from '@mui/material';
+import { Typography } from '@mui/material';
 import Plot from 'react-plotly.js';
-import { Alert, Card } from './ui';
+import { Alert } from './ui';
 import { useTheme } from '../contexts/ThemeContext';
 
 const Chart = ({ chartData, loading = false, error = null }) => {
@@ -292,110 +292,76 @@ const Chart = ({ chartData, loading = false, error = null }) => {
   };
 
   const renderChartInfo = () => {
-    if (!chartInfo) return null;
-
-    return (
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center space-x-2">
-          <div className="px-2 py-1 text-xs font-bold text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-900/30 rounded-full border border-blue-200 dark:border-blue-800/50">
-            {chartInfo.type.toUpperCase()}
-          </div>
-          {chartInfo.cached && (
-            <div className="px-2 py-1 text-xs font-bold text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900/30 rounded-full border border-green-200 dark:border-green-800/50">
-              CACHED
-            </div>
-          )}
-          {chartInfo.fallback && (
-            <div className="px-2 py-1 text-xs font-bold text-amber-700 bg-amber-100 dark:text-amber-300 dark:bg-amber-900/30 rounded-full border border-amber-200 dark:border-amber-800/50">
-              FALLBACK
-            </div>
-          )}
-        </div>
-        <div className="px-2 py-1 text-xs font-medium text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-gray-800/50 rounded-full border border-gray-200 dark:border-gray-700/50">
-          {chartInfo.rowCount} rows
-        </div>
-      </div>
-    );
+    // Don't render chart info badges
+    return null;
   };
 
   if (loading) {
     return (
-      <Card className="w-full bg-gradient-to-br from-blue-50/50 to-indigo-100/50 dark:from-gray-800/50 dark:to-gray-900/50 backdrop-blur-sm border-gray-200/50 dark:border-gray-700/50">
-        <div className="h-96 flex items-center justify-center">
-          <div className="text-center">
-            <div className="relative mb-4">
-              <div className="w-12 h-12 rounded-full border-4 border-blue-200 dark:border-blue-800 animate-spin border-t-blue-500 dark:border-t-blue-400"></div>
-            </div>
-            <Typography variant="body2" color="text.secondary" className="font-medium">
-              Generating beautiful chart...
-            </Typography>
+      <div className="w-full h-full flex items-center justify-center">
+        <div className="text-center">
+          <div className="relative mb-4">
+            <div className="w-12 h-12 rounded-full border-4 border-blue-200 dark:border-blue-800 animate-spin border-t-blue-500 dark:border-t-blue-400"></div>
           </div>
+          <Typography variant="body2" color="text.secondary" className="font-medium">
+            Generating chart...
+          </Typography>
         </div>
-      </Card>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Card className="w-full bg-gradient-to-br from-red-50/50 to-rose-100/50 dark:from-red-900/20 dark:to-rose-900/20 backdrop-blur-sm border-red-200/50 dark:border-red-800/50">
-        <div className="p-6">
+      <div className="w-full h-full flex items-center justify-center p-4">
+        <div className="text-center">
           <Alert variant="error" className="mb-4">
             {error}
           </Alert>
-          <Typography variant="body2" color="text.secondary" className="text-center">
-            Unable to generate chart. Please try again or check your query.
+          <Typography variant="body2" color="text.secondary">
+            Unable to generate chart.
           </Typography>
         </div>
-      </Card>
+      </div>
     );
   }
 
   if (!chartData || !plotData || plotData.length === 0) {
     return (
-      <Card className="w-full bg-gradient-to-br from-gray-50/50 to-gray-100/50 dark:from-gray-800/30 dark:to-gray-900/30 backdrop-blur-sm border-gray-200/50 dark:border-gray-700/50">
-        <div className="h-96 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center">
-              <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            </div>
-            <Typography variant="h6" color="text.secondary" gutterBottom className="font-semibold">
-              No Chart Data
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Execute a query to generate a beautiful chart visualization
-            </Typography>
+      <div className="w-full h-full flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center">
+            <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
           </div>
+          <Typography variant="h6" color="text.secondary" gutterBottom className="font-semibold">
+            No Chart Data
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Execute a query to generate a chart
+          </Typography>
         </div>
-      </Card>
+      </div>
     );
   }
 
   return (
-    <Card className="w-full bg-gradient-to-br from-white/80 to-gray-50/80 dark:from-gray-800/50 dark:to-gray-900/50 backdrop-blur-sm border-gray-200/50 dark:border-gray-700/50 shadow-xl">
-      <Card.Header className="flex-shrink-0 border-b border-gray-200/50 dark:border-gray-700/50">
-        {renderChartInfo()}
-      </Card.Header>
-      <Card.Body className="p-0 relative">
-        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-blue-50/20 to-purple-50/20 dark:from-transparent dark:via-gray-900/20 dark:to-gray-800/20 pointer-events-none"></div>
-        <div className="relative z-10 w-full">
-          <Plot
-            data={plotData}
-            layout={layout}
-            style={{ width: '100%', height: '400px', minHeight: '300px' }}
-            useResizeHandler={true}
-            config={{ 
-              responsive: true, 
-              displayModeBar: true,
-              displaylogo: false,
-              modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'],
-              doubleClick: 'reset'
-            }}
-          />
-        </div>
-      </Card.Body>
-    </Card>
+    <div className="w-full h-full relative">
+      <Plot
+        data={plotData}
+        layout={layout}
+        style={{ width: '100%', height: '100%' }}
+        useResizeHandler={true}
+        config={{ 
+          responsive: true, 
+          displayModeBar: true,
+          displaylogo: false,
+          modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'],
+          doubleClick: 'reset'
+        }}
+      />
+    </div>
   );
 };
 

@@ -1,5 +1,7 @@
 # Dashboard Deployment Guide
 
+> **Note:** All commands in this guide should be executed from the project root directory.
+
 ## 🚀 Quick Start
 
 ### **Development Deployment**

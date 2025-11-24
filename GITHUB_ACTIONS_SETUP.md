@@ -374,7 +374,7 @@ gh release edit v1.0.0-rc1 --prerelease=false
 - **[GitHub Actions Documentation](https://docs.github.com/en/actions)**
 - **[Docker Hub Documentation](https://docs.docker.com/docker-hub/)**
 - **[Workflow Files](.github/workflows/README.md)**
-- **[Docker Deployment Guide](DOCKER_DEPLOYMENT.md)**
+- **[Docker Deployment Guide](docker/DEPLOYMENT.md)**
 - **[Main Project README](README.md)**
 
 ---

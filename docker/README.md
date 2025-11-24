@@ -151,7 +151,7 @@ You can develop locally with Docker and deploy to production with Kubernetes sea
 
 ## 📚 **Additional Resources**
 
-- **[Complete Docker Deployment Guide](../DOCKER_DEPLOYMENT.md)** - Comprehensive setup guide
+- **[Complete Docker Deployment Guide](DEPLOYMENT.md)** - Comprehensive setup guide
 - **[Helm Deployment Guide](../helm/README.md)** - Kubernetes deployment
 - **[Main README](../README.md)** - Project overview
 

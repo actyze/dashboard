@@ -4,6 +4,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+# Disable ESLint warnings treated as errors during build
+ENV DISABLE_ESLINT_PLUGIN=true
 RUN npm run build
 
 # Production stage

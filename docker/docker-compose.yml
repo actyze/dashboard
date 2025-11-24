@@ -17,7 +17,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-dashboard}
       POSTGRES_USER: ${POSTGRES_USER:-nexus_service}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-PostgreActyze123$}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_HOST_AUTH_METHOD: md5
     ports:
       - "5432:5432"
@@ -38,12 +38,20 @@ services:
 
   # Trino Query Engine (OPTIONAL - use profile to enable/disable)
   trino:
-    image: trinodb/trino:477
+    build:
+      context: ./trino
+      dockerfile: Dockerfile
+    image: dashboard-trino:latest
     container_name: dashboard-trino
     ports:
       - "8081:8080"
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-dashboard}
+      POSTGRES_USER: ${POSTGRES_USER:-nexus_service}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - ./trino/catalog:/etc/trino/catalog:ro
       - ./trino/config.properties:/etc/trino/config.properties:ro
     depends_on:
       postgres:
@@ -61,6 +69,44 @@ services:
       - local
       - trino-only
 
+  # Database initialization service - runs SQL scripts
+  db-init:
+    image: postgres:15-alpine
+    container_name: dashboard-db-init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-dashboard}
+      PGUSER: ${POSTGRES_USER:-nexus_service}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ../helm/dashboard/sql:/sql:ro
+    command: >
+      sh -c "
+      echo '🔍 Checking if database initialization is needed...';
+      SCHEMA_EXISTS=$$(psql -tAc \"SELECT 1 FROM pg_namespace WHERE nspname='nexus'\" 2>/dev/null || echo '0');
+      if [ \"$$SCHEMA_EXISTS\" = \"1\" ]; then
+        echo '✅ Database already initialized (nexus schema exists)';
+      else
+        echo '🔨 Initializing database...';
+        echo '  📝 Creating nexus schema...';
+        psql -f /sql/nexus-schema.sql;
+        echo '  📝 Creating demo schema...';
+        psql -f /sql/demo-schema.sql;
+        echo '  📝 Loading demo data...';
+        psql -f /sql/demo-data.sql;
+        echo '✅ Database initialization complete';
+      fi
+      "
+    networks:
+      - dashboard
+    profiles:
+      - local
+    restart: "no"
+
   # Schema Service (FAISS-based table recommendations)
   schema-service:
     build:
@@ -70,6 +116,7 @@ services:
     ports:
       - "8001:8000"
     environment:
+      PORT: 8000
       TRINO_HOST: ${TRINO_HOST:-trino}
       TRINO_PORT: ${TRINO_PORT:-8080}
       TRINO_USER: ${TRINO_USER:-admin}
@@ -102,12 +149,14 @@ services:
     ports:
       - "8000:8000"
     environment:
+      # Service Configuration
+      NEXUS_PORT: 8000
       # Database Configuration (can be local or external)
       POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
-      POSTGRES_DATABASE: ${POSTGRES_DATABASE:-nexus}
+      POSTGRES_DATABASE: ${POSTGRES_DATABASE:-dashboard}
       POSTGRES_USER: ${POSTGRES_USER:-nexus_service}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-PostgreActyze123$}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       # Trino Configuration (can be local or external)
       TRINO_HOST: ${TRINO_HOST:-trino}
       TRINO_PORT: ${TRINO_PORT:-8080}
@@ -134,6 +183,8 @@ services:
       DEBUG: ${DEBUG:-true}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
+      db-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
         required: false  # Optional - can use external PostgreSQL
@@ -151,13 +202,14 @@ services:
     networks:
       - dashboard
     restart: unless-stopped
+    profiles:
+      - local
 
   # Frontend Service
   frontend:
     build:
-      context: ../
+      context: ../frontend
       dockerfile: Dockerfile
-      target: frontend
     container_name: dashboard-frontend
     ports:
       - "3000:80"
@@ -176,6 +228,8 @@ services:
     networks:
       - dashboard
     restart: unless-stopped
+    profiles:
+      - local
 
 volumes:
   postgres_data:

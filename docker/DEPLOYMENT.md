@@ -1,5 +1,7 @@
 # Dashboard Docker Deployment Guide
 
+> **Note:** All commands in this guide should be executed from the project root directory unless otherwise specified.
+
 This guide explains how to deploy the complete Dashboard application stack using Docker Compose, providing an alternative to Kubernetes/Helm deployment for local development and testing.
 
 ## 🏗️ Architecture Overview

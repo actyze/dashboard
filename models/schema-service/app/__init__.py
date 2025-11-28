@@ -1,0 +1,2 @@
+"""Schema Service - Modular package."""
+

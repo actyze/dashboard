@@ -8,6 +8,7 @@ import Chart from './Chart';
 import ViewToggle from './ViewToggle';
 import ChartTypeSelector from './ChartTypeSelector';
 import { Card, Text, Button } from './ui';
+import { AIService } from '../services';
 
 const QueryPage = ({ selectedQuery, onBackToQueriesList }) => {
   const { isDark } = useTheme();
@@ -30,14 +31,36 @@ const QueryPage = ({ selectedQuery, onBackToQueriesList }) => {
     setQueryError(null);
     
     try {
-      // Simulate API call to convert natural language to SQL
-      setTimeout(() => {
-        const sampleSQL = `-- Generated from: "${naturalLanguageQuery}"\nSELECT \n  region,\n  SUM(sales_amount) as total_sales,\n  COUNT(*) as order_count\nFROM sales_data \nWHERE order_date >= CURRENT_DATE - INTERVAL '30 days'\nGROUP BY region\nORDER BY total_sales DESC;`;
-        setSqlQuery(sampleSQL);
-        setQueryLoading(false);
-      }, 2000);
+      const response = await AIService.convertToSQL(naturalLanguageQuery);
+      
+      if (response.success && response.data) {
+        const generatedSQL = `-- Generated from: "${response.data.originalQuery}"\n${response.data.sqlQuery}`;
+        setSqlQuery(generatedSQL);
+        
+        if (response.data.queryResults) {
+          console.log('Setting queryResults:', response.data.queryResults);
+          setQueryResults(response.data.queryResults);
+          
+          const mockChartData = {
+            chart: {
+              type: 'bar',
+              config: {
+                xField: response.data.queryResults.columns[0]?.name || 'x',
+                yField: response.data.queryResults.columns[1]?.name || 'y'
+              }
+            },
+            data: response.data.queryResults,
+            cached: false
+          };
+          setChartData(mockChartData);
+        }
+      } else {
+        setQueryError(response.message || 'Failed to process natural language query');
+      }
     } catch (error) {
-      setQueryError('Failed to process natural language query');
+      console.error('AI query failed:', error);
+      setQueryError(error.message || 'Failed to process natural language query');
+    } finally {
       setQueryLoading(false);
     }
   };

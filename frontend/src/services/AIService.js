@@ -1,4 +1,8 @@
 import { ApiResponse, mockDelay } from './apiConfig';
+import { GraphQLService } from './GraphQLService';
+
+// Check if we should use mock data (default to false - use real API)
+const USE_MOCK_DATA = process.env.REACT_APP_USE_MOCK_DATA === 'true';
 
 /**
  * Service for AI-powered natural language to SQL conversion
@@ -12,6 +16,59 @@ export class AIService {
    * @returns {Promise<ApiResponse>}
    */
   static async convertToSQL(naturalLanguageQuery, context = {}) {
+    // Use real API if not in mock mode
+    if (!USE_MOCK_DATA) {
+      try {
+        const response = await GraphQLService.processNaturalLanguage(naturalLanguageQuery);
+        
+        if (!response.success) {
+          throw new Error(response.error || 'Failed to process query');
+        }
+
+        let transformedResults = null;
+        if (response.queryResults && response.queryResults.rows && response.queryResults.columns) {
+          const columnObjects = response.queryResults.columns.map(col => 
+            typeof col === 'string' ? { name: col, label: col } : col
+          );
+          
+          const dataObjects = response.queryResults.rows.map(row => {
+            const obj = {};
+            response.queryResults.columns.forEach((col, index) => {
+              const colName = typeof col === 'string' ? col : col.name;
+              obj[colName] = row[index];
+            });
+            return obj;
+          });
+          
+          transformedResults = {
+            data: dataObjects,
+            columns: columnObjects,
+            rowCount: response.queryResults.rowCount || dataObjects.length
+          };
+          console.log('Transformed:', transformedResults);
+        } else {
+          console.log('No transformation - queryResults structure:', response.queryResults);
+        }
+        
+        return ApiResponse.success({
+          originalQuery: response.nlQuery || naturalLanguageQuery,
+          sqlQuery: response.generatedSql,
+          explanation: response.modelReasoning || 'SQL query generated successfully',
+          confidence: response.modelConfidence || 0.9,
+          suggestions: [],
+          timestamp: new Date().toISOString(),
+          modelVersion: 'nexus-graphql',
+          queryResults: transformedResults,
+          processingTime: response.processingTime,
+          executionTime: response.executionTime
+        }, 'Query converted successfully');
+      } catch (error) {
+        console.error('GraphQL API failed, falling back to mock data:', error);
+        // Fall through to mock implementation
+      }
+    }
+
+    // Mock implementation (fallback)
     await mockDelay(1500 + Math.random() * 1000); // Simulate 1.5-2.5 second processing
 
     try {

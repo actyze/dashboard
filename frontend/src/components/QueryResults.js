@@ -18,7 +18,7 @@ const QueryResults = ({
       setData(queryData.data);
       setColumns(queryData.columns);
       setTotalRows(queryData.rowCount || queryData.data.length);
-      setPage(0); // Reset to first page when new data arrives
+      setPage(0);
     }
   }, [queryData]);
 

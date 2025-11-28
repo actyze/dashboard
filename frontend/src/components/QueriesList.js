@@ -3,7 +3,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { Card, Text } from './ui';
 import { QueriesService } from '../services';
 
-const QueriesList = ({ onQuerySelect }) => {
+const QueriesList = ({ onQuerySelect, onNavigate }) => {
   const { isDark } = useTheme();
   const [queries, setQueries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -78,7 +78,7 @@ const QueriesList = ({ onQuerySelect }) => {
               }
               focus:ring-1 focus:ring-blue-500 focus:border-blue-500
             `}
-            placeholder="Search queries, worksheets, and documentation"
+            placeholder="Search queries and dashboards"
           />
         </div>
       </div>
@@ -89,7 +89,10 @@ const QueriesList = ({ onQuerySelect }) => {
           Quick actions
         </Text>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className={`p-4 cursor-pointer transition-colors ${isDark ? 'bg-gray-800 hover:bg-gray-750' : 'bg-white hover:bg-gray-50'}`}>
+          <Card 
+            className={`p-4 cursor-pointer transition-colors ${isDark ? 'bg-gray-800 hover:bg-gray-750' : 'bg-white hover:bg-gray-50'}`}
+            onClick={() => onQuerySelect(null)}
+          >
             <div className="flex items-center space-x-3">
               <div className={`w-8 h-8 rounded ${isDark ? 'bg-blue-600' : 'bg-blue-500'} flex items-center justify-center`}>
                 <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -102,6 +105,27 @@ const QueriesList = ({ onQuerySelect }) => {
                 </Text>
                 <Text color="secondary" className="text-xs">
                   Create a SQL Worksheet
+                </Text>
+              </div>
+            </div>
+          </Card>
+          
+          <Card 
+            className={`p-4 cursor-pointer transition-colors ${isDark ? 'bg-gray-800 hover:bg-gray-750' : 'bg-white hover:bg-gray-50'}`}
+            onClick={() => onNavigate && onNavigate('combined-dashboard')}
+          >
+            <div className="flex items-center space-x-3">
+              <div className={`w-8 h-8 rounded ${isDark ? 'bg-green-600' : 'bg-green-500'} flex items-center justify-center`}>
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                </svg>
+              </div>
+              <div>
+                <Text variant="subtitle1" className="font-medium">
+                  Create database
+                </Text>
+                <Text color="secondary" className="text-xs">
+                  Setup a new database
                 </Text>
               </div>
             </div>
@@ -120,12 +144,6 @@ const QueriesList = ({ onQuerySelect }) => {
           <nav className="flex space-x-8">
             <button className="border-b-2 border-blue-500 pb-2 text-sm font-medium text-blue-600 dark:text-blue-400">
               All projects
-            </button>
-            <button className="pb-2 text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
-              Worksheets
-            </button>
-            <button className="pb-2 text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
-              Notebooks
             </button>
             <button className="pb-2 text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
               Dashboards

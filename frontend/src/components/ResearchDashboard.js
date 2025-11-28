@@ -15,6 +15,7 @@ import SqlQuery from './SqlQuery';
 import Chart from './Chart';
 import QueryResults from './QueryResults';
 import { useTheme } from '../contexts/ThemeContext';
+import { AIService } from '../services';
 
 const Dashboard = () => {
   const { isDark } = useTheme();
@@ -114,61 +115,53 @@ const Dashboard = () => {
     setBackendResponse('Processing natural language query...');
     
     try {
-      // Call complete NL-to-SQL-to-Chart workflow endpoint
-      const response = await fetch('/api/query', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          input: message,
-          type: 'natural',
-          includeChart: true
-        }),
-      });
+      const response = await AIService.convertToSQL(message);
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result.error) {
-        throw new Error(result.error);
-      }
-      
-      if (result.success) {
-        // Update SQL query box with generated SQL
-        if (result.generatedSQL) {
-          setSqlQuery(result.generatedSQL);
+      if (response.success && response.data) {
+        if (response.data.sqlQuery) {
+          setSqlQuery(response.data.sqlQuery);
         }
         
-        // Update query results with executed data
-        if (result.queryResults) {
-          setQueryResults(result.queryResults);
+        if (response.data.queryResults) {
+          setQueryResults(response.data.queryResults);
+          
+          const chartDataConfig = {
+            chart: {
+              type: 'bar',
+              config: {
+                xField: response.data.queryResults.columns[0]?.name || 'x',
+                yField: response.data.queryResults.columns[1]?.name || 'y'
+              },
+              fallback: false
+            },
+            data: response.data.queryResults,
+            cached: false
+          };
+          setChartData(chartDataConfig);
         }
         
-        // Update chart with generated chart configuration
-        if (result.chartData) {
-          setChartData(result.chartData);
-        }
-        
-        // Update backend response with comprehensive information
         let responseMessage = `✅ Complete workflow executed successfully!\n`;
-        responseMessage += `📝 SQL: Generated with ${result.confidence || 'high'} confidence\n`;
-        responseMessage += `📊 Data: ${result.queryResults?.rowCount || 0} rows retrieved\n`;
-        responseMessage += `📈 Chart: ${result.extractedChartType || 'auto'} chart recommended`;
+        responseMessage += `📝 SQL: Generated with ${Math.round((response.data.confidence || 0.9) * 100)}% confidence\n`;
+        responseMessage += `📊 Data: ${response.data.queryResults?.rowCount || 0} rows retrieved\n`;
         
-        if (result.naturalLanguage) {
-          responseMessage += `\n\n💡 Natural Language: ${result.naturalLanguage}`;
+        if (response.data.processingTime) {
+          responseMessage += `⏱️ Processing: ${response.data.processingTime}ms\n`;
         }
-        if (result.generatedSQL) {
-          responseMessage += `\n📝 Generated SQL: ${result.generatedSQL}`;
+        if (response.data.executionTime) {
+          responseMessage += `⚡ Execution: ${response.data.executionTime}ms\n`;
+        }
+        
+        if (response.data.originalQuery) {
+          responseMessage += `\n\n💡 Natural Language: ${response.data.originalQuery}`;
+        }
+        if (response.data.explanation) {
+          responseMessage += `\n📖 Explanation: ${response.data.explanation}`;
         }
         
         setBackendResponse(responseMessage);
       } else {
         setBackendResponse('No SQL query could be generated from the input.');
+        setQueryError(response.message || 'Failed to process query');
       }
       
     } catch (error) {

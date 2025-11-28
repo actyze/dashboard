@@ -135,10 +135,10 @@ class OrchestrationService:
                     nl_query, conversation_history, schema_recommendations
                 )
                 
-                # Cache the result if successful
-                if sql_generation.get("success"):
+                # Cache the result if successful - cache only the SQL, not the entire dict
+                if sql_generation.get("success") and sql_generation.get("sql"):
                     await self.cache_service.cache_llm_response(
-                        cache_key, {"type": "sql_generation"}, str(sql_generation)
+                        cache_key, {"type": "sql_generation"}, sql_generation.get("sql")
                     )
             
             # Detailed LLM output logging (matching Java backend)

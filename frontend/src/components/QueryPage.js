@@ -9,6 +9,7 @@ import ViewToggle from './ViewToggle';
 import ChartTypeSelector from './ChartTypeSelector';
 import { Card, Text, Button } from './ui';
 import { AIService } from '../services';
+import { useProcessNaturalLanguage } from '../hooks/useGraphQL';
 
 const QueryPage = ({ selectedQuery, onBackToQueriesList }) => {
   const { isDark } = useTheme();
@@ -20,49 +21,78 @@ const QueryPage = ({ selectedQuery, onBackToQueriesList }) => {
     selectedQuery?.query || 
     "SELECT customer_name, order_total, order_date\nFROM orders\nWHERE order_date >= '2024-01-01'\nORDER BY order_total DESC\nLIMIT 10;"
   );
-  const [queryLoading, setQueryLoading] = useState(false);
   const [queryError, setQueryError] = useState(null);
   const [queryResults, setQueryResults] = useState(null);
   const [chartData, setChartData] = useState(null);
 
-  // Handle AI query submission
-  const handleAIQuery = async (naturalLanguageQuery) => {
-    setQueryLoading(true);
-    setQueryError(null);
-    
-    try {
-      const response = await AIService.convertToSQL(naturalLanguageQuery);
-      
-      if (response.success && response.data) {
-        const generatedSQL = `-- Generated from: "${response.data.originalQuery}"\n${response.data.sqlQuery}`;
+  // Use GraphQL mutation hook for natural language processing
+  const { 
+    mutate: processNaturalLanguage, 
+    isPending: queryLoading 
+  } = useProcessNaturalLanguage({
+    onSuccess: (response) => {
+      if (response.success && response.generatedSql) {
+        const generatedSQL = `-- Generated from natural language query\n${response.generatedSql}`;
         setSqlQuery(generatedSQL);
         
-        if (response.data.queryResults) {
-          console.log('Setting queryResults:', response.data.queryResults);
-          setQueryResults(response.data.queryResults);
+        if (response.queryResults && response.queryResults.rows && response.queryResults.columns) {
+          // Transform the response to the expected format
+          const columnObjects = response.queryResults.columns.map(col => 
+            typeof col === 'string' ? { name: col, label: col } : col
+          );
           
+          const dataObjects = response.queryResults.rows.map(row => {
+            const obj = {};
+            response.queryResults.columns.forEach((col, index) => {
+              const colName = typeof col === 'string' ? col : col.name;
+              obj[colName] = row[index];
+            });
+            return obj;
+          });
+          
+          const transformedResults = {
+            data: dataObjects,
+            columns: columnObjects,
+            rowCount: response.queryResults.rowCount || dataObjects.length
+          };
+          
+          console.log('Setting queryResults:', transformedResults);
+          setQueryResults(transformedResults);
+          
+          // Create chart data
           const mockChartData = {
             chart: {
               type: 'bar',
               config: {
-                xField: response.data.queryResults.columns[0]?.name || 'x',
-                yField: response.data.queryResults.columns[1]?.name || 'y'
+                xField: columnObjects[0]?.name || 'x',
+                yField: columnObjects[1]?.name || 'y'
               }
             },
-            data: response.data.queryResults,
+            data: transformedResults,
             cached: false
           };
           setChartData(mockChartData);
         }
+        setQueryError(null);
       } else {
-        setQueryError(response.message || 'Failed to process natural language query');
+        setQueryError(response.error || 'Failed to process natural language query');
       }
-    } catch (error) {
-      console.error('AI query failed:', error);
+    },
+    onError: (error) => {
+      console.error('Natural language processing failed:', error);
       setQueryError(error.message || 'Failed to process natural language query');
-    } finally {
-      setQueryLoading(false);
     }
+  });
+
+  // Handle AI query submission
+  const handleAIQuery = async (naturalLanguageQuery) => {
+    setQueryError(null);
+    
+    // Use the GraphQL mutation hook
+    processNaturalLanguage({
+      message: naturalLanguageQuery,
+      conversationHistory: []
+    });
   };
 
   // Handle SQL query execution

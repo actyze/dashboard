@@ -1,13 +1,32 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { GraphQLService } from '../services/GraphQLService';
+import { transformQueryResults, transformToChartData } from '../utils/dataTransformers';
 
 /**
  * Custom hook for processing natural language queries via GraphQL
  * 
+ * Automatically transforms the response data to component-ready format.
+ * 
+ * Returns transformed data structure:
+ * {
+ *   success: boolean,
+ *   generatedSql: string,
+ *   queryResults: { data: [], columns: [], rowCount: number },
+ *   chartData: { chart: {}, data: {} },
+ *   processingTime: number,
+ *   executionTime: number,
+ *   modelConfidence: number,
+ *   error: string
+ * }
+ * 
  * Usage:
  * const { mutate, isPending, error, data } = useProcessNaturalLanguage({
- *   onSuccess: (data) => console.log('Success:', data),
- *   onError: (error) => console.error('Error:', error)
+ *   onSuccess: (transformedData) => {
+ *     // Data is already transformed and ready to use
+ *     setSqlQuery(transformedData.generatedSql);
+ *     setQueryResults(transformedData.queryResults);
+ *     setChartData(transformedData.chartData);
+ *   }
  * });
  * 
  * mutate({ message: 'Show me sales data', conversationHistory: [] });
@@ -16,19 +35,27 @@ export const useProcessNaturalLanguage = (options = {}) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ message, conversationHistory = [] }) => 
-      GraphQLService.processNaturalLanguage(message, conversationHistory),
+    mutationFn: async ({ message, conversationHistory = [] }) => {
+      const response = await GraphQLService.processNaturalLanguage(message, conversationHistory);
+      
+      // Transform the response data automatically
+      const transformedResults = transformQueryResults(response.queryResults);
+      const chartData = transformedResults ? transformToChartData(transformedResults) : null;
+      
+      return {
+        ...response,
+        queryResults: transformedResults,
+        chartData
+      };
+    },
     
-    // Custom options can be passed per service
-    gcTime: options.gcTime ?? 0, // No caching by default
+    gcTime: options.gcTime ?? 0,
     
     onSuccess: (data, variables, context) => {
-      // Custom onSuccess handler
       if (options.onSuccess) {
         options.onSuccess(data, variables, context);
       }
       
-      // Invalidate related queries if needed
       if (options.invalidateQueries) {
         options.invalidateQueries.forEach(queryKey => {
           queryClient.invalidateQueries({ queryKey });
@@ -42,7 +69,7 @@ export const useProcessNaturalLanguage = (options = {}) => {
       }
     },
     
-    ...options, // Allow overriding any options
+    ...options,
   });
 };
 

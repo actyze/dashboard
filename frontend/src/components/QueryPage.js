@@ -8,7 +8,6 @@ import Chart from './Chart';
 import ViewToggle from './ViewToggle';
 import ChartTypeSelector from './ChartTypeSelector';
 import { Card, Text, Button } from './ui';
-import { AIService } from '../services';
 import { useProcessNaturalLanguage } from '../hooks/useGraphQL';
 
 const QueryPage = ({ selectedQuery, onBackToQueriesList }) => {
@@ -25,7 +24,6 @@ const QueryPage = ({ selectedQuery, onBackToQueriesList }) => {
   const [queryResults, setQueryResults] = useState(null);
   const [chartData, setChartData] = useState(null);
 
-  // Use GraphQL mutation hook for natural language processing
   const { 
     mutate: processNaturalLanguage, 
     isPending: queryLoading 
@@ -34,45 +32,8 @@ const QueryPage = ({ selectedQuery, onBackToQueriesList }) => {
       if (response.success && response.generatedSql) {
         const generatedSQL = `-- Generated from natural language query\n${response.generatedSql}`;
         setSqlQuery(generatedSQL);
-        
-        if (response.queryResults && response.queryResults.rows && response.queryResults.columns) {
-          // Transform the response to the expected format
-          const columnObjects = response.queryResults.columns.map(col => 
-            typeof col === 'string' ? { name: col, label: col } : col
-          );
-          
-          const dataObjects = response.queryResults.rows.map(row => {
-            const obj = {};
-            response.queryResults.columns.forEach((col, index) => {
-              const colName = typeof col === 'string' ? col : col.name;
-              obj[colName] = row[index];
-            });
-            return obj;
-          });
-          
-          const transformedResults = {
-            data: dataObjects,
-            columns: columnObjects,
-            rowCount: response.queryResults.rowCount || dataObjects.length
-          };
-          
-          console.log('Setting queryResults:', transformedResults);
-          setQueryResults(transformedResults);
-          
-          // Create chart data
-          const mockChartData = {
-            chart: {
-              type: 'bar',
-              config: {
-                xField: columnObjects[0]?.name || 'x',
-                yField: columnObjects[1]?.name || 'y'
-              }
-            },
-            data: transformedResults,
-            cached: false
-          };
-          setChartData(mockChartData);
-        }
+        setQueryResults(response.queryResults);
+        setChartData(response.chartData);
         setQueryError(null);
       } else {
         setQueryError(response.error || 'Failed to process natural language query');

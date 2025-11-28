@@ -5,7 +5,9 @@
 export { QueriesService } from './QueriesService';
 export { QueryExecutionService } from './QueryExecutionService';
 export { AIService } from './AIService';
+export { GraphQLService } from './GraphQLService';
 export { API_CONFIG, ApiResponse, apiCall, mockDelay } from './apiConfig';
+export { Network, apiInstance } from './network';
 
 // Service configuration
 export const SERVICES_CONFIG = {

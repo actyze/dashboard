@@ -7,7 +7,8 @@ React dashboard application with Material-UI and Tailwind CSS for natural langua
 - **React 18.2.0** - Functional components with hooks
 - **Material-UI (MUI) 5.14.5** - Component library
 - **Tailwind CSS 3.4.18** - Utility-first CSS framework
-- **Axios** - HTTP client
+- **@tanstack/react-query** - Data fetching and server state management
+- **Axios** - HTTP client (used within services)
 - **React Plotly.js** - Charting library
 
 ## Code Style & Standards
@@ -20,8 +21,9 @@ React dashboard application with Material-UI and Tailwind CSS for natural langua
 - Extract reusable logic into custom hooks
 
 ### React Hooks
-- Prefer `useState` for local component state
-- Use `useEffect` for side effects (API calls, subscriptions, DOM manipulation)
+- Prefer `useState` for local UI state (toggles, form inputs, etc.)
+- Use React Query hooks for data fetching and server state (see Data Fetching section)
+- Use `useEffect` for side effects (subscriptions, DOM manipulation) - avoid for data fetching
 - Use `useContext` for theme and global state (ThemeContext)
 - Create custom hooks for reusable stateful logic
 - Always include dependencies in `useEffect` dependency arrays
@@ -79,26 +81,79 @@ frontend/src/
 │   ├── ui/             # Reusable UI components
 │   └── ...             # Feature components
 ├── contexts/           # React contexts (ThemeContext)
-├── services/           # API and business logic
+├── hooks/              # React Query custom hooks
+│   ├── useGraphQL.js   # GraphQL operation hooks
+│   └── index.js        # Hook exports
+├── services/           # API services (called by hooks)
 │   ├── apiConfig.js    # Centralized API configuration
-│   ├── AIService.js    # AI-related API calls
+│   ├── GraphQLService.js # GraphQL API calls
 │   └── ...             # Other services
-└── index.js            # Entry point
+├── config/             # Configuration files
+│   └── queryConfig.js  # React Query cache config per service
+└── index.js            # Entry point with QueryClientProvider
+```
+
+### Data Fetching with React Query
+- **Always use React Query hooks for data fetching** (don't use useEffect for API calls)
+- Create custom hooks in `hooks/` for each API operation
+- Use specific hooks (e.g., `useProcessNaturalLanguage`) not generic hooks
+- Services should only contain API call logic, not state management
+- React Query provides built-in loading, error, and caching states
+- No manual state management for `loading` or `error` - use `isPending` and `error` from hooks
+- Configure cache settings per service in `config/queryConfig.js`
+- Currently caching is disabled (`gcTime: 0, staleTime: 0`) for all services
+- Cache can be enabled per service when needed by updating queryConfig.js
+
+#### Data Fetching Pattern
+```javascript
+// ❌ OLD: Manual state management with useEffect
+const [data, setData] = useState(null);
+const [loading, setLoading] = useState(false);
+const [error, setError] = useState(null);
+
+useEffect(() => {
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const result = await SomeService.getData();
+      setData(result);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  fetchData();
+}, []);
+
+// ✅ NEW: Use React Query hooks
+const { mutate, isPending, error, data } = useProcessNaturalLanguage({
+  onSuccess: (response) => {
+    // Handle success
+  }
+});
+
+const handleQuery = (query) => {
+  mutate({ message: query, conversationHistory: [] });
+};
 ```
 
 ### Services & API Calls
-- Use `axios` for all HTTP requests
+- Services contain pure API call logic (no state management)
+- Use `axios` for all HTTP requests within services
 - Centralize API configuration in `services/apiConfig.js`
-- Create service files for different API domains (AIService, QueriesService, etc.)
-- Always handle errors with try/catch or `.catch()`
-- Show loading states during API calls
-- Display user-friendly error messages
+- Create service files for different API domains (GraphQLService, etc.)
+- Services are called by React Query hooks, not directly from components
+- Always handle errors with try/catch
+- Keep services focused on API communication only
 
 ### State Management
-- Use `useState` for component-local state
-- Use `useContext` for shared state (theme, user preferences)
-- Consider lifting state up when multiple components need it
+- **UI State (local)**: Use `useState` for toggles, form inputs, modals, etc.
+- **Server State (remote)**: Use React Query hooks for API data
+- **Shared UI State**: Use `useContext` for theme, user preferences
+- Consider lifting state up when multiple components need the same UI state
 - Avoid prop drilling - use context when appropriate
+- Never use useState/useEffect for data fetching - use React Query hooks
 
 ### Error Handling
 - Always implement error boundaries for critical sections
@@ -108,11 +163,13 @@ frontend/src/
 - Provide fallback UI for error states
 
 ### Performance Optimization
+- React Query handles request deduplication and caching automatically
 - Use `React.memo()` for expensive components that re-render frequently
 - Memoize callbacks with `useCallback` when passing to child components
 - Memoize computed values with `useMemo` for expensive calculations
 - Lazy load routes with `React.lazy()` and `Suspense`
 - Optimize images and assets
+- Enable caching in queryConfig.js when appropriate for performance gains
 
 ### Common Patterns
 
@@ -131,19 +188,53 @@ const MyComponent = () => {
 };
 ```
 
-#### API Calls
+#### Data Fetching with React Query
 ```javascript
-import axios from 'axios';
-import { apiConfig } from '../services/apiConfig';
+import { useProcessNaturalLanguage } from '../hooks';
 
-const fetchData = async () => {
-  try {
-    const response = await axios.get('/api/endpoint', apiConfig);
-    return response.data;
-  } catch (error) {
-    console.error('API Error:', error);
-    throw error;
-  }
+const MyComponent = () => {
+  const { mutate, isPending, error, data } = useProcessNaturalLanguage({
+    onSuccess: (response) => {
+      console.log('Query successful:', response);
+    },
+    onError: (err) => {
+      console.error('Query failed:', err);
+    }
+  });
+
+  const handleSubmit = (query) => {
+    mutate({ message: query, conversationHistory: [] });
+  };
+
+  if (isPending) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+
+  return <div>{/* Your UI */}</div>;
+};
+```
+
+#### Creating New React Query Hooks
+```javascript
+// In hooks/useGraphQL.js
+export const useYourOperation = (options = {}) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (params) => GraphQLService.yourOperation(params),
+    gcTime: options.gcTime ?? 0,
+    onSuccess: (data, variables, context) => {
+      if (options.onSuccess) {
+        options.onSuccess(data, variables, context);
+      }
+      if (options.invalidateQueries) {
+        options.invalidateQueries.forEach(queryKey => {
+          queryClient.invalidateQueries({ queryKey });
+        });
+      }
+    },
+    onError: options.onError,
+    ...options,
+  });
 };
 ```
 
@@ -182,21 +273,27 @@ const fetchData = async () => {
 - Format code consistently
 
 ### Common Mistakes to Avoid
-1. ❌ Trailing backslashes in object literals: `{ key: 'value',\ }`
-2. ❌ Missing dependencies in useEffect
-3. ❌ Forgetting to clean up subscriptions
-4. ❌ Mutating state directly
-5. ❌ Not handling loading/error states
-6. ❌ Prop drilling instead of using context
-7. ❌ Creating functions inside render without useCallback
+1. ❌ Using useEffect + useState for data fetching (use React Query hooks instead)
+2. ❌ Calling services directly from components (use React Query hooks)
+3. ❌ Manual loading/error state management for API calls (use isPending/error from hooks)
+4. ❌ Trailing backslashes in object literals: `{ key: 'value',\ }`
+5. ❌ Missing dependencies in useEffect
+6. ❌ Forgetting to clean up subscriptions
+7. ❌ Mutating state directly
+8. ❌ Prop drilling instead of using context
+9. ❌ Creating functions inside render without useCallback
 
 ### Best Practices
-1. ✅ Always check for syntax errors before committing
-2. ✅ Test components in both light and dark modes
-3. ✅ Handle all async operations properly
-4. ✅ Implement proper loading states
-5. ✅ Use error boundaries for critical sections
-6. ✅ Optimize re-renders with React.memo when needed
-7. ✅ Keep components under 200 lines when possible
-8. ✅ Extract reusable logic into custom hooks
+1. ✅ Use React Query hooks for all data fetching (never useEffect + setState)
+2. ✅ Create specific custom hooks for each API operation (not generic hooks)
+3. ✅ Use isPending and error from React Query (no manual loading/error state)
+4. ✅ Configure cache settings per service in config/queryConfig.js
+5. ✅ Always check for syntax errors before committing
+6. ✅ Test components in both light and dark modes
+7. ✅ Use error boundaries for critical sections
+8. ✅ Optimize re-renders with React.memo when needed
+9. ✅ Keep components under 200 lines when possible
+10. ✅ Extract reusable logic into custom hooks
+11. ✅ Do not add stuff into the readme automatically
+12. ✅ Do not add comments where not required
 

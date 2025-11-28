@@ -103,7 +103,10 @@ function App() {
         </div>
         
         {currentView === 'queries-list' ? (
-          <QueriesList onQuerySelect={handleQuerySelect} />
+          <QueriesList 
+            onQuerySelect={handleQuerySelect}
+            onNavigate={handleSidebarNavigation}
+          />
         ) : currentView === 'combined-dashboard' ? (
           <CombinedDashboard />
         ) : (

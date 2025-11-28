@@ -180,3 +180,36 @@ CREATE INDEX idx_demo_employees_dept ON demo_hrms.employees(department_id);
 CREATE INDEX idx_demo_employees_status ON demo_hrms.employees(status);
 CREATE INDEX idx_demo_attendance_employee ON demo_hrms.attendance(employee_id);
 CREATE INDEX idx_demo_attendance_date ON demo_hrms.attendance(date);
+
+-- =============================================================================
+-- DEMO VIEWS
+-- =============================================================================
+
+-- View: Customer Order Summary
+CREATE OR REPLACE VIEW demo_ecommerce.customer_order_summary_view AS
+SELECT 
+    c.customer_id,
+    c.first_name,
+    c.last_name,
+    c.email,
+    COUNT(o.order_id) as total_orders,
+    COALESCE(SUM(o.total_amount), 0) as total_spent,
+    MAX(o.order_date) as last_order_date
+FROM demo_ecommerce.customers c
+LEFT JOIN demo_ecommerce.orders o ON c.customer_id = o.customer_id
+GROUP BY c.customer_id, c.first_name, c.last_name, c.email;
+
+-- Materialized View: Product Sales Summary
+CREATE MATERIALIZED VIEW IF NOT EXISTS demo_ecommerce.product_sales_summary_mv AS
+SELECT 
+    p.product_id,
+    p.product_name,
+    p.category,
+    COUNT(oi.order_item_id) as times_sold,
+    COALESCE(SUM(oi.quantity), 0) as total_quantity_sold,
+    COALESCE(SUM(oi.total_price), 0) as total_revenue
+FROM demo_ecommerce.products p
+LEFT JOIN demo_ecommerce.order_items oi ON p.product_id = oi.product_id
+GROUP BY p.product_id, p.product_name, p.category;
+
+CREATE INDEX idx_mv_product_sales_id ON demo_ecommerce.product_sales_summary_mv(product_id);

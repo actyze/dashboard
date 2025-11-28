@@ -20,6 +20,7 @@ RUN pip install spacy
 
 # Copy application code and model downloader
 COPY schema_service.py download_models.py ./
+COPY app ./app
 COPY .env* ./
 
 # Create directory for model cache

@@ -55,7 +55,7 @@ const Sidebar = ({ isCollapsed, onToggle, currentView, onNavigate }) => {
     {
       section: 'Work with data',
       items: [
-        { id: 'combined-dashboard', label: 'Dashboard', icon: <DashboardIcon />, view: 'combined-dashboard' },
+        { id: 'dashboards-list', label: 'Dashboards', icon: <DashboardIcon />, view: 'dashboards-list' },
         { id: 'queries-list', label: 'Queries', icon: <QueriesIcon />, view: 'queries-list' },
         { id: 'home', label: 'Home', icon: <HomeIcon /> },
         { id: 'monitoring', label: 'Monitoring', icon: <MonitoringIcon /> },
@@ -70,33 +70,39 @@ const Sidebar = ({ isCollapsed, onToggle, currentView, onNavigate }) => {
     }
   ];
 
-  const MenuItem = ({ item, section }) => (
-    <button
-      onClick={() => {
-        if (item.view && onNavigate) {
-          onNavigate(item.view);
-        }
-      }}
-      className={`
-        w-full flex items-center px-3 py-2.5 text-left rounded-lg transition-all duration-200
-        ${(item.view && currentView === item.view) || (item.id === 'queries-list' && currentView === 'query-page')
-          ? 'bg-blue-600 text-white shadow-sm' 
-          : isDark 
-            ? 'text-gray-300 hover:bg-gray-700 hover:text-white'
-            : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
-        }
-        ${isCollapsed ? 'justify-center' : 'justify-start'}
-        group
-      `}
-    >
-      <span className={`flex-shrink-0 ${!isCollapsed ? 'mr-3' : ''}`}>
-        {item.icon}
-      </span>
-      {!isCollapsed && (
-        <span className="text-sm font-medium">{item.label}</span>
-      )}
-    </button>
-  );
+  const MenuItem = ({ item, section }) => {
+    const isActive = (item.view && currentView === item.view) || 
+                     (item.id === 'queries-list' && currentView === 'query-page') ||
+                     (item.id === 'dashboards-list' && currentView === 'combined-dashboard');
+    
+    return (
+      <button
+        onClick={() => {
+          if (item.view && onNavigate) {
+            onNavigate(item.view);
+          }
+        }}
+        className={`
+          w-full flex items-center px-3 py-2.5 text-left rounded-lg transition-all duration-200
+          ${isActive
+            ? 'bg-blue-600 text-white shadow-sm' 
+            : isDark 
+              ? 'text-gray-300 hover:bg-gray-700 hover:text-white'
+              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+          }
+          ${isCollapsed ? 'justify-center' : 'justify-start'}
+          group
+        `}
+      >
+        <span className={`flex-shrink-0 ${!isCollapsed ? 'mr-3' : ''}`}>
+          {item.icon}
+        </span>
+        {!isCollapsed && (
+          <span className="text-sm font-medium">{item.label}</span>
+        )}
+      </button>
+    );
+  };
 
   const SectionHeader = ({ title }) => (
     !isCollapsed && (

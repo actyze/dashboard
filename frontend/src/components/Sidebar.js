@@ -1,27 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router';
 import { useTheme } from '../contexts/ThemeContext';
-import { Text, Button } from './ui';
+import { Text } from './ui';
 
-const Sidebar = ({ isCollapsed, onToggle, currentView, onNavigate }) => {
-  const { isDark } = useTheme();
+const Sidebar = ({ isCollapsed, onToggle }) => {
+  const { isDark, toggleTheme } = useTheme();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const menuRef = useRef(null);
 
-  // Icons
-  const HomeIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-    </svg>
-  );
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowSettingsMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const QueriesIcon = () => (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-    </svg>
-  );
-
-
-  const MonitoringIcon = () => (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
     </svg>
   );
 
@@ -31,17 +36,16 @@ const Sidebar = ({ isCollapsed, onToggle, currentView, onNavigate }) => {
     </svg>
   );
 
-
-  const ComputeIcon = () => (
+  const SettingsIcon = () => (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
   );
 
   const AdminIcon = () => (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
     </svg>
   );
 
@@ -55,31 +59,28 @@ const Sidebar = ({ isCollapsed, onToggle, currentView, onNavigate }) => {
     {
       section: 'Work with data',
       items: [
-        { id: 'dashboards-list', label: 'Dashboards', icon: <DashboardIcon />, view: 'dashboards-list' },
-        { id: 'queries-list', label: 'Queries', icon: <QueriesIcon />, view: 'queries-list' },
-        { id: 'home', label: 'Home', icon: <HomeIcon /> },
-        { id: 'monitoring', label: 'Monitoring', icon: <MonitoringIcon /> },
+        { id: 'dashboards', label: 'Dashboards', icon: <DashboardIcon />, path: '/dashboards' },
+        { id: 'queries', label: 'Queries', icon: <QueriesIcon />, path: '/queries' }
       ]
     },
     {
       section: 'Manage',
       items: [
-        { id: 'compute', label: 'Compute', icon: <ComputeIcon /> },
-        { id: 'admin', label: 'Admin', icon: <AdminIcon /> },
+        { id: 'settings', label: 'Preferences', icon: <SettingsIcon />, path: '/settings' },
+        { id: 'admin', label: 'Admin', icon: <AdminIcon />, path: '/admin' }
       ]
     }
   ];
 
-  const MenuItem = ({ item, section }) => {
-    const isActive = (item.view && currentView === item.view) || 
-                     (item.id === 'queries-list' && currentView === 'query-page') ||
-                     (item.id === 'dashboards-list' && currentView === 'combined-dashboard');
+  const MenuItem = ({ item }) => {
+    const isActive = location.pathname === item.path || 
+                     location.pathname.startsWith(item.path.replace(/s$/, '/'));
     
     return (
       <button
         onClick={() => {
-          if (item.view && onNavigate) {
-            onNavigate(item.view);
+          if (item.path) {
+            navigate(item.path);
           }
         }}
         className={`
@@ -104,11 +105,11 @@ const Sidebar = ({ isCollapsed, onToggle, currentView, onNavigate }) => {
     );
   };
 
-  const SectionHeader = ({ title }) => (
+  const SectionHeader = ({ title, isFirst }) => (
     !isCollapsed && (
       <Text 
         variant="caption" 
-        className={`uppercase tracking-wider font-semibold px-3 mt-6 mb-3 ${
+        className={`tracking-wide font-medium px-3 ${isFirst ? 'mt-0' : 'mt-5'} mb-2 text-xs ${
           isDark ? 'text-gray-400' : 'text-gray-500'
         }`}
       >
@@ -154,10 +155,10 @@ const Sidebar = ({ isCollapsed, onToggle, currentView, onNavigate }) => {
       <div className="flex-1 overflow-y-auto p-3 space-y-1">
         {menuItems.map((section, sectionIndex) => (
           <div key={section.section}>
-            <SectionHeader title={section.section} />
+            <SectionHeader title={section.section} isFirst={sectionIndex === 0} />
             <div className={`space-y-1 ${isCollapsed && sectionIndex > 0 ? 'mt-4' : ''}`}>
               {section.items.map((item) => (
-                <MenuItem key={item.id} item={item} section={section.section} />
+                <MenuItem key={item.id} item={item} />
               ))}
             </div>
           </div>
@@ -165,22 +166,95 @@ const Sidebar = ({ isCollapsed, onToggle, currentView, onNavigate }) => {
       </div>
 
       {/* User Section */}
-      <div className={`p-3 border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-        <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
-          <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
-            UV
-          </div>
-          {!isCollapsed && (
-            <div className="flex-1 min-w-0">
-              <Text className={`font-medium text-sm truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                Uddish Verma
-              </Text>
-              <Text className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                PUBLIC
-              </Text>
+      <div className={`p-3 border-t ${isDark ? 'border-gray-700' : 'border-gray-200'} relative`} ref={menuRef}>
+        <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+              UV
             </div>
+            {!isCollapsed && (
+              <div className="flex-1 min-w-0">
+                <Text className={`font-medium text-sm truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  Uddish Verma
+                </Text>
+                <Text className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  PUBLIC
+                </Text>
+              </div>
+            )}
+          </div>
+          
+          {!isCollapsed && (
+            <button
+              onClick={() => setShowSettingsMenu(!showSettingsMenu)}
+              className={`
+                p-1.5 rounded-lg transition-colors
+                ${isDark 
+                  ? 'text-gray-400 hover:text-white hover:bg-gray-700' 
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }
+              `}
+              title="Settings"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
           )}
         </div>
+
+        {/* Settings Dropdown Menu */}
+        {showSettingsMenu && !isCollapsed && (
+          <div className={`
+            absolute bottom-full left-3 right-3 mb-2 rounded-lg shadow-lg border overflow-hidden
+            ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}
+          `}>
+            <button
+              onClick={() => {
+                toggleTheme();
+                setShowSettingsMenu(false);
+              }}
+              className={`
+                w-full px-4 py-2.5 text-left text-sm flex items-center space-x-3 transition-colors
+                ${isDark 
+                  ? 'text-gray-200 hover:bg-gray-700' 
+                  : 'text-gray-700 hover:bg-gray-50'
+                }
+              `}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {isDark ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                )}
+              </svg>
+              <span>{isDark ? 'Light mode' : 'Dark mode'}</span>
+            </button>
+            
+            <div className={`h-px ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`}></div>
+            
+            <button
+              onClick={() => {
+                setShowSettingsMenu(false);
+                navigate('/login');
+              }}
+              className={`
+                w-full px-4 py-2.5 text-left text-sm flex items-center space-x-3 transition-colors
+                ${isDark 
+                  ? 'text-gray-200 hover:bg-gray-700' 
+                  : 'text-gray-700 hover:bg-gray-50'
+                }
+              `}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              <span>Logout</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

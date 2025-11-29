@@ -1,147 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  AppBar,
-  Toolbar,
-  Typography,
-  CircularProgress,
-  Box
-} from '@mui/material';
-import axios from 'axios';
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router';
+import Layout from './components/Layout';
+import Login from './components/Login';
+import Signup from './components/Signup';
 import QueryPage from './components/QueryPage';
 import QueriesList from './components/QueriesList';
 import Dashboard from './components/Dashboard';
 import DashboardsList from './components/DashboardsList';
-import Sidebar from './components/Sidebar';
-import { Alert } from './components/ui';
-import ThemeToggle from './components/ThemeToggle';
-import { useTheme } from './contexts/ThemeContext';
 
 function App() {
-  const { isDark } = useTheme();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [apiStatus, setApiStatus] = useState(null);
-  const [currentView, setCurrentView] = useState('dashboards-list'); // 'combined-dashboard', 'dashboards-list', 'queries-list' or 'query-page'
-  const [selectedQuery, setSelectedQuery] = useState(null);
-  const [selectedDashboard, setSelectedDashboard] = useState(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  
-  // Check backend API status on component mount - DISABLED FOR FRONTEND-ONLY DEVELOPMENT
-  useEffect(() => {
-    // Mock successful API status for frontend-only development
-    setApiStatus({ status: 'Frontend-only mode' });
-    setError(null);
-    setLoading(false);
-  }, []);
-
-  // Handle query selection from the queries list
-  const handleQuerySelect = (query) => {
-    setSelectedQuery(query);
-    setCurrentView('query-page');
-  };
-
-  // Handle going back to queries list
-  const handleBackToQueriesList = () => {
-    setCurrentView('queries-list');
-    setSelectedQuery(null);
-  };
-
-  // Handle dashboard selection from the dashboards list
-  const handleDashboardSelect = (dashboard) => {
-    setSelectedDashboard(dashboard);
-    setCurrentView('combined-dashboard');
-  };
-
-  // Handle going back to dashboards list
-  const handleBackToDashboardsList = () => {
-    setCurrentView('dashboards-list');
-    setSelectedDashboard(null);
-  };
-
-  // Handle sidebar navigation
-  const handleSidebarNavigation = (view) => {
-    setCurrentView(view);
-    if (view === 'queries-list') {
-      setSelectedQuery(null);
-    }
-    if (view === 'dashboards-list') {
-      setSelectedDashboard(null);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
-        <div className="text-center">
-          <CircularProgress />
-          <Typography className="mt-4" color="textSecondary">
-            Loading dashboard...
-          </Typography>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
-        <div className="max-w-md w-full px-6">
-          <Alert variant="error" className="mb-4">
-            {error}
-          </Alert>
-          <div className="text-center">
-            <button 
-              onClick={() => window.location.reload()} 
-              className="text-blue-600 hover:text-blue-700 font-medium"
-            >
-              Try again
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className={`${isDark ? 'dark' : ''} h-screen flex`}>
-      {/* Sidebar */}
-      <Sidebar 
-        isCollapsed={sidebarCollapsed} 
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-        currentView={currentView}
-        onNavigate={handleSidebarNavigation}
-      />
-      
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Global header with theme toggle */}
-        <div className="fixed top-4 right-4 z-50">
-          <ThemeToggle />
-        </div>
-        
-        {currentView === 'queries-list' ? (
-          <QueriesList 
-            onQuerySelect={handleQuerySelect}
-            onNavigate={handleSidebarNavigation}
-          />
-        ) : currentView === 'dashboards-list' ? (
-          <DashboardsList 
-            onDashboardSelect={handleDashboardSelect}
-            onNavigate={handleSidebarNavigation}
-          />
-        ) : currentView === 'combined-dashboard' ? (
-          <Dashboard 
-            selectedDashboard={selectedDashboard}
-            onBackToDashboardsList={handleBackToDashboardsList}
-          />
-        ) : (
-          <QueryPage 
-            selectedQuery={selectedQuery}
-            onBackToQueriesList={handleBackToQueriesList}
-          />
-        )}
-      </div>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        {/* Auth Routes */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+
+        {/* Main App Routes with Layout */}
+        <Route element={<Layout />}>
+          <Route path="/" element={<DashboardsList />} />
+          <Route path="/dashboards" element={<DashboardsList />} />
+          <Route path="/dashboard/:id" element={<Dashboard />} />
+          <Route path="/queries" element={<QueriesList />} />
+          <Route path="/query/:id" element={<QueryPage />} />
+        </Route>
+
+        {/* Catch all - redirect to home */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

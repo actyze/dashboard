@@ -29,6 +29,9 @@ class TrinoService:
     ) -> Dict[str, Any]:
         """Execute SQL query against Trino."""
         
+        # Strip whitespace and trailing semicolon to prevent syntax errors
+        sql = sql.strip().rstrip(';')
+        
         self.logger.info(
             "Processing SQL execution request",
             sql=sql[:200] + "..." if len(sql) > 200 else sql,
@@ -86,28 +89,55 @@ class TrinoService:
         max_results: int,
         timeout_seconds: int
     ) -> Dict[str, Any]:
-        """Execute query via HTTP (placeholder implementation)."""
+        """Execute query using Trino Python client."""
         
-        # This is a placeholder implementation
-        # In a real scenario, you would use the Trino HTTP API or Python client
-        
-        # For demonstration, return mock data
-        if "SELECT" in sql.upper():
-            return {
-                "columns": ["id", "name", "value"],
-                "rows": [
-                    [1, "Sample Row 1", 100.0],
-                    [2, "Sample Row 2", 200.0],
-                    [3, "Sample Row 3", 300.0]
-                ],
-                "row_count": 3
+        def _run_query():
+            import trino
+            from trino.dbapi import connect
+            from trino.auth import BasicAuthentication
+            
+            auth = None
+            if self.password:
+                auth = BasicAuthentication(self.user, self.password)
+            
+            # Connection arguments
+            conn_args = {
+                "host": self.host,
+                "port": self.port,
+                "user": self.user,
+                "catalog": self.catalog,
+                "schema": self.schema,
+                "http_scheme": 'https' if settings.trino_ssl else 'http',
             }
-        else:
+            if auth:
+                conn_args["auth"] = auth
+                
+            conn = connect(**conn_args)
+            cur = conn.cursor()
+            cur.execute(sql)
+            
+            # Fetch results
+            rows = cur.fetchmany(max_results)
+            
+            # Get columns
+            columns = []
+            if cur.description:
+                columns = [desc[0] for desc in cur.description]
+                
             return {
-                "columns": ["result"],
-                "rows": [["Query executed successfully"]],
-                "row_count": 1
+                "columns": columns,
+                "rows": rows,
+                "row_count": len(rows)
             }
+
+        loop = asyncio.get_event_loop()
+        try:
+            # Run synchronous Trino call in thread pool
+            result = await loop.run_in_executor(None, _run_query)
+            return result
+        except Exception as e:
+            self.logger.error("Trino client execution failed", error=str(e))
+            raise e
     
     def _classify_error(self, error_message: str) -> str:
         """Classify error type based on error message."""

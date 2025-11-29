@@ -15,6 +15,8 @@ class ExecuteSQLRequest(BaseModel):
     sql: str
     max_results: Optional[int] = 100
     timeout_seconds: Optional[int] = 30
+    nl_query: Optional[str] = None
+    conversation_history: Optional[List[str]] = []
 
 class QueryRequest(BaseModel):
     input: str
@@ -38,7 +40,9 @@ async def execute_sql(request: ExecuteSQLRequest):
     result = await orchestration_service.execute_sql_directly(
         request.sql,
         request.max_results,
-        request.timeout_seconds
+        request.timeout_seconds,
+        request.nl_query,
+        request.conversation_history
     )
     return result
 

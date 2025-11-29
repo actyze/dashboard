@@ -15,6 +15,7 @@ pydantic-settings==2.1.0
 # Database & Caching
 sqlalchemy[asyncio]==2.0.23
 asyncpg==0.29.0
+trino>=0.328.0
 cachetools==5.3.2
 async-lru==2.0.4
 
@@ -36,4 +37,3 @@ typing-extensions==4.8.0
 # Development
 pytest==7.4.3
 pytest-asyncio==0.21.1
-httpx==0.25.2

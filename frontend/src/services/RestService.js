@@ -35,12 +35,14 @@ export class RestService {
    * @param {number} timeoutSeconds - Timeout for execution in seconds (default: 30)
    * @returns {Promise} API response containing query results
    */
-  static async executeSql(sql, maxResults = 100, timeoutSeconds = 30) {
+  static async executeSql(sql, maxResults = 100, timeoutSeconds = 30, nlQuery = null, conversationHistory = []) {
     const endpoint = '/api/execute-sql';
     const payload = {
       sql,
       max_results: maxResults,
-      timeout_seconds: timeoutSeconds
+      timeout_seconds: timeoutSeconds,
+      nl_query: nlQuery,
+      conversation_history: conversationHistory
     };
 
     try {

@@ -7,7 +7,7 @@ import QueryResults from './QueryResults';
 import Chart from './Chart';
 import { QueryExecutionService } from '../services/QueryExecutionService';
 
-const CombinedDashboard = () => {
+const Dashboard = () => {
   const { isDark } = useTheme();
   const [tiles, setTiles] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -245,7 +245,7 @@ const CombinedDashboard = () => {
                   variant="h5" 
                   className="font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent dark:from-white dark:to-gray-300"
                 >
-                  Combined Dashboard
+                  Dashboard
                 </Typography>
                 <Typography 
                   className="mt-0.5 text-sm"
@@ -389,5 +389,5 @@ const CombinedDashboard = () => {
   );
 };
 
-export default CombinedDashboard;
+export default Dashboard;
 

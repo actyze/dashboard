@@ -23,10 +23,11 @@ const QueryPage = ({ selectedQuery, onBackToQueriesList }) => {
   const [queryError, setQueryError] = useState(null);
   const [queryResults, setQueryResults] = useState(null);
   const [chartData, setChartData] = useState(null);
+  const [manualQueryLoading, setManualQueryLoading] = useState(false);
 
   const { 
     mutate: processNaturalLanguage, 
-    isPending: queryLoading 
+    isPending: aiQueryLoading 
   } = useProcessNaturalLanguage({
     onSuccess: (response) => {
       if (response.success && response.generatedSql) {
@@ -56,15 +57,12 @@ const QueryPage = ({ selectedQuery, onBackToQueriesList }) => {
     });
   };
 
-  // Handle SQL query execution
   const handleExecuteQuery = async () => {
-    setQueryLoading(true);
+    setManualQueryLoading(true);
     setQueryError(null);
     
     try {
-      // Simulate query execution
       setTimeout(() => {
-        // Mock results with more data for testing scroll
         const regions = ['North America', 'Europe', 'Asia Pacific', 'South America', 'Middle East', 'Africa', 'Oceania'];
         const mockData = [];
         
@@ -90,7 +88,6 @@ const QueryPage = ({ selectedQuery, onBackToQueriesList }) => {
           rowCount: mockData.length
         };
 
-        // Mock chart data
         const mockChartData = {
           chart: {
             type: 'bar',
@@ -105,13 +102,15 @@ const QueryPage = ({ selectedQuery, onBackToQueriesList }) => {
         
         setQueryResults(mockResults);
         setChartData(mockChartData);
-        setQueryLoading(false);
+        setManualQueryLoading(false);
       }, 1500);
     } catch (error) {
       setQueryError('Failed to execute query');
-      setQueryLoading(false);
+      setManualQueryLoading(false);
     }
   };
+
+  const queryLoading = aiQueryLoading || manualQueryLoading;
 
 
   return (

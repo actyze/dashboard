@@ -314,11 +314,13 @@ class OrchestrationService:
         self,
         sql: str,
         max_results: int = 100,
-        timeout_seconds: int = 30
+        timeout_seconds: int = 30,
+        nl_query: Optional[str] = None,
+        conversation_history: Optional[List[str]] = None
     ) -> Dict[str, Any]:
-        """Execute SQL directly without natural language processing."""
+        """Execute SQL directly, with optional retry logic if NL query is provided."""
         
-        self.logger.info("Executing SQL directly", sql=sql[:100])
+        self.logger.info("Executing SQL directly", sql=sql[:100], has_nl_context=bool(nl_query))
         
         # Check cache first
         cache_params = {"max_results": max_results, "timeout": timeout_seconds}
@@ -334,7 +336,27 @@ class OrchestrationService:
                 "error": cached_result.get("error")
             }
         
-        result = await self.trino_service.execute_query(sql, max_results, timeout_seconds)
+        # If NL context provided, use retry logic
+        if nl_query:
+            conversation_history = conversation_history or []
+            
+            # Get schema recommendations for correction context
+            cached_schema = await self.cache_service.get_schema_recommendations(
+                nl_query, conversation_history
+            )
+            schema_recs_dict = cached_schema if cached_schema else {"success": True, "recommendations": []}
+            
+            result = await self.trino_service.execute_with_retry(
+                nl_query,
+                sql,
+                max_results,
+                timeout_seconds,
+                settings.max_retries,
+                self._create_correction_callback(schema_recs_dict, conversation_history)
+            )
+        else:
+            # Simple execution
+            result = await self.trino_service.execute_query(sql, max_results, timeout_seconds)
         
         # Cache successful results
         if result.get("success"):

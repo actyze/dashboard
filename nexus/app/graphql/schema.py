@@ -14,10 +14,7 @@ from app.models_extended import (
     SavedQueryInputGQL, SavedQueryGQL, QueryHistoryItemGQL,
     DashboardStatsGQL
 )
-from app.services.orchestration_service import OrchestrationService
-
-# Global orchestration service instance
-orchestration_service = OrchestrationService()
+from app.services.orchestration_service import orchestration_service
 
 
 @strawberry.type

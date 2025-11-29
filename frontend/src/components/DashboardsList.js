@@ -1,59 +1,69 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { Card, Text } from './ui';
-import { QueriesService } from '../services';
 
-const QueriesList = ({ onQuerySelect, onNavigate }) => {
+const DashboardsList = ({ onDashboardSelect, onNavigate }) => {
   const { isDark } = useTheme();
-  const [queries, setQueries] = useState([]);
+  const [dashboards, setDashboards] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    loadQueries();
+    loadDashboards();
   }, []);
 
-  const loadQueries = async () => {
+  const loadDashboards = () => {
     setLoading(true);
-    setError(null);
     
     try {
-      const response = await QueriesService.getAllQueries({
-        search: searchTerm
-      });
+      // Load dashboards from localStorage
+      const savedTiles = localStorage.getItem('dashboardTiles');
+      const savedDashboards = localStorage.getItem('savedDashboards') || '[]';
       
-      if (response.success) {
-        setQueries(response.data);
-      } else {
-        setError(response.message || 'Failed to load queries');
+      let dashboardsList = JSON.parse(savedDashboards);
+      
+      // If there are tiles but no dashboard list, create a default dashboard
+      if (savedTiles && dashboardsList.length === 0) {
+        dashboardsList = [{
+          id: 'default',
+          title: 'My Dashboard',
+          description: 'Default dashboard',
+          tilesCount: JSON.parse(savedTiles).length,
+          lastViewed: new Date().toLocaleDateString(),
+          lastUpdated: new Date().toLocaleDateString()
+        }];
       }
-    } catch (err) {
-      setError('An error occurred while loading queries');
+      
+      setDashboards(dashboardsList);
+    } catch (error) {
+      console.error('Error loading dashboards:', error);
+      setDashboards([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSearch = async (term) => {
+  const handleSearch = (term) => {
     setSearchTerm(term);
-    if (term.trim()) {
-      await loadQueries();
-    }
   };
+
+  const filteredDashboards = dashboards.filter(dashboard =>
+    dashboard.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    dashboard.description?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className={`h-full flex flex-col ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
       {/* Header */}
       <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b px-6 py-4`}>
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded bg-blue-500 flex items-center justify-center">
+          <div className="w-8 h-8 rounded bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
             <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 12a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1v-7z" />
             </svg>
           </div>
           <Text variant="h4" className="font-semibold">
-            Queries
+            Dashboards
           </Text>
         </div>
       </div>
@@ -78,7 +88,7 @@ const QueriesList = ({ onQuerySelect, onNavigate }) => {
               }
               focus:ring-1 focus:ring-blue-500 focus:border-blue-500
             `}
-            placeholder="Search queries and dashboards"
+            placeholder="Search dashboards"
           />
         </div>
       </div>
@@ -91,7 +101,7 @@ const QueriesList = ({ onQuerySelect, onNavigate }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card 
             className={`p-4 cursor-pointer transition-colors ${isDark ? 'bg-gray-800 hover:bg-gray-750' : 'bg-white hover:bg-gray-50'}`}
-            onClick={() => onQuerySelect(null)}
+            onClick={() => onDashboardSelect(null)}
           >
             <div className="flex items-center space-x-3">
               <div className={`w-8 h-8 rounded ${isDark ? 'bg-blue-600' : 'bg-blue-500'} flex items-center justify-center`}>
@@ -101,10 +111,10 @@ const QueriesList = ({ onQuerySelect, onNavigate }) => {
               </div>
               <div>
                 <Text variant="subtitle1" className="font-medium">
-                  New Query
+                  New Dashboard
                 </Text>
                 <Text color="secondary" className="text-xs">
-                  Create a SQL Worksheet
+                  Create a new dashboard
                 </Text>
               </div>
             </div>
@@ -112,20 +122,20 @@ const QueriesList = ({ onQuerySelect, onNavigate }) => {
           
           <Card 
             className={`p-4 cursor-pointer transition-colors ${isDark ? 'bg-gray-800 hover:bg-gray-750' : 'bg-white hover:bg-gray-50'}`}
-            onClick={() => onNavigate && onNavigate('dashboards-list')}
+            onClick={() => onNavigate && onNavigate('queries-list')}
           >
             <div className="flex items-center space-x-3">
               <div className={`w-8 h-8 rounded ${isDark ? 'bg-green-600' : 'bg-green-500'} flex items-center justify-center`}>
                 <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
               <div>
                 <Text variant="subtitle1" className="font-medium">
-                  View Dashboards
+                  View Queries
                 </Text>
                 <Text color="secondary" className="text-xs">
-                  Browse dashboards
+                  Browse SQL queries
                 </Text>
               </div>
             </div>
@@ -133,17 +143,17 @@ const QueriesList = ({ onQuerySelect, onNavigate }) => {
         </div>
       </div>
 
-      {/* Recently viewed section */}
+      {/* Dashboards List */}
       <div className="flex-1 px-6 overflow-hidden flex flex-col">
         <Text variant="h6" className="mb-4 font-medium">
-          Your Queries
+          Your Dashboards
         </Text>
         
         {/* Tabs */}
         <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
           <nav className="flex space-x-8">
             <button className="border-b-2 border-blue-500 pb-2 text-sm font-medium text-blue-600 dark:text-blue-400">
-              All queries
+              All dashboards
             </button>
             <button className="pb-2 text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
               Recent
@@ -151,13 +161,13 @@ const QueriesList = ({ onQuerySelect, onNavigate }) => {
           </nav>
         </div>
 
-        {/* Queries Table */}
+        {/* Dashboards Table */}
         <div className={`flex-1 ${isDark ? 'bg-gray-800' : 'bg-white'} rounded-lg border ${isDark ? 'border-gray-700' : 'border-gray-200'} overflow-hidden flex flex-col`}>
           {/* Table Header */}
           <div className={`px-6 py-3 border-b ${isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'}`}>
             <div className="grid grid-cols-12 gap-4 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               <div className="col-span-5">Title</div>
-              <div className="col-span-2">Type</div>
+              <div className="col-span-2">Tiles</div>
               <div className="col-span-2">Viewed</div>
               <div className="col-span-2">Updated</div>
               <div className="col-span-1"></div>
@@ -171,75 +181,66 @@ const QueriesList = ({ onQuerySelect, onNavigate }) => {
                 <div className="text-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
                   <Text color="secondary" className="mt-2 text-sm">
-                    Loading queries...
+                    Loading dashboards...
                   </Text>
                 </div>
               </div>
-            ) : error ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="text-center">
-                  <svg className="w-8 h-8 text-red-500 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                  </svg>
-                  <Text className="text-red-600 dark:text-red-400 font-medium">
-                    {error}
-                  </Text>
-                  <button 
-                    onClick={loadQueries}
-                    className="mt-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
-                  >
-                    Try Again
-                  </button>
-                </div>
-              </div>
-            ) : queries.length === 0 ? (
+            ) : filteredDashboards.length === 0 ? (
               <div className="flex items-center justify-center py-12">
                 <div className="text-center">
                   <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5z" />
                   </svg>
                   <Text color="secondary">
-                    No queries found
+                    No dashboards found
                   </Text>
                   <Text color="secondary" className="text-sm mt-1">
-                    {searchTerm ? 'Try adjusting your search' : 'Create your first query to get started'}
+                    {searchTerm ? 'Try adjusting your search' : 'Create your first dashboard to get started'}
                   </Text>
+                  {!searchTerm && (
+                    <button
+                      onClick={() => onDashboardSelect(null)}
+                      className="mt-4 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                    >
+                      Create Dashboard
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (
-              queries.map((query) => (
+              filteredDashboards.map((dashboard) => (
                 <div 
-                  key={query.id}
+                  key={dashboard.id}
                   className={`px-6 py-4 cursor-pointer transition-colors ${isDark ? 'hover:bg-gray-750' : 'hover:bg-gray-50'}`}
-                  onClick={() => onQuerySelect(query)}
+                  onClick={() => onDashboardSelect(dashboard)}
                 >
                   <div className="grid grid-cols-12 gap-4 items-center">
                     <div className="col-span-5 flex items-center space-x-3">
-                      <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 12a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1v-7z" />
                       </svg>
                       <div>
                         <Text className="font-medium">
-                          {query.title}
+                          {dashboard.title}
                         </Text>
                         <Text color="secondary" className="text-xs">
-                          {query.description}
+                          {dashboard.description}
                         </Text>
                       </div>
                     </div>
                     <div className="col-span-2">
                       <Text className="text-sm">
-                        SQL Worksheet
+                        {dashboard.tilesCount || 0} tiles
                       </Text>
                     </div>
                     <div className="col-span-2">
                       <Text color="secondary" className="text-sm">
-                        {query.lastViewed}
+                        {dashboard.lastViewed}
                       </Text>
                     </div>
                     <div className="col-span-2">
                       <Text color="secondary" className="text-sm">
-                        {query.lastUpdated}
+                        {dashboard.lastUpdated}
                       </Text>
                     </div>
                     <div className="col-span-1 flex justify-end">
@@ -260,4 +261,5 @@ const QueriesList = ({ onQuerySelect, onNavigate }) => {
   );
 };
 
-export default QueriesList;
+export default DashboardsList;
+

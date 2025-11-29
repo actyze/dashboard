@@ -9,7 +9,8 @@ import {
 import axios from 'axios';
 import QueryPage from './components/QueryPage';
 import QueriesList from './components/QueriesList';
-import CombinedDashboard from './components/CombinedDashboard';
+import Dashboard from './components/Dashboard';
+import DashboardsList from './components/DashboardsList';
 import Sidebar from './components/Sidebar';
 import { Alert } from './components/ui';
 import ThemeToggle from './components/ThemeToggle';
@@ -20,8 +21,9 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [apiStatus, setApiStatus] = useState(null);
-  const [currentView, setCurrentView] = useState('combined-dashboard'); // 'combined-dashboard', 'research-dashboard', 'queries-list' or 'query-page'
+  const [currentView, setCurrentView] = useState('dashboards-list'); // 'combined-dashboard', 'dashboards-list', 'queries-list' or 'query-page'
   const [selectedQuery, setSelectedQuery] = useState(null);
+  const [selectedDashboard, setSelectedDashboard] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
   // Check backend API status on component mount - DISABLED FOR FRONTEND-ONLY DEVELOPMENT
@@ -44,11 +46,26 @@ function App() {
     setSelectedQuery(null);
   };
 
+  // Handle dashboard selection from the dashboards list
+  const handleDashboardSelect = (dashboard) => {
+    setSelectedDashboard(dashboard);
+    setCurrentView('combined-dashboard');
+  };
+
+  // Handle going back to dashboards list
+  const handleBackToDashboardsList = () => {
+    setCurrentView('dashboards-list');
+    setSelectedDashboard(null);
+  };
+
   // Handle sidebar navigation
   const handleSidebarNavigation = (view) => {
     setCurrentView(view);
     if (view === 'queries-list') {
       setSelectedQuery(null);
+    }
+    if (view === 'dashboards-list') {
+      setSelectedDashboard(null);
     }
   };
 
@@ -107,8 +124,16 @@ function App() {
             onQuerySelect={handleQuerySelect}
             onNavigate={handleSidebarNavigation}
           />
+        ) : currentView === 'dashboards-list' ? (
+          <DashboardsList 
+            onDashboardSelect={handleDashboardSelect}
+            onNavigate={handleSidebarNavigation}
+          />
         ) : currentView === 'combined-dashboard' ? (
-          <CombinedDashboard />
+          <Dashboard 
+            selectedDashboard={selectedDashboard}
+            onBackToDashboardsList={handleBackToDashboardsList}
+          />
         ) : (
           <QueryPage 
             selectedQuery={selectedQuery}

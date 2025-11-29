@@ -23,7 +23,7 @@ const QueryPage = () => {
   const [activeView, setActiveView] = useState('results'); // 'results' or 'chart'
   const [sqlQuery, setSqlQuery] = useState(
     selectedQuery?.query || 
-    "SELECT customer_name, order_total, order_date\nFROM orders\nWHERE order_date >= '2024-01-01'\nORDER BY order_total DESC\nLIMIT 10;"
+    "SELECT customer_name, order_total, order_date\nFROM orders\nWHERE order_date >= DATE '2024-01-01'\nORDER BY order_total DESC\nLIMIT 10"
   );
   const [queryError, setQueryError] = useState(null);
   const [queryResults, setQueryResults] = useState(null);
@@ -59,7 +59,13 @@ const QueryPage = () => {
       setSqlQuery(commentPrefix + generatedSql);
       
       // Step 2: Execute SQL
-      const executeResponse = await RestService.executeSql(generatedSql);
+      // Pass natural language query for auto-correction context
+      const executeResponse = await RestService.executeSql(
+        generatedSql, 
+        100, 
+        30, 
+        naturalLanguageQuery
+      );
       
       if (!executeResponse.success) {
         throw new Error(executeResponse.error || 'Failed to execute SQL');

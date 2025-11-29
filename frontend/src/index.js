@@ -5,6 +5,19 @@ import App from './App';
 import { CssBaseline, ThemeProvider } from '@mui/material';
 import { createTheme } from '@mui/material/styles';
 import { ThemeProvider as CustomThemeProvider, useTheme } from './contexts/ThemeContext';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QUERY_CONFIG } from './config/queryConfig';
+
+// Create QueryClient with default configuration (no caching)
+// Different services can have different cache settings via QUERY_CONFIG
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: QUERY_CONFIG.rest, // Default to REST config
+    mutations: {
+      retry: 1,
+    },
+  },
+});
 
 const AppWithTheme = () => {
   const { isDark } = useTheme();
@@ -36,8 +49,10 @@ const AppWithTheme = () => {
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <CustomThemeProvider>
-      <AppWithTheme />
-    </CustomThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <CustomThemeProvider>
+        <AppWithTheme />
+      </CustomThemeProvider>
+    </QueryClientProvider>
   </React.StrictMode>
 );

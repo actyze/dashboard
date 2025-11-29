@@ -8,7 +8,7 @@ import Chart from './Chart';
 import ViewToggle from './ViewToggle';
 import ChartTypeSelector from './ChartTypeSelector';
 import { Card, Text, Button } from './ui';
-import { AIService } from '../services';
+import { useProcessNaturalLanguage } from '../hooks/useGraphQL';
 
 const QueryPage = ({ selectedQuery, onBackToQueriesList }) => {
   const { isDark } = useTheme();
@@ -20,49 +20,40 @@ const QueryPage = ({ selectedQuery, onBackToQueriesList }) => {
     selectedQuery?.query || 
     "SELECT customer_name, order_total, order_date\nFROM orders\nWHERE order_date >= '2024-01-01'\nORDER BY order_total DESC\nLIMIT 10;"
   );
-  const [queryLoading, setQueryLoading] = useState(false);
   const [queryError, setQueryError] = useState(null);
   const [queryResults, setQueryResults] = useState(null);
   const [chartData, setChartData] = useState(null);
 
+  const { 
+    mutate: processNaturalLanguage, 
+    isPending: queryLoading 
+  } = useProcessNaturalLanguage({
+    onSuccess: (response) => {
+      if (response.success && response.generatedSql) {
+        const generatedSQL = `-- Generated from natural language query\n${response.generatedSql}`;
+        setSqlQuery(generatedSQL);
+        setQueryResults(response.queryResults);
+        setChartData(response.chartData);
+        setQueryError(null);
+      } else {
+        setQueryError(response.error || 'Failed to process natural language query');
+      }
+    },
+    onError: (error) => {
+      console.error('Natural language processing failed:', error);
+      setQueryError(error.message || 'Failed to process natural language query');
+    }
+  });
+
   // Handle AI query submission
   const handleAIQuery = async (naturalLanguageQuery) => {
-    setQueryLoading(true);
     setQueryError(null);
     
-    try {
-      const response = await AIService.convertToSQL(naturalLanguageQuery);
-      
-      if (response.success && response.data) {
-        const generatedSQL = `-- Generated from: "${response.data.originalQuery}"\n${response.data.sqlQuery}`;
-        setSqlQuery(generatedSQL);
-        
-        if (response.data.queryResults) {
-          console.log('Setting queryResults:', response.data.queryResults);
-          setQueryResults(response.data.queryResults);
-          
-          const mockChartData = {
-            chart: {
-              type: 'bar',
-              config: {
-                xField: response.data.queryResults.columns[0]?.name || 'x',
-                yField: response.data.queryResults.columns[1]?.name || 'y'
-              }
-            },
-            data: response.data.queryResults,
-            cached: false
-          };
-          setChartData(mockChartData);
-        }
-      } else {
-        setQueryError(response.message || 'Failed to process natural language query');
-      }
-    } catch (error) {
-      console.error('AI query failed:', error);
-      setQueryError(error.message || 'Failed to process natural language query');
-    } finally {
-      setQueryLoading(false);
-    }
+    // Use the GraphQL mutation hook
+    processNaturalLanguage({
+      message: naturalLanguageQuery,
+      conversationHistory: []
+    });
   };
 
   // Handle SQL query execution

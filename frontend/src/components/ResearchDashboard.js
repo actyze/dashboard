@@ -15,20 +15,40 @@ import SqlQuery from './SqlQuery';
 import Chart from './Chart';
 import QueryResults from './QueryResults';
 import { useTheme } from '../contexts/ThemeContext';
-import { AIService } from '../services';
+import { useProcessNaturalLanguage } from '../hooks';
+import { formatSuccessMessage, formatErrorMessage } from '../utils/dataTransformers';
 
 const Dashboard = () => {
   const { isDark } = useTheme();
-  // State for the SQL query
   const [sqlQuery, setSqlQuery] = useState("SELECT column1,column3\nFROM table_name\nWHERE column1='example'\nORDER BY column2;");
-  // State for backend response
   const [backendResponse, setBackendResponse] = useState('');
-  
-  // State for query execution and results
-  const [queryLoading, setQueryLoading] = useState(false);
   const [queryError, setQueryError] = useState(null);
   const [queryResults, setQueryResults] = useState(null);
   const [chartData, setChartData] = useState(null);
+
+  const { 
+    mutate: processNaturalLanguage, 
+    isPending: queryLoading 
+  } = useProcessNaturalLanguage({
+    onSuccess: (response) => {
+      if (response.success && response.generatedSql) {
+        setSqlQuery(response.generatedSql);
+        setQueryResults(response.queryResults);
+        setChartData(response.chartData);
+        setBackendResponse(formatSuccessMessage(response));
+        setQueryError(null);
+      } else {
+        const errorMsg = response.error || 'Failed to process query';
+        setQueryError(errorMsg);
+        setBackendResponse(formatErrorMessage(errorMsg));
+      }
+    },
+    onError: (error) => {
+      console.error('Natural language processing failed:', error);
+      setQueryError(error.message);
+      setBackendResponse(formatErrorMessage(error.message));
+    }
+  });
   
   // Backend API call function
   const executeQueryWithChart = async (query, chartType = 'bar') => {
@@ -109,68 +129,15 @@ const Dashboard = () => {
   };
 
   // Handle chat input submission with complete NL-to-SQL-to-Chart workflow
-  const handleChatSubmit = async (message) => {
-    setQueryLoading(true);
+  const handleChatSubmit = (message) => {
     setQueryError(null);
     setBackendResponse('Processing natural language query...');
     
-    try {
-      const response = await AIService.convertToSQL(message);
-      
-      if (response.success && response.data) {
-        if (response.data.sqlQuery) {
-          setSqlQuery(response.data.sqlQuery);
-        }
-        
-        if (response.data.queryResults) {
-          setQueryResults(response.data.queryResults);
-          
-          const chartDataConfig = {
-            chart: {
-              type: 'bar',
-              config: {
-                xField: response.data.queryResults.columns[0]?.name || 'x',
-                yField: response.data.queryResults.columns[1]?.name || 'y'
-              },
-              fallback: false
-            },
-            data: response.data.queryResults,
-            cached: false
-          };
-          setChartData(chartDataConfig);
-        }
-        
-        let responseMessage = `✅ Complete workflow executed successfully!\n`;
-        responseMessage += `📝 SQL: Generated with ${Math.round((response.data.confidence || 0.9) * 100)}% confidence\n`;
-        responseMessage += `📊 Data: ${response.data.queryResults?.rowCount || 0} rows retrieved\n`;
-        
-        if (response.data.processingTime) {
-          responseMessage += `⏱️ Processing: ${response.data.processingTime}ms\n`;
-        }
-        if (response.data.executionTime) {
-          responseMessage += `⚡ Execution: ${response.data.executionTime}ms\n`;
-        }
-        
-        if (response.data.originalQuery) {
-          responseMessage += `\n\n💡 Natural Language: ${response.data.originalQuery}`;
-        }
-        if (response.data.explanation) {
-          responseMessage += `\n📖 Explanation: ${response.data.explanation}`;
-        }
-        
-        setBackendResponse(responseMessage);
-      } else {
-        setBackendResponse('No SQL query could be generated from the input.');
-        setQueryError(response.message || 'Failed to process query');
-      }
-      
-    } catch (error) {
-      console.error('Complete workflow failed:', error);
-      setQueryError(error.message);
-      setBackendResponse(`❌ Workflow failed: ${error.message}`);
-    } finally {
-      setQueryLoading(false);
-    }
+    // Use the React Query hook to process the query
+    processNaturalLanguage({
+      message,
+      conversationHistory: []
+    });
   };
   
   return (

@@ -9,7 +9,8 @@ import Chart from './Chart';
 import ViewToggle from './ViewToggle';
 import ChartTypeSelector from './ChartTypeSelector';
 import { Card, Text, Button } from './ui';
-import { useProcessNaturalLanguage } from '../hooks/useGraphQL';
+import { RestService } from '../services/RestService';
+import { transformQueryResults, transformToChartData } from '../utils/dataTransformers';
 
 const QueryPage = () => {
   const { id } = useParams();
@@ -28,6 +29,7 @@ const QueryPage = () => {
   const [queryResults, setQueryResults] = useState(null);
   const [chartData, setChartData] = useState(null);
   const [manualQueryLoading, setManualQueryLoading] = useState(false);
+  const [aiQueryLoading, setAiQueryLoading] = useState(false);
 
   // Load query data based on ID from URL
   useEffect(() => {
@@ -39,36 +41,43 @@ const QueryPage = () => {
     }
   }, [id]);
 
-  const { 
-    mutate: processNaturalLanguage, 
-    isPending: aiQueryLoading 
-  } = useProcessNaturalLanguage({
-    onSuccess: (response) => {
-      if (response.success && response.generatedSql) {
-        const generatedSQL = `-- Generated from natural language query\n${response.generatedSql}`;
-        setSqlQuery(generatedSQL);
-        setQueryResults(response.queryResults);
-        setChartData(response.chartData);
-        setQueryError(null);
-      } else {
-        setQueryError(response.error || 'Failed to process natural language query');
-      }
-    },
-    onError: (error) => {
-      console.error('Natural language processing failed:', error);
-      setQueryError(error.message || 'Failed to process natural language query');
-    }
-  });
-
   // Handle AI query submission
   const handleAIQuery = async (naturalLanguageQuery) => {
     setQueryError(null);
+    setAiQueryLoading(true);
     
-    // Use the GraphQL mutation hook
-    processNaturalLanguage({
-      message: naturalLanguageQuery,
-      conversationHistory: []
-    });
+    try {
+      // Step 1: Generate SQL
+      const generateResponse = await RestService.generateSql(naturalLanguageQuery);
+      
+      if (!generateResponse.success) {
+        throw new Error(generateResponse.error || 'Failed to generate SQL');
+      }
+      
+      const generatedSql = generateResponse.generated_sql;
+      const commentPrefix = `-- Generated from natural language query\n`;
+      setSqlQuery(commentPrefix + generatedSql);
+      
+      // Step 2: Execute SQL
+      const executeResponse = await RestService.executeSql(generatedSql);
+      
+      if (!executeResponse.success) {
+        throw new Error(executeResponse.error || 'Failed to execute SQL');
+      }
+
+      // Transform results
+      const transformedResults = transformQueryResults(executeResponse.query_results);
+      const chartData = transformedResults ? transformToChartData(transformedResults) : null;
+      
+      setQueryResults(transformedResults);
+      setChartData(chartData);
+
+    } catch (error) {
+      console.error('AI Query failed:', error);
+      setQueryError(error.message || 'Failed to process natural language query');
+    } finally {
+      setAiQueryLoading(false);
+    }
   };
 
   const handleExecuteQuery = async () => {
@@ -76,50 +85,25 @@ const QueryPage = () => {
     setQueryError(null);
     
     try {
-      setTimeout(() => {
-        const regions = ['North America', 'Europe', 'Asia Pacific', 'South America', 'Middle East', 'Africa', 'Oceania'];
-        const mockData = [];
-        
-        for (let i = 0; i < 25; i++) {
-          mockData.push({
-            region: regions[i % regions.length] + (i > 6 ? ` ${Math.floor(i/7) + 1}` : ''),
-            total_sales: Math.floor(Math.random() * 200000) + 20000,
-            order_count: Math.floor(Math.random() * 500) + 50,
-            customer_id: `CUST-${String(i + 1).padStart(4, '0')}`,
-            last_order_date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-          });
-        }
+      // Remove comments and clean up SQL before execution if needed
+      // But Trino/Postgres usually handle comments fine
+      
+      const executeResponse = await RestService.executeSql(sqlQuery);
+      
+      if (!executeResponse.success) {
+        throw new Error(executeResponse.error || 'Failed to execute SQL');
+      }
 
-        const mockResults = {
-          data: mockData,
-          columns: [
-            { name: 'region', label: 'Region', type: 'string' },
-            { name: 'total_sales', label: 'Total Sales', type: 'number' },
-            { name: 'order_count', label: 'Order Count', type: 'number' },
-            { name: 'customer_id', label: 'Customer ID', type: 'string' },
-            { name: 'last_order_date', label: 'Last Order Date', type: 'date' }
-          ],
-          rowCount: mockData.length
-        };
-
-        const mockChartData = {
-          chart: {
-            type: 'bar',
-            config: {
-              xField: 'region',
-              yField: 'total_sales'
-            }
-          },
-          data: mockResults,
-          cached: false
-        };
-        
-        setQueryResults(mockResults);
-        setChartData(mockChartData);
-        setManualQueryLoading(false);
-      }, 1500);
+      // Transform results
+      const transformedResults = transformQueryResults(executeResponse.query_results);
+      const chartData = transformedResults ? transformToChartData(transformedResults) : null;
+      
+      setQueryResults(transformedResults);
+      setChartData(chartData);
     } catch (error) {
-      setQueryError('Failed to execute query');
+      console.error('Query execution failed:', error);
+      setQueryError(error.message || 'Failed to execute query');
+    } finally {
       setManualQueryLoading(false);
     }
   };

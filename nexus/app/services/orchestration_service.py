@@ -37,7 +37,97 @@ class OrchestrationService:
         await self.schema_service.client.aclose()
         await self.llm_service.client.aclose()
         self.logger.info("Orchestration service shutdown")
-    
+
+    async def generate_sql_from_nl(
+        self,
+        nl_query: str,
+        conversation_history: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Step 1 & 2: Generate SQL from Natural Language using Schema Service and LLM.
+        """
+        conversation_history = conversation_history or []
+        start_time = asyncio.get_event_loop().time()
+        
+        self.logger.info("Generating SQL from NL", query=nl_query)
+        
+        try:
+            # Step 1: Get schema recommendations
+            self.logger.info("=== STEP 1: FAISS SCHEMA SERVICE ===")
+            
+            cached_schema = await self.cache_service.get_schema_recommendations(
+                nl_query, conversation_history
+            )
+            
+            if cached_schema:
+                self.logger.info("Using cached schema recommendations")
+                schema_recommendations = cached_schema
+            else:
+                schema_recommendations = await self.schema_service.get_recommendations(
+                    nl_query, conversation_history
+                )
+                if schema_recommendations.get("success"):
+                    await self.cache_service.cache_schema_recommendations(
+                        nl_query, conversation_history, schema_recommendations
+                    )
+            
+            if not schema_recommendations.get("success"):
+                error_msg = schema_recommendations.get("error", "Schema service failed")
+                return self._create_error_response(error_msg, "SCHEMA_SERVICE_ERROR", start_time)
+            
+            recommendations = schema_recommendations.get("recommendations", []) or []
+            
+            # Step 2: Generate SQL using LLM
+            self.logger.info("=== STEP 2: SQL GENERATION (LLM) ===")
+            
+            cache_key = f"{nl_query}_{len(conversation_history)}_{len(recommendations)}"
+            cached_sql = await self.cache_service.get_llm_response(
+                cache_key, {"type": "sql_generation"}
+            )
+            
+            if cached_sql and isinstance(cached_sql, str):
+                self.logger.info("Using cached SQL generation")
+                sql_generation = {
+                    "success": True,
+                    "sql": cached_sql,
+                    "confidence": 0.85,
+                    "reasoning": "Retrieved from cache"
+                }
+            else:
+                sql_generation = await self.llm_service.generate_sql(
+                    nl_query, conversation_history, schema_recommendations
+                )
+                if sql_generation.get("success") and sql_generation.get("sql"):
+                    await self.cache_service.cache_llm_response(
+                        cache_key, {"type": "sql_generation"}, sql_generation.get("sql")
+                    )
+            
+            if not sql_generation.get("success"):
+                error_msg = sql_generation.get("error", "SQL generation failed")
+                error_type = sql_generation.get("error_type", "SQL_GENERATION_ERROR")
+                user_friendly_error = self.error_analysis_service.get_user_friendly_error(error_type, error_msg)
+                return self._create_error_response(user_friendly_error, error_type, start_time)
+            
+            generated_sql = sql_generation.get("sql", "").strip()
+            if not generated_sql:
+                return self._create_error_response("Generated SQL is empty", "EMPTY_SQL_ERROR", start_time)
+            
+            processing_time = (asyncio.get_event_loop().time() - start_time) * 1000
+            
+            return {
+                "success": True,
+                "nl_query": nl_query,
+                "generated_sql": generated_sql,
+                "schema_recommendations": recommendations,
+                "model_confidence": sql_generation.get("confidence"),
+                "model_reasoning": sql_generation.get("reasoning"),
+                "processing_time": processing_time
+            }
+            
+        except Exception as e:
+            self.logger.error("SQL generation error", error=str(e))
+            return self._create_error_response(f"Generation error: {str(e)}", "PROCESSING_ERROR", start_time)
+
     async def process_natural_language_workflow(
         self,
         nl_query: str,
@@ -59,119 +149,22 @@ class OrchestrationService:
         start_time = asyncio.get_event_loop().time()
         
         try:
-            # Step 1: Get schema recommendations from FAISS service
-            self.logger.info("=== STEP 1: FAISS SCHEMA SERVICE ===")
-            self.logger.info("Input NL Query", query=nl_query)
-            self.logger.info("Input Query History", history=conversation_history if conversation_history else "None")
-            self.logger.debug("=== ORCHESTRATION DEBUG - STEP 1 ===")
-            self.logger.debug("Request timestamp", timestamp=int(start_time * 1000))
-            self.logger.debug("Query length", characters=len(nl_query))
-            self.logger.debug("History entries", count=len(conversation_history))
+            # Step 1 & 2: Generate SQL
+            generation_result = await self.generate_sql_from_nl(nl_query, conversation_history)
             
-            # Check cache first
-            cached_schema = await self.cache_service.get_schema_recommendations(
-                nl_query, conversation_history
-            )
+            if not generation_result.get("success"):
+                return generation_result
             
-            if cached_schema:
-                self.logger.info("Using cached schema recommendations")
-                schema_recommendations = cached_schema
-            else:
-                schema_recommendations = await self.schema_service.get_recommendations(
-                    nl_query, conversation_history
-                )
-                
-                # Cache the result if successful
-                if schema_recommendations.get("success"):
-                    await self.cache_service.cache_schema_recommendations(
-                        nl_query, conversation_history, schema_recommendations
-                    )
-            
-            if not schema_recommendations.get("success"):
-                error_msg = schema_recommendations.get("error", "Schema service failed")
-                self.logger.error("Schema recommendations failed", error=error_msg)
-                return self._create_error_response(
-                    error_msg, "SCHEMA_SERVICE_ERROR", start_time
-                )
-            
-            recommendations = schema_recommendations.get("recommendations", []) or []
-            
-            # Detailed schema recommendations logging (matching Java backend)
-            self.logger.info("FAISS Output - Success", success=schema_recommendations.get("success"))
-            if recommendations:
-                self.logger.info("FAISS Output - Found schema recommendations", count=len(recommendations))
-                # Log top 3 recommendations with details
-                for i, rec in enumerate(recommendations[:3]):
-                    self.logger.info(
-                        f"  Schema {i+1}",
-                        full_name=rec.get("full_name", "unknown"),
-                        confidence=rec.get("confidence", 0.0)
-                    )
-            else:
-                self.logger.warning("FAISS Output - No schema recommendations found")
-            
-            # Step 2: Generate SQL using LLM with schema context
-            self.logger.info("=== STEP 2: SQL GENERATION (LLM) ===")
-            self.logger.info("LLM Input - NL Query", query=nl_query)
-            self.logger.info("LLM Input - Schema Context", recommendation_count=len(recommendations))
-            
-            # Check cache first (using LLM cache for SQL generation)
-            cache_key = f"{nl_query}_{len(conversation_history)}_{len(recommendations)}"
-            cached_sql = await self.cache_service.get_llm_response(
-                cache_key, {"type": "sql_generation"}
-            )
-            
-            if cached_sql and isinstance(cached_sql, str):
-                self.logger.info("Using cached SQL generation")
-                # Parse cached string back to dict format
-                sql_generation = {
-                    "success": True,
-                    "sql": cached_sql,
-                    "confidence": 0.85,
-                    "reasoning": "Retrieved from cache"
-                }
-            else:
-                sql_generation = await self.llm_service.generate_sql(
-                    nl_query, conversation_history, schema_recommendations
-                )
-                
-                # Cache the result if successful - cache only the SQL, not the entire dict
-                if sql_generation.get("success") and sql_generation.get("sql"):
-                    await self.cache_service.cache_llm_response(
-                        cache_key, {"type": "sql_generation"}, sql_generation.get("sql")
-                    )
-            
-            # Detailed LLM output logging (matching Java backend)
-            self.logger.info("LLM Output - Success", success=sql_generation.get("success") if sql_generation else "null response")
-            if sql_generation:
-                generated_sql = sql_generation.get("sql", "")
-                self.logger.info("LLM Output - SQL", sql=generated_sql[:200] + "..." if len(generated_sql) > 200 else generated_sql)
-                self.logger.info("LLM Output - Confidence", confidence=sql_generation.get("confidence"))
-                self.logger.info("LLM Output - Reasoning", reasoning=sql_generation.get("reasoning", ""))
-            
-            if not sql_generation.get("success"):
-                error_msg = sql_generation.get("error", "SQL generation failed")
-                error_type = sql_generation.get("error_type", "SQL_GENERATION_ERROR")
-                
-                # Get user-friendly error message
-                user_friendly_error = self.error_analysis_service.get_user_friendly_error(error_type, error_msg)
-                
-                self.logger.error("SQL generation failed", error=error_msg, error_type=error_type, user_friendly=user_friendly_error)
-                return self._create_error_response(user_friendly_error, error_type, start_time)
-            
-            generated_sql = sql_generation.get("sql", "").strip()
-            if not generated_sql:
-                self.logger.error("Generated SQL is empty")
-                return self._create_error_response(
-                    "Generated SQL is empty", "EMPTY_SQL_ERROR", start_time
-                )
+            generated_sql = generation_result["generated_sql"]
+            recommendations = generation_result.get("schema_recommendations", [])
             
             self.logger.info("SQL generated successfully", sql=generated_sql[:100])
             
             # Step 3: Execute SQL with retry logic
             self.logger.info("=== STEP 3: SQL EXECUTION WITH RETRY ===")
-            self.logger.info("Initial SQL to execute", sql=generated_sql)
-            self.logger.info("Max retry attempts", max_retries=settings.max_retries)
+            
+            # Re-construct schema_recommendations dict for correction callback
+            schema_recs_dict = {"success": True, "recommendations": recommendations}
             
             # Check cache first
             cache_params = {
@@ -190,7 +183,7 @@ class OrchestrationService:
                     settings.default_max_results,
                     settings.default_timeout_seconds,
                     settings.max_retries,
-                    self._create_correction_callback(schema_recommendations, conversation_history)
+                    self._create_correction_callback(schema_recs_dict, conversation_history)
                 )
                 
                 # Cache successful results
@@ -208,8 +201,8 @@ class OrchestrationService:
                 "generated_sql": sql_result.get("final_sql", generated_sql),
                 "query_results": sql_result.get("query_results"),
                 "schema_recommendations": recommendations,
-                "model_confidence": sql_generation.get("confidence"),
-                "model_reasoning": sql_generation.get("reasoning"),
+                "model_confidence": generation_result.get("model_confidence"),
+                "model_reasoning": generation_result.get("model_reasoning"),
                 "processing_time": processing_time,
                 "execution_time": sql_result.get("execution_time"),
                 "retry_attempts": sql_result.get("retry_attempts", 0),
@@ -221,21 +214,10 @@ class OrchestrationService:
                     "error": sql_result.get("error"),
                     "error_type": sql_result.get("error_type")
                 })
-            else:
-                # Log successful completion (matching Java backend)
-                final_sql = sql_result.get("final_sql", generated_sql)
-                retry_attempts = sql_result.get("retry_attempts", 0)
-                self.logger.info(
-                    "Natural language workflow completed successfully",
-                    attempts=retry_attempts,
-                    nl_query=nl_query,
-                    final_sql=final_sql[:100] + "..." if len(final_sql) > 100 else final_sql
-                )
             
             # Step 5: Save to user history if user_id and session_id provided
             if user_id and session_id:
                 try:
-                    # Save conversation messages
                     await self.user_service.save_conversation_message(
                         user_id=user_id,
                         session_id=session_id,
@@ -244,7 +226,6 @@ class OrchestrationService:
                         metadata={"schema_recommendations_count": len(recommendations)}
                     )
                     
-                    # Save assistant response
                     assistant_message = f"Generated SQL: {response['generated_sql']}"
                     if response.get("error"):
                         assistant_message = f"Error: {response['error']}"
@@ -261,14 +242,13 @@ class OrchestrationService:
                         }
                     )
                     
-                    # Save query execution history
                     await self.user_service.save_query_execution(
                         user_id=user_id,
                         session_id=session_id,
                         natural_language_query=nl_query,
                         generated_sql=response.get("generated_sql"),
                         execution_status="success" if response["success"] else "error",
-                        execution_time_ms=int(response.get("execution_time", 0)),
+                        execution_time_ms=int(response.get("execution_time", 0) or 0),
                         row_count=response.get("query_results", {}).get("row_count") if response.get("query_results") else None,
                         error_message=response.get("error"),
                         schema_recommendations={"recommendations": recommendations},
@@ -278,13 +258,6 @@ class OrchestrationService:
                     
                 except Exception as e:
                     self.logger.warning("Failed to save user history", error=str(e))
-            
-            self.logger.info(
-                "Natural language workflow completed",
-                success=response["success"],
-                processing_time=processing_time,
-                retry_attempts=response["retry_attempts"]
-            )
             
             return response
             
@@ -427,3 +400,6 @@ class OrchestrationService:
             "success": success,
             "message": "Cache cleared successfully" if success else "Failed to clear cache"
         }
+
+# Global orchestration service instance
+orchestration_service = OrchestrationService()

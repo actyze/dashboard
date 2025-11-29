@@ -8,6 +8,7 @@
 export { QueriesService } from './QueriesService';
 export { QueryExecutionService } from './QueryExecutionService';
 export { GraphQLService } from './GraphQLService';
+export { RestService } from './RestService';
 export { API_CONFIG, ApiResponse, apiCall, mockDelay } from './apiConfig';
 export { Network, apiInstance } from './network';
 

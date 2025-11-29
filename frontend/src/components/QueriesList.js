@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router';
 import { useTheme } from '../contexts/ThemeContext';
 import { Card, Text } from './ui';
 import { QueriesService } from '../services';
 
-const QueriesList = ({ onQuerySelect, onNavigate }) => {
+const QueriesList = () => {
   const { isDark } = useTheme();
+  const navigate = useNavigate();
   const [queries, setQueries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -46,95 +48,64 @@ const QueriesList = ({ onQuerySelect, onNavigate }) => {
     <div className={`h-full flex flex-col ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
       {/* Header */}
       <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b px-6 py-4`}>
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded bg-blue-500 flex items-center justify-center">
-            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-          </div>
-          <Text variant="h4" className="font-semibold">
-            Queries
-          </Text>
-        </div>
-      </div>
-
-      {/* Search Bar */}
-      <div className="flex-shrink-0 px-6 py-4">
-        <div className="relative max-w-2xl">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => handleSearch(e.target.value)}
-            className={`
-              block w-full pl-10 pr-3 py-2 text-sm rounded-md border
-              ${isDark 
-                ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-400' 
-                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
-              }
-              focus:ring-1 focus:ring-blue-500 focus:border-blue-500
-            `}
-            placeholder="Search queries and dashboards"
-          />
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="flex-shrink-0 px-6 pb-6">
-        <Text variant="h6" className="mb-4 font-medium">
-          Quick actions
-        </Text>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card 
-            className={`p-4 cursor-pointer transition-colors ${isDark ? 'bg-gray-800 hover:bg-gray-750' : 'bg-white hover:bg-gray-50'}`}
-            onClick={() => onQuerySelect(null)}
-          >
-            <div className="flex items-center space-x-3">
-              <div className={`w-8 h-8 rounded ${isDark ? 'bg-blue-600' : 'bg-blue-500'} flex items-center justify-center`}>
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-              </div>
-              <div>
-                <Text variant="subtitle1" className="font-medium">
-                  New Query
-                </Text>
-                <Text color="secondary" className="text-xs">
-                  Create a SQL Worksheet
-                </Text>
-              </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 rounded bg-blue-500 flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
             </div>
-          </Card>
+            <Text variant="h4" className="font-semibold">
+              Queries
+            </Text>
+          </div>
           
-          <Card 
-            className={`p-4 cursor-pointer transition-colors ${isDark ? 'bg-gray-800 hover:bg-gray-750' : 'bg-white hover:bg-gray-50'}`}
-            onClick={() => onNavigate && onNavigate('dashboards-list')}
-          >
-            <div className="flex items-center space-x-3">
-              <div className={`w-8 h-8 rounded ${isDark ? 'bg-green-600' : 'bg-green-500'} flex items-center justify-center`}>
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5z" />
+          {/* Search and New Button */}
+          <div className="flex items-center space-x-3">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
-              <div>
-                <Text variant="subtitle1" className="font-medium">
-                  View Dashboards
-                </Text>
-                <Text color="secondary" className="text-xs">
-                  Browse dashboards
-                </Text>
-              </div>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => handleSearch(e.target.value)}
+                className={`
+                  w-64 pl-10 pr-3 py-1.5 text-sm rounded-md border
+                  ${isDark 
+                    ? 'bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-400' 
+                    : 'bg-gray-50 border-gray-300 text-gray-900 placeholder-gray-500'
+                  }
+                  focus:ring-1 focus:ring-blue-500 focus:border-blue-500
+                `}
+                placeholder="Search"
+              />
             </div>
-          </Card>
+            
+            <button
+              onClick={() => navigate('/query/new')}
+              className={`
+                flex items-center space-x-1.5 px-3 py-1.5 text-sm font-medium rounded-md
+                transition-colors
+                ${isDark 
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }
+              `}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span>Query</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Recently viewed section */}
-      <div className="flex-1 px-6 overflow-hidden flex flex-col">
+      <div className="flex-1 px-6 pt-6 overflow-hidden flex flex-col">
         <Text variant="h6" className="mb-4 font-medium">
           Your Queries
         </Text>
@@ -211,7 +182,7 @@ const QueriesList = ({ onQuerySelect, onNavigate }) => {
                 <div 
                   key={query.id}
                   className={`px-6 py-4 cursor-pointer transition-colors ${isDark ? 'hover:bg-gray-750' : 'hover:bg-gray-50'}`}
-                  onClick={() => onQuerySelect(query)}
+                  onClick={() => navigate(`/query/${query.id}`)}
                 >
                   <div className="grid grid-cols-12 gap-4 items-center">
                     <div className="col-span-5 flex items-center space-x-3">

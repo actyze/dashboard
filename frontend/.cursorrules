@@ -5,6 +5,7 @@ React dashboard application with Material-UI and Tailwind CSS for natural langua
 
 ## Technology Stack
 - **React 18.2.0** - Functional components with hooks
+- **React Router 7.x** - Declarative routing (using `react-router`, NOT `react-router-dom`)
 - **Material-UI (MUI) 5.14.5** - Component library
 - **Tailwind CSS 3.4.18** - Utility-first CSS framework
 - **@tanstack/react-query** - Data fetching and server state management
@@ -79,6 +80,9 @@ export const ComponentName = ({ prop1, prop2 }) => {
 frontend/src/
 ├── components/          # React components
 │   ├── ui/             # Reusable UI components
+│   ├── Layout.js       # Main layout with sidebar
+│   ├── Login.js        # Login page
+│   ├── Signup.js       # Signup page
 │   └── ...             # Feature components
 ├── contexts/           # React contexts (ThemeContext)
 ├── hooks/              # React Query custom hooks
@@ -90,6 +94,8 @@ frontend/src/
 │   └── ...             # Other services
 ├── config/             # Configuration files
 │   └── queryConfig.js  # React Query cache config per service
+├── utils/              # Utility functions
+│   └── dataTransformers.js # Data transformation logic
 └── index.js            # Entry point with QueryClientProvider
 ```
 

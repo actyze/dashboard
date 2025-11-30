@@ -1,11 +1,5 @@
-/**
- * API Configuration and utilities for all services
- */
-
-// API Base Configuration
 export const API_CONFIG = {
-  BASE_URL: process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000', // Nexus service port
-  GRAPHQL_ENDPOINT: '/graphql', // GraphQL endpoint for Nexus service
+  BASE_URL: process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000',
   TIMEOUT: 30000,
   HEADERS: {
     'Content-Type': 'application/json',

@@ -17,7 +17,8 @@ INSERT INTO demo_ecommerce.customers (first_name, last_name, email, phone, addre
 ('James', 'Taylor', 'james.t@email.com', '+1-555-0107', '147 Birch Rd', 'San Antonio', 'TX', 'USA', '78201', 'VIP'),
 ('Jennifer', 'Thomas', 'jen.thomas@email.com', '+1-555-0108', '258 Spruce St', 'San Diego', 'CA', 'USA', '92101', 'Regular'),
 ('Robert', 'Jackson', 'rob.jackson@email.com', '+1-555-0109', '369 Willow Way', 'Dallas', 'TX', 'USA', '75201', 'Premium'),
-('Michelle', 'White', 'michelle.w@email.com', '+1-555-0110', '741 Aspen Ave', 'San Jose', 'CA', 'USA', '95101', 'Regular');
+('Michelle', 'White', 'michelle.w@email.com', '+1-555-0110', '741 Aspen Ave', 'San Jose', 'CA', 'USA', '95101', 'Regular')
+ON CONFLICT (email) DO NOTHING;
 
 -- Insert demo products
 INSERT INTO demo_ecommerce.products (product_name, category, subcategory, brand, price, cost, stock_quantity, description) VALUES
@@ -30,20 +31,25 @@ INSERT INTO demo_ecommerce.products (product_name, category, subcategory, brand,
 ('Desk Lamp', 'Home & Kitchen', 'Lighting', 'BrightLight', 34.99, 18.00, 80, 'LED desk lamp with adjustable brightness'),
 ('Backpack', 'Fashion', 'Bags', 'TravelPro', 59.99, 25.00, 90, 'Durable backpack with laptop compartment'),
 ('Water Bottle', 'Sports & Fitness', 'Accessories', 'HydroFlow', 19.99, 7.50, 300, 'Insulated stainless steel water bottle'),
-('Wireless Mouse', 'Electronics', 'Accessories', 'ClickPro', 29.99, 12.00, 180, 'Ergonomic wireless mouse with precision tracking');
+('Wireless Mouse', 'Electronics', 'Accessories', 'ClickPro', 29.99, 12.00, 180, 'Ergonomic wireless mouse with precision tracking')
+ON CONFLICT DO NOTHING;
 
 -- Insert demo orders
-INSERT INTO demo_ecommerce.orders (customer_id, order_date, status, total_amount, shipping_cost, tax_amount, payment_method, shipping_address) VALUES
-(1, '2024-01-15 10:30:00', 'Delivered', 149.98, 9.99, 12.00, 'Credit Card', '123 Main St, New York, NY 10001'),
-(2, '2024-01-16 14:22:00', 'Delivered', 74.98, 5.99, 6.40, 'PayPal', '456 Oak Ave, Los Angeles, CA 90210'),
-(3, '2024-01-17 09:15:00', 'Shipped', 219.97, 0.00, 17.60, 'Credit Card', '789 Pine St, Chicago, IL 60601'),
-(4, '2024-01-18 16:45:00', 'Processing', 89.99, 7.99, 7.84, 'Debit Card', '321 Elm St, Houston, TX 77001'),
-(5, '2024-01-19 11:20:00', 'Delivered', 129.98, 8.99, 11.12, 'Credit Card', '654 Maple Dr, Phoenix, AZ 85001'),
-(6, '2024-01-20 13:30:00', 'Delivered', 59.99, 5.99, 5.28, 'PayPal', '987 Cedar Ln, Philadelphia, PA 19101'),
-(7, '2024-01-21 08:45:00', 'Cancelled', 0.00, 0.00, 0.00, 'Credit Card', '147 Birch Rd, San Antonio, TX 78201'),
-(8, '2024-01-22 15:10:00', 'Delivered', 194.97, 9.99, 16.40, 'Credit Card', '258 Spruce St, San Diego, CA 92101'),
-(9, '2024-01-23 12:00:00', 'Shipped', 49.99, 6.99, 4.56, 'Debit Card', '369 Willow Way, Dallas, TX 75201'),
-(10, '2024-01-24 17:25:00', 'Processing', 29.99, 4.99, 2.80, 'PayPal', '741 Aspen Ave, San Jose, CA 95101');
+INSERT INTO demo_ecommerce.orders (order_id, customer_id, order_date, status, total_amount, shipping_cost, tax_amount, payment_method, shipping_address) VALUES
+(1, 1, '2024-01-15 10:30:00', 'Delivered', 149.98, 9.99, 12.00, 'Credit Card', '123 Main St, New York, NY 10001'),
+(2, 2, '2024-01-16 14:22:00', 'Delivered', 74.98, 5.99, 6.40, 'PayPal', '456 Oak Ave, Los Angeles, CA 90210'),
+(3, 3, '2024-01-17 09:15:00', 'Shipped', 219.97, 0.00, 17.60, 'Credit Card', '789 Pine St, Chicago, IL 60601'),
+(4, 4, '2024-01-18 16:45:00', 'Processing', 89.99, 7.99, 7.84, 'Debit Card', '321 Elm St, Houston, TX 77001'),
+(5, 5, '2024-01-19 11:20:00', 'Delivered', 129.98, 8.99, 11.12, 'Credit Card', '654 Maple Dr, Phoenix, AZ 85001'),
+(6, 6, '2024-01-20 13:30:00', 'Delivered', 59.99, 5.99, 5.28, 'PayPal', '987 Cedar Ln, Philadelphia, PA 19101'),
+(7, 7, '2024-01-21 08:45:00', 'Cancelled', 0.00, 0.00, 0.00, 'Credit Card', '147 Birch Rd, San Antonio, TX 78201'),
+(8, 8, '2024-01-22 15:10:00', 'Delivered', 194.97, 9.99, 16.40, 'Credit Card', '258 Spruce St, San Diego, CA 92101'),
+(9, 9, '2024-01-23 12:00:00', 'Shipped', 49.99, 6.99, 4.56, 'Debit Card', '369 Willow Way, Dallas, TX 75201'),
+(10, 10, '2024-01-24 17:25:00', 'Processing', 29.99, 4.99, 2.80, 'PayPal', '741 Aspen Ave, San Jose, CA 95101')
+ON CONFLICT (order_id) DO NOTHING;
+
+-- Reset sequence for orders table to avoid ID conflicts with future inserts
+SELECT setval('demo_ecommerce.orders_order_id_seq', (SELECT MAX(order_id) FROM demo_ecommerce.orders));
 
 -- Insert demo order items
 INSERT INTO demo_ecommerce.order_items (order_id, product_id, quantity, unit_price, total_price) VALUES
@@ -63,7 +69,8 @@ INSERT INTO demo_ecommerce.order_items (order_id, product_id, quantity, unit_pri
 (8, 6, 1, 89.99, 89.99),
 (8, 10, 1, 29.99, 29.99),
 (9, 3, 1, 49.99, 49.99),
-(10, 10, 1, 29.99, 29.99);
+(10, 10, 1, 29.99, 29.99)
+ON CONFLICT DO NOTHING;
 
 -- =============================================================================
 -- HRMS DEMO DATA
@@ -78,7 +85,8 @@ INSERT INTO demo_hrms.departments (department_name, location, budget) VALUES
 ('Finance', 'Boston', 750000.00),
 ('Product Management', 'Seattle', 900000.00),
 ('Customer Support', 'Denver', 400000.00),
-('Data Science', 'San Francisco', 1800000.00);
+('Data Science', 'San Francisco', 1800000.00)
+ON CONFLICT DO NOTHING;
 
 -- Insert demo employees
 INSERT INTO demo_hrms.employees (first_name, last_name, email, phone, hire_date, job_title, department_id, salary, manager_id, status) VALUES
@@ -96,7 +104,8 @@ INSERT INTO demo_hrms.employees (first_name, last_name, email, phone, hire_date,
 ('Liam', 'Harris', 'liam.harris@company.com', '+1-555-1012', '2020-05-03', 'Product Manager', 6, 125000.00, NULL, 'Active'),
 ('Mia', 'Clark', 'mia.clark@company.com', '+1-555-1013', '2022-03-15', 'Support Manager', 7, 90000.00, NULL, 'Active'),
 ('Noah', 'Lewis', 'noah.lewis@company.com', '+1-555-1014', '2021-08-07', 'Data Scientist', 8, 135000.00, NULL, 'Active'),
-('Olivia', 'Walker', 'olivia.walker@company.com', '+1-555-1015', '2022-06-20', 'Junior Data Scientist', 8, 95000.00, 14, 'Active');
+('Olivia', 'Walker', 'olivia.walker@company.com', '+1-555-1015', '2022-06-20', 'Junior Data Scientist', 8, 95000.00, 14, 'Active')
+ON CONFLICT (email) DO NOTHING;
 
 -- Update department manager references
 UPDATE demo_hrms.departments SET manager_id = 1 WHERE department_id = 1;
@@ -114,7 +123,8 @@ INSERT INTO demo_hrms.projects (project_name, description, start_date, end_date,
 ('Customer Analytics Platform', 'Build analytics platform for customer insights', '2024-02-15', '2024-08-15', 'In Progress', 750000.00, 8, 14),
 ('Q1 Marketing Campaign', 'Launch new product marketing campaign', '2024-01-01', '2024-03-31', 'Completed', 200000.00, 2, 5),
 ('Sales CRM Integration', 'Integrate new CRM system with existing tools', '2024-03-01', '2024-05-31', 'Planning', 300000.00, 3, 7),
-('HR Portal Upgrade', 'Upgrade employee self-service portal', '2024-04-01', '2024-07-31', 'Planning', 150000.00, 4, 9);
+('HR Portal Upgrade', 'Upgrade employee self-service portal', '2024-04-01', '2024-07-31', 'Planning', 150000.00, 4, 9)
+ON CONFLICT DO NOTHING;
 
 -- Insert demo employee project assignments
 INSERT INTO demo_hrms.employee_projects (employee_id, project_id, role, allocation_percentage, start_date, end_date) VALUES
@@ -124,7 +134,8 @@ INSERT INTO demo_hrms.employee_projects (employee_id, project_id, role, allocati
 (15, 2, 'Data Analyst', 100.00, '2024-02-15', '2024-08-15'),
 (5, 3, 'Campaign Manager', 100.00, '2024-01-01', '2024-03-31'),
 (7, 4, 'Implementation Lead', 75.00, '2024-03-01', '2024-05-31'),
-(9, 5, 'Business Analyst', 50.00, '2024-04-01', '2024-07-31');
+(9, 5, 'Business Analyst', 50.00, '2024-04-01', '2024-07-31')
+ON CONFLICT DO NOTHING;
 
 -- Insert demo attendance records
 INSERT INTO demo_hrms.attendance (employee_id, date, check_in_time, check_out_time, hours_worked, status) VALUES
@@ -136,7 +147,8 @@ INSERT INTO demo_hrms.attendance (employee_id, date, check_in_time, check_out_ti
 (3, '2024-01-17', '09:00:00', '18:00:00', 8.00, 'Present'),
 (5, '2024-01-15', '08:30:00', '17:30:00', 8.00, 'Present'),
 (5, '2024-01-16', '09:00:00', '18:00:00', 8.00, 'Present'),
-(5, '2024-01-17', '08:45:00', '17:45:00', 8.00, 'Present');
+(5, '2024-01-17', '08:45:00', '17:45:00', 8.00, 'Present')
+ON CONFLICT DO NOTHING;
 
 -- Insert demo performance reviews
 INSERT INTO demo_hrms.performance_reviews (employee_id, reviewer_id, review_period, review_date, overall_rating, goals_achievement, technical_skills, communication, teamwork, comments) VALUES
@@ -144,7 +156,8 @@ INSERT INTO demo_hrms.performance_reviews (employee_id, reviewer_id, review_peri
 (3, 1, '2023 Annual', '2024-01-20', 4.2, 4.0, 4.5, 4.1, 4.3, 'Strong technical skills, good team collaboration'),
 (5, 4, '2023 Annual', '2024-01-25', 4.6, 4.8, 4.0, 4.9, 4.7, 'Outstanding marketing campaign results'),
 (7, 6, '2023 Annual', '2024-01-30', 4.3, 4.2, 3.8, 4.5, 4.4, 'Good sales performance, excellent client relationships'),
-(9, 8, '2023 Annual', '2024-02-05', 4.1, 3.9, 4.2, 4.3, 4.0, 'Solid HR operations, room for process improvement');
+(9, 8, '2023 Annual', '2024-02-05', 4.1, 3.9, 4.2, 4.3, 4.0, 'Solid HR operations, room for process improvement')
+ON CONFLICT DO NOTHING;
 
 -- =============================================================================
 -- ANALYTICS DEMO DATA
@@ -155,7 +168,8 @@ INSERT INTO demo_analytics.monthly_sales (year, month, total_orders, total_reven
 (2024, 1, 150, 15750.50, 89, 105.00),
 (2023, 12, 180, 19200.75, 102, 106.67),
 (2023, 11, 165, 17325.25, 95, 105.00),
-(2023, 10, 142, 14890.80, 78, 104.86);
+(2023, 10, 142, 14890.80, 78, 104.86)
+ON CONFLICT (year, month) DO NOTHING;
 
 INSERT INTO demo_analytics.product_performance (product_id, product_name, category, total_sold, total_revenue, avg_rating) VALUES
 (1, 'Wireless Bluetooth Headphones', 'Electronics', 45, 4499.55, 4.5),
@@ -167,4 +181,5 @@ INSERT INTO demo_analytics.product_performance (product_id, product_name, catego
 (7, 'Desk Lamp', 'Home & Kitchen', 15, 524.85, 4.1),
 (8, 'Backpack', 'Fashion', 22, 1319.78, 4.5),
 (9, 'Water Bottle', 'Sports & Fitness', 67, 1339.33, 4.8),
-(10, 'Wireless Mouse', 'Electronics', 41, 1229.59, 4.3);
+(10, 'Wireless Mouse', 'Electronics', 41, 1229.59, 4.3)
+ON CONFLICT DO NOTHING;

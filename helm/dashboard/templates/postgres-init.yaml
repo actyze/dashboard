@@ -7,11 +7,7 @@ metadata:
     {{- include "dashboard.labels" . | nindent 4 }}
     app.kubernetes.io/component: postgres
 data:
-  01-nexus-schema.sql: |
-{{ .Files.Get "sql/nexus-schema.sql" | indent 4 }}
-  
-  02-demo-schema.sql: |
-{{ .Files.Get "sql/demo-schema.sql" | indent 4 }}
-  
-  03-demo-data.sql: |
-{{ .Files.Get "sql/demo-data.sql" | indent 4 }}
+{{- range $path, $bytes := .Files.Glob "sql/*.sql" }}
+  {{ base $path }}: |
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}

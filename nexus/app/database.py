@@ -1,9 +1,11 @@
 """Database configuration and models for user data persistence."""
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Text, DateTime, JSON, Integer, Boolean
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy import String, Text, DateTime, JSON, Integer, Boolean, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
+import uuid
 from typing import Optional, Dict, Any, List
 import structlog
 from app.config import settings
@@ -21,11 +23,87 @@ class User(Base):
     """User model for authentication and preferences."""
     __tablename__ = "users"
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    email: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[Optional[str]] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Role(Base):
+    """Role definitions (ADMIN, EDITOR, VIEWER)."""
+    __tablename__ = "roles"
+    
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Group(Base):
+    """Group/Team definitions."""
+    __tablename__ = "groups"
+    
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class UserRole(Base):
+    """Direct mapping of Users to Roles."""
+    __tablename__ = "user_roles"
+    
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), primary_key=True)
+    role_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.roles.id", ondelete="CASCADE"), primary_key=True)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class UserGroup(Base):
+    """Mapping of Users to Groups."""
+    __tablename__ = "user_groups"
+    
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), primary_key=True)
+    group_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.groups.id", ondelete="CASCADE"), primary_key=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class GroupRole(Base):
+    """Mapping of Groups to Roles (Inheritance)."""
+    __tablename__ = "group_roles"
+    
+    group_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.groups.id", ondelete="CASCADE"), primary_key=True)
+    role_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.roles.id", ondelete="CASCADE"), primary_key=True)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class RefreshToken(Base):
+    """Refresh tokens for JWT authentication."""
+    __tablename__ = "refresh_tokens"
+    
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class Dashboard(Base):
+    """Dashboard configuration and metadata."""
+    __tablename__ = "dashboards"
+    
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    configuration: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+    owner_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("nexus.users.id", ondelete="SET NULL"))
+    owner_group_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("nexus.groups.id", ondelete="SET NULL"))
+    is_public: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -35,7 +113,7 @@ class UserPreferences(Base):
     __tablename__ = "user_preferences"
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), nullable=False, index=True)
     preference_key: Mapped[str] = mapped_column(String(100), nullable=False)
     preference_value: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -47,7 +125,7 @@ class ConversationHistory(Base):
     __tablename__ = "conversation_history"
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), nullable=False, index=True)
     session_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     message_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'user' or 'assistant'
     message_content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -60,7 +138,7 @@ class QueryHistory(Base):
     __tablename__ = "query_history"
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), nullable=False, index=True)
     session_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     natural_language_query: Mapped[str] = mapped_column(Text, nullable=False)
     generated_sql: Mapped[Optional[str]] = mapped_column(Text)
@@ -79,7 +157,8 @@ class SavedQueries(Base):
     __tablename__ = "saved_queries"
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), nullable=False, index=True)
+    owner_group_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("nexus.groups.id", ondelete="SET NULL"))
     query_name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
     natural_language_query: Mapped[str] = mapped_column(Text, nullable=False)
@@ -136,7 +215,7 @@ class DatabaseManager:
             self.logger.error("Failed to create tables", error=str(e))
             raise
     
-    async def get_session(self) -> AsyncSession:
+    def get_session(self) -> AsyncSession:
         """Get database session."""
         if not self.async_session:
             raise RuntimeError("Database not initialized")

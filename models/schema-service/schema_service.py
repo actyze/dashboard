@@ -8,8 +8,9 @@ import os
 import logging
 from typing import List, Dict, Any, Optional
 
+# Import Depends
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 
@@ -25,6 +26,7 @@ from app.explorer import (
     get_table_detail,
     search_database_objects_list
 )
+from app.auth import require_auth, verify_service_token
 
 # -------- Setup --------
 load_dotenv()
@@ -234,7 +236,7 @@ async def health():
 
 
 @app.post("/recommend", response_model=SchemaRecommendationResponse)
-async def recommend(req: SchemaRecommendationRequest):
+async def recommend(req: SchemaRecommendationRequest, user: dict = Depends(verify_service_token)):
     try:
         return schema_service.recommend(
             req.natural_language_query, 
@@ -248,7 +250,7 @@ async def recommend(req: SchemaRecommendationRequest):
 
 
 @app.post("/refresh")
-async def manual_refresh():
+async def manual_refresh(user: dict = Depends(verify_service_token)):
     try:
         await schema_service.refresh_schemas()
         return {"status": "success", "last_updated": schema_service.embedder.last_updated.isoformat()}
@@ -262,7 +264,7 @@ async def manual_refresh():
 # ============================================================================
 
 @app.get("/explorer/databases")
-async def get_databases():
+async def get_databases(user: dict = Depends(verify_service_token)):
     """Get list of all databases/catalogs (Level 1: Database Browser)."""
     return get_databases_list(
         schema_service.embedder.raw_schema_cache,
@@ -271,7 +273,7 @@ async def get_databases():
 
 
 @app.get("/explorer/databases/{database}/schemas")
-async def get_database_schemas(database: str):
+async def get_database_schemas(database: str, user: dict = Depends(verify_service_token)):
     """Get list of all schemas in a database (Level 2: Schema Browser)."""
     return get_database_schemas_list(
         database,
@@ -281,7 +283,7 @@ async def get_database_schemas(database: str):
 
 
 @app.get("/explorer/databases/{database}/schemas/{schema}/objects")
-async def get_schema_objects(database: str, schema: str):
+async def get_schema_objects(database: str, schema: str, user: dict = Depends(verify_service_token)):
     """Get all database objects in a schema (Level 3: Object Browser)."""
     return get_schema_objects_list(
         database,
@@ -292,7 +294,7 @@ async def get_schema_objects(database: str, schema: str):
 
 
 @app.get("/explorer/databases/{database}/schemas/{schema}/tables/{table}")
-async def get_table_details(database: str, schema: str, table: str):
+async def get_table_details(database: str, schema: str, table: str, user: dict = Depends(verify_service_token)):
     """Get detailed information about a specific table/view (Level 4: Object Details)."""
     return get_table_detail(
         database,
@@ -308,7 +310,8 @@ async def search_database_objects(
     query: str,
     database: Optional[str] = None,
     schema: Optional[str] = None,
-    object_type: Optional[str] = None
+    object_type: Optional[str] = None,
+    user: dict = Depends(verify_service_token)
 ):
     """Search for database objects across all databases/schemas."""
     return search_database_objects_list(

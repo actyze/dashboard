@@ -37,7 +37,8 @@ class BaseService:
         method: str, 
         endpoint: str, 
         data: Optional[Dict[str, Any]] = None,
-        params: Optional[Dict[str, Any]] = None
+        params: Optional[Dict[str, Any]] = None,
+        headers: Optional[Dict[str, str]] = None
     ) -> Dict[str, Any]:
         """Make HTTP request with retry logic."""
         url = f"{self.base_url}{endpoint}"
@@ -55,7 +56,8 @@ class BaseService:
                 method=method,
                 url=url,
                 json=data,
-                params=params
+                params=params,
+                headers=headers
             )
             response.raise_for_status()
             

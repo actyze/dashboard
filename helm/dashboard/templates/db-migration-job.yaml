@@ -1,0 +1,67 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "dashboard.fullname" . }}-db-migration
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db-migration
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    metadata:
+      name: {{ include "dashboard.fullname" . }}-db-migration
+      labels:
+        {{- include "dashboard.labels" . | nindent 8 }}
+        app.kubernetes.io/component: db-migration
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migration-tool
+          image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
+          imagePullPolicy: {{ .Values.postgres.imagePullPolicy | default .Values.global.imagePullPolicy }}
+          env:
+            - name: PGHOST
+              value: {{ include "dashboard.fullname" . }}-postgres
+            - name: PGPORT
+              value: "5432"
+            - name: PGDATABASE
+              value: {{ .Values.postgres.database }}
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dashboard.fullname" . }}-postgres-credentials
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dashboard.fullname" . }}-postgres-credentials
+                  key: password
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Waiting for postgres to be ready..."
+              until pg_isready; do sleep 2; done
+              
+              echo "Starting migration..."
+              # Loop through all sql files in alphanumeric order
+              # Note: ConfigMap keys are filenames, mounted at /sql/filename
+              for file in /sql/*.sql; do
+                if [ -f "$file" ]; then
+                  echo "Running $file..."
+                  psql -f "$file"
+                fi
+              done
+              
+              echo "Migration completed successfully!"
+          volumeMounts:
+            - name: sql-scripts
+              mountPath: /sql
+      volumes:
+        - name: sql-scripts
+          configMap:
+            name: {{ include "dashboard.fullname" . }}-postgres-init
+

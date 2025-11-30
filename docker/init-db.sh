@@ -24,13 +24,13 @@ else
   
   # Execute SQL initialization scripts in order
   echo "  📝 Creating nexus schema..."
-  docker exec dashboard-postgres psql -U ${POSTGRES_USER:-nexus_service} -d ${POSTGRES_DB:-dashboard} -f /docker-entrypoint-initdb.d/nexus-schema.sql
+  docker exec dashboard-postgres psql -U ${POSTGRES_USER:-nexus_service} -d ${POSTGRES_DB:-dashboard} -f /docker-entrypoint-initdb.d/01-nexus-schema.sql
   
   echo "  📝 Creating demo schema..."
-  docker exec dashboard-postgres psql -U ${POSTGRES_USER:-nexus_service} -d ${POSTGRES_DB:-dashboard} -f /docker-entrypoint-initdb.d/demo-schema.sql
+  docker exec dashboard-postgres psql -U ${POSTGRES_USER:-nexus_service} -d ${POSTGRES_DB:-dashboard} -f /docker-entrypoint-initdb.d/02-demo-schema.sql
   
   echo "  📝 Loading demo data..."
-  docker exec dashboard-postgres psql -U ${POSTGRES_USER:-nexus_service} -d ${POSTGRES_DB:-dashboard} -f /docker-entrypoint-initdb.d/demo-data.sql
+  docker exec dashboard-postgres psql -U ${POSTGRES_USER:-nexus_service} -d ${POSTGRES_DB:-dashboard} -f /docker-entrypoint-initdb.d/03-demo-data.sql
   
   echo "✅ Database initialization complete"
 fi

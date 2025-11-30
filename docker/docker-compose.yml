@@ -86,20 +86,18 @@ services:
       - ../helm/dashboard/sql:/sql:ro
     command: >
       sh -c "
-      echo '🔍 Checking if database initialization is needed...';
-      SCHEMA_EXISTS=$$(psql -tAc \"SELECT 1 FROM pg_namespace WHERE nspname='nexus'\" 2>/dev/null || echo '0');
-      if [ \"$$SCHEMA_EXISTS\" = \"1\" ]; then
-        echo '✅ Database already initialized (nexus schema exists)';
-      else
-        echo '🔨 Initializing database...';
-        echo '  📝 Creating nexus schema...';
-        psql -f /sql/nexus-schema.sql;
-        echo '  📝 Creating demo schema...';
-        psql -f /sql/demo-schema.sql;
-        echo '  📝 Loading demo data...';
-        psql -f /sql/demo-data.sql;
-        echo '✅ Database initialization complete';
-      fi
+      echo '🔍 Checking database connection...';
+      until pg_isready -h postgres; do sleep 2; done;
+      
+      echo '🚀 Starting database migration...';
+      # Loop through all sql files in alphanumeric order
+      for file in /sql/*.sql; do
+        if [ -f \"$$file\" ]; then
+          echo \"  📝 Applying $$file...\";
+          psql -f \"$$file\";
+        fi
+      done
+      echo '✅ Database migration complete';
       "
     networks:
       - dashboard

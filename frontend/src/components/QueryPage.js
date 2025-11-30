@@ -9,8 +9,7 @@ import Chart from './Chart';
 import ViewToggle from './ViewToggle';
 import ChartTypeSelector from './ChartTypeSelector';
 import { Card, Text, Button } from './ui';
-import { RestService } from '../services/RestService';
-import { transformQueryResults, transformToChartData } from '../utils/dataTransformers';
+import { useProcessNaturalLanguage, useExecuteSql } from '../hooks';
 
 const QueryPage = () => {
   const { id } = useParams();
@@ -28,90 +27,56 @@ const QueryPage = () => {
   const [queryError, setQueryError] = useState(null);
   const [queryResults, setQueryResults] = useState(null);
   const [chartData, setChartData] = useState(null);
-  const [manualQueryLoading, setManualQueryLoading] = useState(false);
-  const [aiQueryLoading, setAiQueryLoading] = useState(false);
 
-  // Load query data based on ID from URL
   useEffect(() => {
     if (id && id !== 'new') {
-      // TODO: Load query from API/service based on ID
-      // For now, just set a placeholder
       const defaultQuery = "SELECT customer_name, order_total, order_date\nFROM orders\nWHERE order_date >= '2024-01-01'\nORDER BY order_total DESC\nLIMIT 10;";
       setSelectedQuery({ id, title: `Query ${id}`, query: defaultQuery });
     }
   }, [id]);
 
-  // Handle AI query submission
-  const handleAIQuery = async (naturalLanguageQuery) => {
-    setQueryError(null);
-    setAiQueryLoading(true);
-    
-    try {
-      // Step 1: Generate SQL
-      const generateResponse = await RestService.generateSql(naturalLanguageQuery);
-      
-      if (!generateResponse.success) {
-        throw new Error(generateResponse.error || 'Failed to generate SQL');
+  const { mutate: processNaturalLanguage, isPending: aiQueryLoading } = useProcessNaturalLanguage({
+    onSuccess: (data) => {
+      if (data.success) {
+        const commentPrefix = `-- Generated from natural language query\n`;
+        setSqlQuery(commentPrefix + data.generatedSql);
+        setQueryResults(data.queryResults);
+        setChartData(data.chartData);
+        setQueryError(null);
+      } else {
+        setQueryError(data.error || 'Failed to process natural language query');
       }
-      
-      const generatedSql = generateResponse.generated_sql;
-      const commentPrefix = `-- Generated from natural language query\n`;
-      setSqlQuery(commentPrefix + generatedSql);
-      
-      // Step 2: Execute SQL
-      // Pass natural language query for auto-correction context
-      const executeResponse = await RestService.executeSql(
-        generatedSql, 
-        100, 
-        30, 
-        naturalLanguageQuery
-      );
-      
-      if (!executeResponse.success) {
-        throw new Error(executeResponse.error || 'Failed to execute SQL');
-      }
-
-      // Transform results
-      const transformedResults = transformQueryResults(executeResponse.query_results);
-      const chartData = transformedResults ? transformToChartData(transformedResults) : null;
-      
-      setQueryResults(transformedResults);
-      setChartData(chartData);
-
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error('AI Query failed:', error);
       setQueryError(error.message || 'Failed to process natural language query');
-    } finally {
-      setAiQueryLoading(false);
     }
+  });
+
+  const { mutate: executeSql, isPending: manualQueryLoading } = useExecuteSql({
+    onSuccess: (data) => {
+      if (data.success) {
+        setQueryResults(data.queryResults);
+        setChartData(data.chartData);
+        setQueryError(null);
+      } else {
+        setQueryError(data.error || 'Failed to execute SQL query');
+      }
+    },
+    onError: (error) => {
+      console.error('SQL Execution failed:', error);
+      setQueryError(error.message || 'Failed to execute SQL query');
+    }
+  });
+
+  const handleAIQuery = (naturalLanguageQuery) => {
+    setQueryError(null);
+    processNaturalLanguage({ nlQuery: naturalLanguageQuery });
   };
 
-  const handleExecuteQuery = async () => {
-    setManualQueryLoading(true);
+  const handleExecuteQuery = () => {
     setQueryError(null);
-    
-    try {
-      // Remove comments and clean up SQL before execution if needed
-      // But Trino/Postgres usually handle comments fine
-      
-      const executeResponse = await RestService.executeSql(sqlQuery);
-      
-      if (!executeResponse.success) {
-        throw new Error(executeResponse.error || 'Failed to execute SQL');
-      }
-
-      // Transform results
-      const transformedResults = transformQueryResults(executeResponse.query_results);
-      const chartData = transformedResults ? transformToChartData(transformedResults) : null;
-      
-      setQueryResults(transformedResults);
-      setChartData(chartData);
-    } catch (error) {
-      console.error('Query execution failed:', error);
-      setQueryError(error.message || 'Failed to execute query');
-    } finally {
-      setManualQueryLoading(false);
-    }
+    executeSql({ sql: sqlQuery });
   };
 
   const queryLoading = aiQueryLoading || manualQueryLoading;

@@ -1,6 +1,6 @@
 {{- if and .Values.services.trino.enabled .Values.services.postgres.enabled }}
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ include "dashboard.fullname" . }}-postgres
   namespace: {{ .Values.global.namespace }}
@@ -8,6 +8,7 @@ metadata:
     {{- include "dashboard.labels" . | nindent 4 }}
     app.kubernetes.io/component: postgres
 spec:
+  serviceName: {{ include "dashboard.fullname" . }}-postgres
   replicas: 1
   selector:
     matchLabels:
@@ -72,7 +73,12 @@ spec:
           periodSeconds: 5
       volumes:
       - name: postgres-data
+        {{- if .Values.postgres.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ include "dashboard.fullname" . }}-postgres-data
+        {{- else }}
         emptyDir: {}
+        {{- end }}
       - name: postgres-init
         configMap:
           name: {{ include "dashboard.fullname" . }}-postgres-init

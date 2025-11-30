@@ -269,6 +269,15 @@ postgres:
     tag: "15-alpine"
   database: "dashboard"
   # user and password loaded from values-dev-secrets.yaml
+  
+  # Persistence configuration
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: "standard"
+    accessModes:
+      - ReadWriteOnce
+      
   resources:
     requests:
       memory: "256Mi"

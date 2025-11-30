@@ -12,7 +12,7 @@ CREATE SCHEMA IF NOT EXISTS demo_analytics;
 -- =============================================================================
 
 -- Demo customers table
-CREATE TABLE demo_ecommerce.customers (
+CREATE TABLE IF NOT EXISTS demo_ecommerce.customers (
     customer_id SERIAL PRIMARY KEY,
     first_name VARCHAR(50) NOT NULL,
     last_name VARCHAR(50) NOT NULL,
@@ -28,7 +28,7 @@ CREATE TABLE demo_ecommerce.customers (
 );
 
 -- Demo products table
-CREATE TABLE demo_ecommerce.products (
+CREATE TABLE IF NOT EXISTS demo_ecommerce.products (
     product_id SERIAL PRIMARY KEY,
     product_name VARCHAR(200) NOT NULL,
     category VARCHAR(50) NOT NULL,
@@ -42,7 +42,7 @@ CREATE TABLE demo_ecommerce.products (
 );
 
 -- Demo orders table
-CREATE TABLE demo_ecommerce.orders (
+CREATE TABLE IF NOT EXISTS demo_ecommerce.orders (
     order_id SERIAL PRIMARY KEY,
     customer_id INTEGER REFERENCES demo_ecommerce.customers(customer_id),
     order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -56,7 +56,7 @@ CREATE TABLE demo_ecommerce.orders (
 );
 
 -- Demo order items table
-CREATE TABLE demo_ecommerce.order_items (
+CREATE TABLE IF NOT EXISTS demo_ecommerce.order_items (
     order_item_id SERIAL PRIMARY KEY,
     order_id INTEGER REFERENCES demo_ecommerce.orders(order_id),
     product_id INTEGER REFERENCES demo_ecommerce.products(product_id),
@@ -70,7 +70,7 @@ CREATE TABLE demo_ecommerce.order_items (
 -- =============================================================================
 
 -- Demo departments table
-CREATE TABLE demo_hrms.departments (
+CREATE TABLE IF NOT EXISTS demo_hrms.departments (
     department_id SERIAL PRIMARY KEY,
     department_name VARCHAR(100) NOT NULL,
     manager_id INTEGER,
@@ -80,7 +80,7 @@ CREATE TABLE demo_hrms.departments (
 );
 
 -- Demo employees table
-CREATE TABLE demo_hrms.employees (
+CREATE TABLE IF NOT EXISTS demo_hrms.employees (
     employee_id SERIAL PRIMARY KEY,
     first_name VARCHAR(50) NOT NULL,
     last_name VARCHAR(50) NOT NULL,
@@ -95,7 +95,7 @@ CREATE TABLE demo_hrms.employees (
 );
 
 -- Demo projects table
-CREATE TABLE demo_hrms.projects (
+CREATE TABLE IF NOT EXISTS demo_hrms.projects (
     project_id SERIAL PRIMARY KEY,
     project_name VARCHAR(200) NOT NULL,
     description TEXT,
@@ -108,7 +108,7 @@ CREATE TABLE demo_hrms.projects (
 );
 
 -- Demo employee project assignments
-CREATE TABLE demo_hrms.employee_projects (
+CREATE TABLE IF NOT EXISTS demo_hrms.employee_projects (
     assignment_id SERIAL PRIMARY KEY,
     employee_id INTEGER REFERENCES demo_hrms.employees(employee_id),
     project_id INTEGER REFERENCES demo_hrms.projects(project_id),
@@ -119,7 +119,7 @@ CREATE TABLE demo_hrms.employee_projects (
 );
 
 -- Demo attendance tracking
-CREATE TABLE demo_hrms.attendance (
+CREATE TABLE IF NOT EXISTS demo_hrms.attendance (
     attendance_id SERIAL PRIMARY KEY,
     employee_id INTEGER REFERENCES demo_hrms.employees(employee_id),
     date DATE NOT NULL,
@@ -130,7 +130,7 @@ CREATE TABLE demo_hrms.attendance (
 );
 
 -- Demo performance reviews
-CREATE TABLE demo_hrms.performance_reviews (
+CREATE TABLE IF NOT EXISTS demo_hrms.performance_reviews (
     review_id SERIAL PRIMARY KEY,
     employee_id INTEGER REFERENCES demo_hrms.employees(employee_id),
     reviewer_id INTEGER REFERENCES demo_hrms.employees(employee_id),
@@ -149,7 +149,7 @@ CREATE TABLE demo_hrms.performance_reviews (
 -- =============================================================================
 
 -- Demo monthly sales summary
-CREATE TABLE demo_analytics.monthly_sales (
+CREATE TABLE IF NOT EXISTS demo_analytics.monthly_sales (
     year INTEGER,
     month INTEGER,
     total_orders INTEGER,
@@ -160,7 +160,7 @@ CREATE TABLE demo_analytics.monthly_sales (
 );
 
 -- Demo product performance
-CREATE TABLE demo_analytics.product_performance (
+CREATE TABLE IF NOT EXISTS demo_analytics.product_performance (
     product_id INTEGER,
     product_name VARCHAR(200),
     category VARCHAR(50),
@@ -171,15 +171,15 @@ CREATE TABLE demo_analytics.product_performance (
 );
 
 -- Create indexes for demo tables
-CREATE INDEX idx_demo_customers_email ON demo_ecommerce.customers(email);
-CREATE INDEX idx_demo_customers_segment ON demo_ecommerce.customers(customer_segment);
-CREATE INDEX idx_demo_products_category ON demo_ecommerce.products(category);
-CREATE INDEX idx_demo_orders_customer ON demo_ecommerce.orders(customer_id);
-CREATE INDEX idx_demo_orders_date ON demo_ecommerce.orders(order_date);
-CREATE INDEX idx_demo_employees_dept ON demo_hrms.employees(department_id);
-CREATE INDEX idx_demo_employees_status ON demo_hrms.employees(status);
-CREATE INDEX idx_demo_attendance_employee ON demo_hrms.attendance(employee_id);
-CREATE INDEX idx_demo_attendance_date ON demo_hrms.attendance(date);
+CREATE INDEX IF NOT EXISTS idx_demo_customers_email ON demo_ecommerce.customers(email);
+CREATE INDEX IF NOT EXISTS idx_demo_customers_segment ON demo_ecommerce.customers(customer_segment);
+CREATE INDEX IF NOT EXISTS idx_demo_products_category ON demo_ecommerce.products(category);
+CREATE INDEX IF NOT EXISTS idx_demo_orders_customer ON demo_ecommerce.orders(customer_id);
+CREATE INDEX IF NOT EXISTS idx_demo_orders_date ON demo_ecommerce.orders(order_date);
+CREATE INDEX IF NOT EXISTS idx_demo_employees_dept ON demo_hrms.employees(department_id);
+CREATE INDEX IF NOT EXISTS idx_demo_employees_status ON demo_hrms.employees(status);
+CREATE INDEX IF NOT EXISTS idx_demo_attendance_employee ON demo_hrms.attendance(employee_id);
+CREATE INDEX IF NOT EXISTS idx_demo_attendance_date ON demo_hrms.attendance(date);
 
 -- =============================================================================
 -- DEMO VIEWS
@@ -212,4 +212,4 @@ FROM demo_ecommerce.products p
 LEFT JOIN demo_ecommerce.order_items oi ON p.product_id = oi.product_id
 GROUP BY p.product_id, p.product_name, p.category;
 
-CREATE INDEX idx_mv_product_sales_id ON demo_ecommerce.product_sales_summary_mv(product_id);
+CREATE INDEX IF NOT EXISTS idx_mv_product_sales_id ON demo_ecommerce.product_sales_summary_mv(product_id);

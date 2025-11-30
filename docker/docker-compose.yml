@@ -84,21 +84,8 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - ../helm/dashboard/sql:/sql:ro
-    command: >
-      sh -c "
-      echo '🔍 Checking database connection...';
-      until pg_isready -h postgres; do sleep 2; done;
-      
-      echo '🚀 Starting database migration...';
-      # Loop through all sql files in alphanumeric order
-      for file in /sql/*.sql; do
-        if [ -f \"$$file\" ]; then
-          echo \"  📝 Applying $$file...\";
-          psql -f \"$$file\";
-        fi
-      done
-      echo '✅ Database migration complete';
-      "
+      - ./migrate.sh:/usr/local/bin/migrate.sh:ro
+    command: ["/usr/local/bin/migrate.sh"]
     networks:
       - dashboard
     profiles:

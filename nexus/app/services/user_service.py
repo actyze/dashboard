@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy import select, update, delete, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 
 from app.database import (
@@ -148,6 +148,25 @@ class UserService:
         """Get all groups a user belongs to."""
         query = select(Group.name).join(UserGroup).where(UserGroup.user_id == user_id)
         return list((await session.execute(query)).scalars().all())
+
+    async def get_service_token(self, service_name: str) -> str:
+        """
+        Generate a long-lived JWT token for service-to-service communication.
+        This acts as a Machine User token.
+        """
+        # In a real production system, we would lookup a specific 'service account' user
+        # For this shared-secret implementation, we just sign a token with specific claims
+        token_data = {
+            "sub": f"service-account-{service_name}",
+            "type": "service",
+            "service": service_name,
+            "roles": ["SERVICE"]
+        }
+        # Long expiration for service tokens (e.g., 1 hour, refreshed automatically)
+        expires = datetime.utcnow() + timedelta(minutes=60)
+        token_data.update({"exp": expires})
+        
+        return create_access_token(token_data)
 
     async def get_user(self, user_id: str) -> Dict[str, Any]:
         """Get user by ID."""

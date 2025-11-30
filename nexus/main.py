@@ -10,7 +10,7 @@ from app.config import settings
 from app.logging import configure_logging
 from app.graphql.schema import schema, orchestration_service
 from app.database import db_manager
-from app.api import router as api_router, auth_router
+from app.api import router as api_router, auth_router, explorer_router
 
 # Configure logging
 configure_logging()
@@ -74,6 +74,7 @@ app.include_router(graphql_app, prefix="")
 # Include REST API router
 app.include_router(api_router)
 app.include_router(auth_router)
+app.include_router(explorer_router)
 
 
 @app.get("/")

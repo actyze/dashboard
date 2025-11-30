@@ -4,12 +4,15 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from app.services.orchestration_service import orchestration_service
 from app.services.user_service import UserService
+from app.services.schema_service import SchemaService
 from app.auth.dependencies import get_current_user, require_viewer, require_editor, require_admin
 
 router = APIRouter(prefix="/api", tags=["REST API"])
 auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
+explorer_router = APIRouter(prefix="/api/explorer", tags=["Schema Explorer"])
 
 user_service = UserService()
+schema_service_client = SchemaService()
 
 class GenerateSQLRequest(BaseModel):
     nl_query: str
@@ -112,3 +115,38 @@ async def query(
         return result
     else:
         raise HTTPException(status_code=400, detail="Invalid query type. Use 'sql' or 'auto'.")
+
+# =============================================================================
+# Explorer Endpoints
+# =============================================================================
+
+@explorer_router.get("/databases")
+async def get_databases(current_user: dict = Depends(require_viewer)):
+    """Get list of all databases."""
+    return await schema_service_client.get_databases()
+
+@explorer_router.get("/databases/{database}/schemas")
+async def get_database_schemas(database: str, current_user: dict = Depends(require_viewer)):
+    """Get schemas for a database."""
+    return await schema_service_client.get_database_schemas(database)
+
+@explorer_router.get("/databases/{database}/schemas/{schema}/objects")
+async def get_schema_objects(database: str, schema: str, current_user: dict = Depends(require_viewer)):
+    """Get objects (tables/views) for a schema."""
+    return await schema_service_client.get_schema_objects(database, schema)
+
+@explorer_router.get("/databases/{database}/schemas/{schema}/tables/{table}")
+async def get_table_details(database: str, schema: str, table: str, current_user: dict = Depends(require_viewer)):
+    """Get detailed information about a specific table."""
+    return await schema_service_client.get_table_details(database, schema, table)
+
+@explorer_router.get("/search")
+async def search_objects(
+    query: str, 
+    database: Optional[str] = None,
+    schema: Optional[str] = None,
+    object_type: Optional[str] = None,
+    current_user: dict = Depends(require_viewer)
+):
+    """Search for database objects."""
+    return await schema_service_client.search_database_objects(query, database, schema, object_type)

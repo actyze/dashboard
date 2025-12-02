@@ -16,6 +16,8 @@ const DatabaseSchemaPanel = ({
   const [expandedSchemas, setExpandedSchemas] = useState(new Set());
   const [schemaCache, setSchemaCache] = useState({}); // Cache schemas per database
   const [objectsCache, setObjectsCache] = useState({}); // Cache objects per schema
+  const [tableDetailsCache, setTableDetailsCache] = useState({}); // Cache table details
+  const [selectedTableInfo, setSelectedTableInfo] = useState(null); // Track full table info (db, schema, table)
 
   // Fetch all databases
   const { 
@@ -73,9 +75,29 @@ const DatabaseSchemaPanel = ({
     setExpandedSchemas(newExpanded);
   };
 
-  const handleTableClick = (tableName) => {
+  const handleTableClick = async (dbName, schemaName, tableName) => {
+    const tableKey = `${dbName}.${schemaName}.${tableName}`;
+    
+    // Update selected table info
+    setSelectedTableInfo({ database: dbName, schema: schemaName, table: tableName });
+    
     if (onTableSelect) {
       onTableSelect(tableName);
+    }
+
+    // Fetch table details if not already cached
+    if (!tableDetailsCache[tableKey]) {
+      try {
+        const response = await RestService.getTableDetails(dbName, schemaName, tableName);
+        if (response) {
+          setTableDetailsCache(prev => ({
+            ...prev,
+            [tableKey]: response
+          }));
+        }
+      } catch (error) {
+        console.error(`Failed to fetch table details for ${tableKey}:`, error);
+      }
     }
   };
 
@@ -220,7 +242,7 @@ const DatabaseSchemaPanel = ({
                                         {objectsCache[schemaKey].tables.map((table) => (
                                           <button
                                             key={table.name}
-                                            onClick={() => handleTableClick(table.name)}
+                                            onClick={() => handleTableClick(database.name, schema.name, table.name)}
                                             className={`w-full flex items-center space-x-1.5 p-1.5 text-left rounded transition-colors mb-0.5
                                               ${selectedTable === table.name 
                                                 ? (isDark ? 'bg-blue-600/80 text-white' : 'bg-blue-500/80 text-white')
@@ -247,7 +269,7 @@ const DatabaseSchemaPanel = ({
                                         {objectsCache[schemaKey].views.map((view) => (
                                           <button
                                             key={view.name}
-                                            onClick={() => handleTableClick(view.name)}
+                                            onClick={() => handleTableClick(database.name, schema.name, view.name)}
                                             className={`w-full flex items-center space-x-1.5 p-1.5 text-left rounded transition-colors mb-0.5
                                               ${selectedTable === view.name 
                                                 ? (isDark ? 'bg-blue-600/80 text-white' : 'bg-blue-500/80 text-white')
@@ -288,7 +310,12 @@ const DatabaseSchemaPanel = ({
 
           {/* Table Schema at Bottom - Fixed Height when visible */}
           <div className={`${selectedTable ? 'flex-shrink-0' : 'hidden'} border-t border-gray-200/50 dark:border-gray-700/50 h-48 overflow-y-auto bg-gray-800/30`}>
-            {selectedTable && <TableSchema tableName={selectedTable} />}
+            {selectedTable && selectedTableInfo && (
+              <TableSchema 
+                tableName={selectedTable} 
+                tableDetails={tableDetailsCache[`${selectedTableInfo.database}.${selectedTableInfo.schema}.${selectedTableInfo.table}`]}
+              />
+            )}
           </div>
         </div>
       </div>

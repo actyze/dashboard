@@ -310,6 +310,67 @@ class OrchestrationService:
             "processing_time": processing_time
         }
     
+    async def generate_chart_data(
+        self,
+        nl_query: str,
+        main_sql: str,
+        schema_context: Optional[Dict[str, Any]] = None,
+        row_count: Optional[int] = None,
+        is_limited: Optional[bool] = False
+    ) -> Dict[str, Any]:
+        """Generate aggregated data specifically for charting."""
+        
+        start_time = asyncio.get_event_loop().time()
+        self.logger.info("Generating chart data", query=nl_query, row_count=row_count, is_limited=is_limited)
+        
+        try:
+            # Step 1: Get Chart SQL from LLM
+            chart_gen_result = await self.llm_service.generate_chart_sql(
+                nl_query, main_sql, schema_context, row_count, is_limited
+            )
+            
+            if not chart_gen_result.get("success"):
+                return {
+                    "success": False,
+                    "error": chart_gen_result.get("error", "Chart generation failed")
+                }
+            
+            config = chart_gen_result.get("chart_config", {})
+            chart_sql = config.get("sql")
+            
+            if not chart_sql:
+                return {"success": False, "error": "LLM did not return chart SQL"}
+            
+            # Step 2: Execute Chart SQL
+            self.logger.info("Executing Chart SQL", sql=chart_sql[:100])
+            
+            # Use simple execution (no retry logic needed for auxiliary chart query usually)
+            # Set a tighter limit for charts
+            result = await self.trino_service.execute_query(chart_sql, max_results=1000, timeout_seconds=20)
+            
+            processing_time = (asyncio.get_event_loop().time() - start_time) * 1000
+            
+            if not result.get("success"):
+                return {
+                    "success": False,
+                    "error": result.get("error"),
+                    "chart_config": config
+                }
+            
+            return {
+                "success": True,
+                "chart_config": config,
+                "chart_data": {
+                    "columns": result.get("columns"),
+                    "rows": result.get("data") # Trino service returns 'data' not 'rows' usually
+                },
+                "processing_time": processing_time
+            }
+            
+        except Exception as e:
+            self.logger.error("Chart data generation error", error=str(e))
+            return {"success": False, "error": str(e)}
+
     async def execute_sql_directly(
         self,
         sql: str,

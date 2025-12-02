@@ -1,8 +1,90 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { Card, Button, Input } from './ui'; // Assuming Input exists or I'll use standard input
+
+// Color palette - single source of truth
+const colors = {
+  primary: '#3064FF',
+  primaryLight: '#5b8aff',
+  primaryLighter: '#93b4ff',
+  primaryDark: '#1e40af',
+};
+
+// Reusable style generators
+const getStyles = (isDark) => ({
+  decorativeLine: isDark
+    ? `linear-gradient(90deg, transparent, ${colors.primary}, transparent)`
+    : 'linear-gradient(90deg, transparent, rgba(255,255,255,0.8), transparent)',
+  button: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.primaryDark} 100%)`,
+  buttonHover: `linear-gradient(135deg, ${colors.primaryLight} 0%, ${colors.primary} 100%)`,
+});
+
+// Animation keyframes for fluid gradient background
+const animationStyles = `
+  @keyframes fluid-1 {
+    0%, 100% { transform: translate(0%, 0%) scale(1); }
+    25% { transform: translate(20%, -30%) scale(1.1); }
+    50% { transform: translate(-20%, 20%) scale(0.9); }
+    75% { transform: translate(30%, 10%) scale(1.05); }
+  }
+  @keyframes fluid-2 {
+    0%, 100% { transform: translate(0%, 0%) scale(1); }
+    25% { transform: translate(-30%, 20%) scale(1.15); }
+    50% { transform: translate(25%, -25%) scale(0.95); }
+    75% { transform: translate(-15%, -20%) scale(1.1); }
+  }
+  @keyframes fluid-3 {
+    0%, 100% { transform: translate(0%, 0%) scale(1); }
+    25% { transform: translate(15%, 25%) scale(0.9); }
+    50% { transform: translate(-25%, -15%) scale(1.1); }
+    75% { transform: translate(20%, -30%) scale(1); }
+  }
+  @keyframes fluid-4 {
+    0%, 100% { transform: translate(0%, 0%) scale(1.1); }
+    33% { transform: translate(-20%, 30%) scale(0.95); }
+    66% { transform: translate(30%, -20%) scale(1.05); }
+  }
+`;
+
+// Fluid blob configuration
+const blobsConfig = [
+  { 
+    size: '140%', 
+    x: '-20%', 
+    y: '-30%', 
+    color: 'rgba(48, 100, 255, 0.8)',
+    animation: 'fluid-1 15s ease-in-out infinite',
+  },
+  { 
+    size: '100%', 
+    x: '50%', 
+    y: '60%', 
+    color: 'rgba(91, 138, 255, 0.7)',
+    animation: 'fluid-2 18s ease-in-out infinite',
+  },
+  { 
+    size: '120%', 
+    x: '70%', 
+    y: '-20%', 
+    color: 'rgba(30, 64, 175, 0.8)',
+    animation: 'fluid-3 20s ease-in-out infinite',
+  },
+  { 
+    size: '90%', 
+    x: '-10%', 
+    y: '70%', 
+    color: 'rgba(59, 130, 246, 0.6)',
+    animation: 'fluid-4 22s ease-in-out infinite',
+  },
+  { 
+    size: '80%', 
+    x: '40%', 
+    y: '20%', 
+    color: 'rgba(147, 180, 255, 0.5)',
+    animation: 'fluid-1 25s ease-in-out infinite reverse',
+  },
+];
 
 const LoginPage = () => {
   const { login, error } = useAuth();
@@ -10,69 +92,191 @@ const LoginPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [leftMousePos, setLeftMousePos] = useState({ x: 0, y: 0 });
+  const [rightMousePos, setRightMousePos] = useState({ x: 0, y: 0 });
+  const [isHoveringLeft, setIsHoveringLeft] = useState(false);
+  const [isHoveringRight, setIsHoveringRight] = useState(false);
+  const leftPanelRef = useRef(null);
+  const rightPanelRef = useRef(null);
   const navigate = useNavigate();
+
+  const styles = getStyles(isDark);
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (leftPanelRef.current) {
+        const rect = leftPanelRef.current.getBoundingClientRect();
+        setLeftMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+      }
+      if (rightPanelRef.current) {
+        const rect = rightPanelRef.current.getBoundingClientRect();
+        setRightMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+      }
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     const success = await login(username, password);
-    if (success) {
-      navigate('/');
-    }
+    if (success) navigate('/');
     setLoading(false);
   };
 
-  return (
-    <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
-      <div className="max-w-md w-full px-6">
-        <div className="text-center mb-8">
-          <h2 className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            Nexus Dashboard
-          </h2>
-          <p className={`mt-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-            Sign in to access your analytics
-          </p>
-        </div>
+  const inputClasses = `w-full px-4 py-3 rounded-xl border-2 outline-none transition-all duration-200 ${
+    isDark
+      ? 'bg-gray-900 border-gray-800 text-white placeholder-gray-600 focus:border-blue-500 focus:bg-gray-900/50'
+      : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:shadow-lg focus:shadow-blue-500/10'
+  }`;
 
-        <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 ${isDark ? 'border border-gray-700' : ''}`}>
-          <form onSubmit={handleSubmit} className="space-y-6">
+  const labelClasses = `block text-sm font-medium mb-2 ${isDark ? 'text-gray-400' : 'text-gray-700'}`;
+
+  return (
+    <div className={`min-h-screen flex ${isDark ? 'bg-gray-950' : 'bg-slate-50'}`}>
+      <style>{animationStyles}</style>
+
+      {/* Left Panel - Animated Fluid Gradient */}
+      <div
+        ref={leftPanelRef}
+        onMouseEnter={() => setIsHoveringLeft(true)}
+        onMouseLeave={() => setIsHoveringLeft(false)}
+        className="hidden lg:flex lg:w-1/2 relative overflow-hidden"
+        style={{ backgroundColor: isDark ? '#050a18' : '#1a3a8f' }}
+      >
+        {/* Animated fluid blobs */}
+        {blobsConfig.map((blob, i) => (
+          <div
+            key={i}
+            className="absolute rounded-full"
+            style={{
+              width: blob.size,
+              height: blob.size,
+              left: blob.x,
+              top: blob.y,
+              background: `radial-gradient(circle, ${blob.color} 0%, transparent 70%)`,
+              filter: 'blur(60px)',
+              animation: blob.animation,
+              willChange: 'transform',
+            }}
+          />
+        ))}
+
+        {/* Subtle overlay for depth */}
+        <div 
+          className="absolute inset-0" 
+          style={{ 
+            background: 'radial-gradient(ellipse at 30% 20%, transparent 0%, rgba(0,0,0,0.2) 100%)',
+          }} 
+        />
+
+        {/* Cursor follower glow */}
+        <div
+          className="absolute rounded-full pointer-events-none transition-all duration-500 ease-out"
+          style={{
+            width: 300,
+            height: 300,
+            left: leftMousePos.x - 150,
+            top: leftMousePos.y - 150,
+            background: 'radial-gradient(circle, rgba(147, 180, 255, 0.4) 0%, transparent 60%)',
+            opacity: isHoveringLeft ? 1 : 0,
+            filter: 'blur(40px)',
+          }}
+        />
+
+        {/* Center content */}
+        <div className="relative z-10 flex flex-col items-center justify-center w-full px-12">
+          <h1 
+            className="text-6xl font-black tracking-tight mb-4 text-white"
+            style={{ textShadow: '0 4px 30px rgba(0,0,0,0.3)' }}
+          >
+            Actyze
+          </h1>
+          <p 
+            className="text-lg font-light tracking-wide text-white/80"
+            style={{ textShadow: '0 2px 10px rgba(0,0,0,0.2)' }}
+          >
+            Every Database, One Platform
+          </p>
+          <div className="mt-8 h-px w-32" style={{ background: styles.decorativeLine }} />
+        </div>
+      </div>
+
+      {/* Right Panel - Login Form */}
+      <div 
+        ref={rightPanelRef}
+        onMouseEnter={() => setIsHoveringRight(true)}
+        onMouseLeave={() => setIsHoveringRight(false)}
+        className={`w-full lg:w-1/2 flex items-center justify-center p-8 relative overflow-hidden ${isDark ? 'bg-gray-950' : 'bg-slate-50'}`}
+      >
+        {/* Cursor follower glow for right panel */}
+        <div
+          className="absolute rounded-full pointer-events-none transition-all duration-500 ease-out"
+          style={{
+            width: 250,
+            height: 250,
+            left: rightMousePos.x - 125,
+            top: rightMousePos.y - 125,
+            background: isDark 
+              ? 'radial-gradient(circle, rgba(48, 100, 255, 0.15) 0%, transparent 60%)'
+              : 'radial-gradient(circle, rgba(48, 100, 255, 0.1) 0%, transparent 60%)',
+            opacity: isHoveringRight ? 1 : 0,
+            filter: 'blur(40px)',
+          }}
+        />
+        <div className="w-full max-w-md relative z-10">
+          {/* Mobile logo */}
+          <div className="lg:hidden text-center mb-10">
+            <h1
+              className="text-4xl font-black tracking-tight"
+              style={{
+                background: `linear-gradient(135deg, ${colors.primary}, ${colors.primaryLight})`,
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
+              Actyze
+            </h1>
+          </div>
+
+          {/* Welcome text */}
+          <div className="mb-8">
+            <h2 className={`text-3xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Welcome back
+            </h2>
+            <p className={`mt-2 ${isDark ? 'text-gray-500' : 'text-gray-600'}`}>
+              Sign in to access your dashboard
+            </p>
+          </div>
+
+          {/* Login Form */}
+          <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
-                <span className="block sm:inline">{error}</span>
+              <div className="px-4 py-3 rounded-lg text-sm bg-red-500/10 border border-red-500/30 text-red-500">
+                {error}
               </div>
             )}
 
             <div>
-              <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                Username
-              </label>
+              <label className={labelClasses}>Username</label>
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className={`w-full px-4 py-2 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-colors
-                  ${isDark 
-                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
-                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
-                  }`}
-                placeholder="nexus_admin"
+                className={inputClasses}
+                placeholder="Enter username"
                 required
               />
             </div>
 
             <div>
-              <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                Password
-              </label>
+              <label className={labelClasses}>Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className={`w-full px-4 py-2 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-colors
-                  ${isDark 
-                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
-                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
-                  }`}
+                className={inputClasses}
                 placeholder="••••••••"
                 required
               />
@@ -81,16 +285,34 @@ const LoginPage = () => {
             <button
               type="submit"
               disabled={loading}
-              className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors`}
+              className={`w-full py-3.5 px-4 rounded-xl font-semibold text-white transition-all duration-200 relative overflow-hidden group
+                ${loading ? 'opacity-70 cursor-not-allowed' : 'hover:shadow-xl hover:shadow-blue-500/25 hover:-translate-y-0.5'}`}
+              style={{ background: styles.button }}
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              <span className="relative z-10 flex items-center justify-center gap-2">
+                {loading && (
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                )}
+                {loading ? 'Signing in...' : 'Sign In'}
+              </span>
+              <div
+                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                style={{ background: styles.buttonHover }}
+              />
             </button>
           </form>
-          
-          <div className="mt-6 text-center text-sm">
-             <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>
-               Default: nexus_admin / admin
-             </p>
+
+          {/* Footer hint */}
+          <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-800">
+            <p className={`text-center text-sm ${isDark ? 'text-gray-600' : 'text-gray-500'}`}>
+              Default credentials:{' '}
+              <span className="font-mono" style={{ color: colors.primary }}>
+                nexus_admin / admin
+              </span>
+            </p>
           </div>
         </div>
       </div>
@@ -99,4 +321,3 @@ const LoginPage = () => {
 };
 
 export default LoginPage;
-

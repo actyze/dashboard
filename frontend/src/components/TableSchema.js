@@ -2,55 +2,45 @@ import React from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { Text } from './ui';
 
-const TableSchema = ({ tableName }) => {
+const TableSchema = ({ tableName, tableDetails }) => {
   const { isDark } = useTheme();
 
-  // Mock table schema data - in real app this would come from API
-  const getTableSchema = (tableName) => {
-    const schemas = {
-      'CUSTOMERS': [
-        { name: 'CUSTOMER_ID', type: 'NUMBER(38,0)', icon: 'number' },
-        { name: 'FIRST_NAME', type: 'VARCHAR(100)', icon: 'text' },
-        { name: 'LAST_NAME', type: 'VARCHAR(100)', icon: 'text' },
-        { name: 'EMAIL', type: 'VARCHAR(255)', icon: 'text' },
-        { name: 'PHONE', type: 'VARCHAR(20)', icon: 'text' },
-        { name: 'ADDRESS', type: 'VARCHAR(500)', icon: 'text' },
-        { name: 'CITY', type: 'VARCHAR(100)', icon: 'text' },
-        { name: 'STATE', type: 'VARCHAR(50)', icon: 'text' },
-        { name: 'ZIP_CODE', type: 'VARCHAR(10)', icon: 'text' },
-        { name: 'CREATED_AT', type: 'TIMESTAMP', icon: 'date' }
-      ],
-      'ORDERS': [
-        { name: 'ORDER_ID', type: 'NUMBER(38,0)', icon: 'number' },
-        { name: 'CUSTOMER_ID', type: 'NUMBER(38,0)', icon: 'number' },
-        { name: 'ORDER_DATE', type: 'DATE', icon: 'date' },
-        { name: 'ORDER_TOTAL', type: 'NUMBER(10,2)', icon: 'number' },
-        { name: 'STATUS', type: 'VARCHAR(50)', icon: 'text' },
-        { name: 'SHIPPING_ADDRESS', type: 'VARCHAR(500)', icon: 'text' },
-        { name: 'PAYMENT_METHOD', type: 'VARCHAR(50)', icon: 'text' }
-      ],
-      'PRODUCTS': [
-        { name: 'PRODUCT_ID', type: 'NUMBER(38,0)', icon: 'number' },
-        { name: 'PRODUCT_NAME', type: 'VARCHAR(255)', icon: 'text' },
-        { name: 'DESCRIPTION', type: 'TEXT', icon: 'text' },
-        { name: 'PRICE', type: 'NUMBER(10,2)', icon: 'number' },
-        { name: 'CATEGORY_ID', type: 'NUMBER(38,0)', icon: 'number' },
-        { name: 'SKU', type: 'VARCHAR(50)', icon: 'text' },
-        { name: 'STOCK_QUANTITY', type: 'NUMBER(10,0)', icon: 'number' },
-        { name: 'IS_ACTIVE', type: 'BOOLEAN', icon: 'text' }
-      ],
-      default: [
-        { name: 'ID', type: 'NUMBER(38,0)', icon: 'number' },
-        { name: 'NAME', type: 'VARCHAR(255)', icon: 'text' },
-        { name: 'CREATED_AT', type: 'TIMESTAMP', icon: 'date' },
-        { name: 'UPDATED_AT', type: 'TIMESTAMP', icon: 'date' }
-      ]
-    };
+  // Determine the icon type based on column data type
+  const getIconType = (dataType) => {
+    const type = (dataType || '').toLowerCase();
     
-    return schemas[tableName] || schemas.default;
+    if (type.includes('int') || type.includes('number') || type.includes('decimal') || 
+        type.includes('float') || type.includes('double') || type.includes('numeric') ||
+        type.includes('bigint') || type.includes('smallint') || type.includes('real')) {
+      return 'number';
+    }
+    if (type.includes('date') || type.includes('time') || type.includes('timestamp')) {
+      return 'date';
+    }
+    if (type.includes('bool')) {
+      return 'boolean';
+    }
+    return 'text';
   };
 
-  const fields = getTableSchema(tableName);
+  // Get columns from tableDetails or show loading/empty state
+  const getColumns = () => {
+    if (!tableDetails) {
+      return null; // Loading state
+    }
+    
+    if (tableDetails.columns && Array.isArray(tableDetails.columns)) {
+      return tableDetails.columns.map(col => ({
+        name: col.name || col.column_name,
+        type: col.data_type || col.type,
+        icon: getIconType(col.data_type || col.type)
+      }));
+    }
+    
+    return []; // Empty state
+  };
+
+  const columns = getColumns();
 
   const getFieldIcon = (type) => {
     if (type === 'text') {
@@ -74,6 +64,13 @@ const TableSchema = ({ tableName }) => {
         </svg>
       );
     }
+    if (type === 'boolean') {
+      return (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      );
+    }
     // Default icon
     return (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -94,6 +91,38 @@ const TableSchema = ({ tableName }) => {
     </svg>
   );
 
+  // Loading state
+  if (columns === null) {
+    return (
+      <div className="p-3">
+        <div className="flex items-center justify-between mb-2">
+          <Text variant="subtitle2" className="font-medium text-xs text-gray-700 dark:text-gray-300">
+            {tableName}
+          </Text>
+        </div>
+        <div className={`text-xs py-4 text-center ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+          Loading columns...
+        </div>
+      </div>
+    );
+  }
+
+  // Empty state
+  if (columns.length === 0) {
+    return (
+      <div className="p-3">
+        <div className="flex items-center justify-between mb-2">
+          <Text variant="subtitle2" className="font-medium text-xs text-gray-700 dark:text-gray-300">
+            {tableName}
+          </Text>
+        </div>
+        <div className={`text-xs py-4 text-center ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+          No columns found
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-3 max-h-80 overflow-y-auto">
       {/* Header */}
@@ -103,7 +132,7 @@ const TableSchema = ({ tableName }) => {
             {tableName}
           </Text>
           <Text color="secondary" className="text-xs">
-            1.6M Rows
+            {columns.length} columns
           </Text>
         </div>
         <div className="flex items-center space-x-0.5">
@@ -118,7 +147,7 @@ const TableSchema = ({ tableName }) => {
 
       {/* Field List */}
       <div className="space-y-0.5">
-        {fields.map((field, index) => (
+        {columns.map((field, index) => (
           <div
             key={index}
             className={`flex items-center justify-between p-1.5 rounded transition-colors ${isDark ? 'hover:bg-gray-800/60' : 'hover:bg-gray-100/60'}`}

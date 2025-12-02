@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { Text, Button } from './ui';
 import TableSchema from './TableSchema';
+import { useGetDatabases } from '../hooks/useRestAPI';
+import { RestService } from '../services/RestService';
 
 const DatabaseSchemaPanel = ({ 
   isCollapsed, 
@@ -10,63 +12,63 @@ const DatabaseSchemaPanel = ({
   selectedTable 
 }) => {
   const { isDark } = useTheme();
-  const [expandedDatabases, setExpandedDatabases] = useState(new Set(['MAIN_DB']));
-  const [expandedSchemas, setExpandedSchemas] = useState(new Set(['SALES']));
+  const [expandedDatabases, setExpandedDatabases] = useState(new Set());
+  const [expandedSchemas, setExpandedSchemas] = useState(new Set());
+  const [schemaCache, setSchemaCache] = useState({}); // Cache schemas per database
+  const [objectsCache, setObjectsCache] = useState({}); // Cache objects per schema
 
-  // Mock database schema - in real app this would come from API
-  const databaseSchema = {
-    'MAIN_DB': {
-      'SALES': {
-        tables: [
-          'CUSTOMERS',
-          'ORDERS',
-          'ORDER_ITEMS',
-          'PRODUCTS',
-          'CATEGORIES',
-          'PAYMENTS',
-          'SHIPPING',
-          'PROMOTIONS',
-          'REVIEWS',
-          'INVENTORY'
-        ]
-      },
-      'USERS': {
-        tables: ['USER_PROFILES', 'USER_SESSIONS', 'USER_PREFERENCES']
-      },
-      'ANALYTICS': {
-        tables: ['PAGE_VIEWS', 'EVENTS', 'CONVERSIONS']
-      },
-      'FINANCE': {
-        tables: ['TRANSACTIONS', 'INVOICES', 'BUDGETS']
-      },
-      'MARKETING': {
-        tables: ['CAMPAIGNS', 'EMAIL_LOGS', 'SOCIAL_MEDIA']
-      },
-      'OPERATIONS': {
-        tables: ['SUPPLIERS', 'WAREHOUSES', 'LOGISTICS']
-      },
-      'SUPPORT': {
-        tables: ['TICKETS', 'FAQ', 'KNOWLEDGE_BASE']
-      }
-    }
-  };
+  // Fetch all databases
+  const { 
+    data: databasesData, 
+    isLoading: isDatabasesLoading, 
+    error: databasesError 
+  } = useGetDatabases();
 
-  const toggleDatabase = (dbName) => {
+  const toggleDatabase = async (dbName) => {
     const newExpanded = new Set(expandedDatabases);
     if (newExpanded.has(dbName)) {
       newExpanded.delete(dbName);
     } else {
       newExpanded.add(dbName);
+      // Fetch schemas for this database if not already cached
+      if (!schemaCache[dbName]) {
+        try {
+          const response = await RestService.getDatabaseSchemas(dbName);
+          if (response && response.schemas) {
+            setSchemaCache(prev => ({
+              ...prev,
+              [dbName]: response.schemas
+            }));
+          }
+        } catch (error) {
+          console.error(`Failed to fetch schemas for ${dbName}:`, error);
+        }
+      }
     }
     setExpandedDatabases(newExpanded);
   };
 
-  const toggleSchema = (schemaName) => {
+  const toggleSchema = async (dbName, schemaName) => {
+    const schemaKey = `${dbName}.${schemaName}`;
     const newExpanded = new Set(expandedSchemas);
-    if (newExpanded.has(schemaName)) {
-      newExpanded.delete(schemaName);
+    if (newExpanded.has(schemaKey)) {
+      newExpanded.delete(schemaKey);
     } else {
-      newExpanded.add(schemaName);
+      newExpanded.add(schemaKey);
+      // Fetch objects for this schema if not already cached
+      if (!objectsCache[schemaKey]) {
+        try {
+          const response = await RestService.getSchemaObjects(dbName, schemaName);
+          if (response && response.objects) {
+            setObjectsCache(prev => ({
+              ...prev,
+              [schemaKey]: response.objects
+            }));
+          }
+        } catch (error) {
+          console.error(`Failed to fetch objects for ${schemaKey}:`, error);
+        }
+      }
     }
     setExpandedSchemas(newExpanded);
   };
@@ -154,57 +156,130 @@ const DatabaseSchemaPanel = ({
         <div className="flex-1 flex flex-col min-h-0">
           {/* Table List - Scrollable */}
           <div className={`${selectedTable ? 'flex-1 min-h-0' : 'flex-1'} overflow-y-auto p-2`}>
-            {Object.entries(databaseSchema).map(([dbName, schemas]) => (
-              <div key={dbName} className="mb-2">
+            {/* Loading State */}
+            {isDatabasesLoading && (
+              <div className={`text-center py-4 text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                Loading databases...
+              </div>
+            )}
+
+            {/* Error State */}
+            {databasesError && (
+              <div className={`text-center py-4 text-sm ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+                Failed to load databases
+              </div>
+            )}
+
+            {/* Database List */}
+            {databasesData?.databases?.map((database) => (
+              <div key={database.name} className="mb-2">
                 {/* Database Level */}
                 <button
-                  onClick={() => toggleDatabase(dbName)}
+                  onClick={() => toggleDatabase(database.name)}
                   className={`w-full flex items-center space-x-1.5 p-1.5 text-left rounded transition-colors ${isDark ? 'hover:bg-gray-800/60 text-gray-200' : 'hover:bg-gray-100/60 text-gray-800'}`}
                 >
-                  <ChevronIcon isExpanded={expandedDatabases.has(dbName)} />
+                  <ChevronIcon isExpanded={expandedDatabases.has(database.name)} />
                   <DatabaseIcon />
-                  <Text className="font-medium text-xs">{dbName}</Text>
+                  <Text className="font-medium text-xs">{database.name}</Text>
+                  <Text className="text-xs text-gray-400 ml-auto">
+                    {database.schema_count} schemas
+                  </Text>
                 </button>
 
                 {/* Schema Level */}
-                {expandedDatabases.has(dbName) && (
+                {expandedDatabases.has(database.name) && (
                   <div className="ml-4">
-                    {Object.entries(schemas).map(([schemaName, schemaData]) => (
-                      <div key={schemaName} className="mb-1">
-                        <button
-                          onClick={() => toggleSchema(schemaName)}
-                          className={`w-full flex items-center space-x-1.5 p-1.5 text-left rounded transition-colors ${isDark ? 'hover:bg-gray-800/60 text-gray-300' : 'hover:bg-gray-100/60 text-gray-700'}`}
-                        >
-                          <ChevronIcon isExpanded={expandedSchemas.has(schemaName)} />
-                          <SchemaIcon />
-                          <Text className="text-xs">{schemaName}</Text>
-                        </button>
+                    {schemaCache[database.name] ? (
+                      schemaCache[database.name].map((schema) => {
+                        const schemaKey = `${database.name}.${schema.name}`;
+                        return (
+                          <div key={schema.name} className="mb-1">
+                            <button
+                              onClick={() => toggleSchema(database.name, schema.name)}
+                              className={`w-full flex items-center space-x-1.5 p-1.5 text-left rounded transition-colors ${isDark ? 'hover:bg-gray-800/60 text-gray-300' : 'hover:bg-gray-100/60 text-gray-700'}`}
+                            >
+                              <ChevronIcon isExpanded={expandedSchemas.has(schemaKey)} />
+                              <SchemaIcon />
+                              <Text className="text-xs">{schema.name}</Text>
+                              <Text className="text-xs text-gray-400 ml-auto">
+                                {schema.table_count} tables
+                              </Text>
+                            </button>
 
-                        {/* Tables Level */}
-                        {expandedSchemas.has(schemaName) && (
-                          <div className="ml-4">
-                            <div className={`mb-1.5 px-1 py-0.5 rounded text-xs ${isDark ? 'bg-gray-800/40 text-gray-400' : 'bg-gray-100/40 text-gray-600'} font-medium uppercase tracking-wide`}>
-                              Tables
-                            </div>
-                            {schemaData.tables.map((tableName, index) => (
-                              <button
-                                key={index}
-                                onClick={() => handleTableClick(tableName)}
-                                className={`w-full flex items-center space-x-1.5 p-1.5 text-left rounded transition-colors mb-0.5
-                                  ${selectedTable === tableName 
-                                    ? (isDark ? 'bg-blue-600/80 text-white' : 'bg-blue-500/80 text-white')
-                                    : (isDark ? 'hover:bg-gray-800/60 text-gray-300' : 'hover:bg-gray-100/60 text-gray-700')
-                                  }
-                                `}
-                              >
-                                <TableIcon />
-                                <Text className="text-xs">{tableName}</Text>
-                              </button>
-                            ))}
+                            {/* Tables Level */}
+                            {expandedSchemas.has(schemaKey) && (
+                              <div className="ml-4">
+                                {objectsCache[schemaKey] ? (
+                                  <>
+                                    {/* Tables Section */}
+                                    {objectsCache[schemaKey].tables && objectsCache[schemaKey].tables.length > 0 && (
+                                      <>
+                                        <div className={`mb-1.5 px-1 py-0.5 rounded text-xs ${isDark ? 'bg-gray-800/40 text-gray-400' : 'bg-gray-100/40 text-gray-600'} font-medium uppercase tracking-wide`}>
+                                          Tables
+                                        </div>
+                                        {objectsCache[schemaKey].tables.map((table) => (
+                                          <button
+                                            key={table.name}
+                                            onClick={() => handleTableClick(table.name)}
+                                            className={`w-full flex items-center space-x-1.5 p-1.5 text-left rounded transition-colors mb-0.5
+                                              ${selectedTable === table.name 
+                                                ? (isDark ? 'bg-blue-600/80 text-white' : 'bg-blue-500/80 text-white')
+                                                : (isDark ? 'hover:bg-gray-800/60 text-gray-300' : 'hover:bg-gray-100/60 text-gray-700')
+                                              }
+                                            `}
+                                          >
+                                            <TableIcon />
+                                            <Text className="text-xs">{table.name}</Text>
+                                            <Text className="text-xs text-gray-400 ml-auto">
+                                              {table.column_count} cols
+                                            </Text>
+                                          </button>
+                                        ))}
+                                      </>
+                                    )}
+                                    
+                                    {/* Views Section */}
+                                    {objectsCache[schemaKey].views && objectsCache[schemaKey].views.length > 0 && (
+                                      <>
+                                        <div className={`mb-1.5 mt-2 px-1 py-0.5 rounded text-xs ${isDark ? 'bg-gray-800/40 text-gray-400' : 'bg-gray-100/40 text-gray-600'} font-medium uppercase tracking-wide`}>
+                                          Views
+                                        </div>
+                                        {objectsCache[schemaKey].views.map((view) => (
+                                          <button
+                                            key={view.name}
+                                            onClick={() => handleTableClick(view.name)}
+                                            className={`w-full flex items-center space-x-1.5 p-1.5 text-left rounded transition-colors mb-0.5
+                                              ${selectedTable === view.name 
+                                                ? (isDark ? 'bg-blue-600/80 text-white' : 'bg-blue-500/80 text-white')
+                                                : (isDark ? 'hover:bg-gray-800/60 text-gray-300' : 'hover:bg-gray-100/60 text-gray-700')
+                                              }
+                                            `}
+                                          >
+                                            <TableIcon />
+                                            <Text className="text-xs">{view.name}</Text>
+                                            <Text className="text-xs text-gray-400 ml-auto">
+                                              {view.column_count} cols
+                                            </Text>
+                                          </button>
+                                        ))}
+                                      </>
+                                    )}
+                                  </>
+                                ) : (
+                                  <div className={`text-xs py-2 px-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                                    Loading objects...
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
-                        )}
+                        );
+                      })
+                    ) : (
+                      <div className={`text-xs py-2 px-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                        Loading schemas...
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
               </div>

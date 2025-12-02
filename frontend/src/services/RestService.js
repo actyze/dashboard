@@ -54,6 +54,31 @@ export class RestService {
     }
   }
 
+  /**
+   * Generate Chart Configuration and Data
+   * @param {string} nlQuery - Natural language query
+   * @param {string} sql - Main SQL query
+   * @param {Object} schemaContext - Schema recommendations
+   * @returns {Promise} API response containing chart config and data
+   */
+  static async generateChart(nlQuery, sql, schemaContext = null) {
+    const endpoint = '/api/generate-chart';
+    const payload = {
+      nl_query: nlQuery,
+      sql: sql,
+      schema_context: schemaContext
+    };
+
+    try {
+      const response = await Network.post(endpoint, payload);
+      return response;
+    } catch (error) {
+      console.error('Generate Chart failed:', error);
+      // Don't throw, just return error response so flow can continue with fallback
+      return { success: false, error: error.message };
+    }
+  }
+
   // =============================================================================
   // Explorer API Methods
   // =============================================================================
@@ -155,4 +180,3 @@ export class RestService {
 }
 
 export default RestService;
-

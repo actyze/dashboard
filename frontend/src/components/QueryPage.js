@@ -7,8 +7,7 @@ import SqlQuery from './SqlQuery';
 import QueryResults from './QueryResults';
 import Chart from './Chart';
 import ViewToggle from './ViewToggle';
-import ChartTypeSelector from './ChartTypeSelector';
-import { Card, Text, Button } from './ui';
+import { Text } from './ui';
 import { useProcessNaturalLanguage, useExecuteSql } from '../hooks';
 
 const QueryPage = () => {
@@ -228,39 +227,12 @@ const QueryPage = () => {
                 setSqlQuery={setSqlQuery}
               />
 
-              {/* View Toggle and Chart Controls */}
-              <div className="flex items-center justify-between">
+              {/* View Toggle */}
+              <div className="flex items-center">
                 <ViewToggle 
                   activeView={activeView}
                   onViewChange={setActiveView}
                 />
-                
-                {/* Chart Type Selector - only show when chart view is active */}
-                {activeView === 'chart' && chartData && (
-                  <div className="flex items-center space-x-3">
-                    <Text color="secondary" className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                      Chart Type
-                    </Text>
-                    <ChartTypeSelector 
-                      currentType={chartData?.chart?.type || 'bar'}
-                      onTypeChange={(type) => {
-                        if (chartData) {
-                          // Create a completely new object to ensure React detects the change
-                          const newChartData = {
-                            ...chartData,
-                            chart: {
-                              ...chartData.chart,
-                              type: type
-                            },
-                            // Add a timestamp to force re-render
-                            _timestamp: Date.now()
-                          };
-                          setChartData(newChartData);
-                        }
-                      }}
-                    />
-                  </div>
-                )}
               </div>
 
               {/* Dynamic Content Area - Results or Chart */}

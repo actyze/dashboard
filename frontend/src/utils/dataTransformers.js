@@ -19,7 +19,7 @@ export const transformQueryResults = (queryResults) => {
   return {
     data: dataObjects,
     columns: columnObjects,
-    rowCount: queryResults.rowCount || dataObjects.length
+    rowCount: queryResults.row_count || queryResults.rowCount || dataObjects.length
   };
 };
 

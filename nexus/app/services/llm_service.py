@@ -123,6 +123,146 @@ Focus on proper Trino SQL syntax and table/column names.
             schema_recommendations
         )
     
+    async def generate_chart_sql(
+        self,
+        natural_language_query: str,
+        main_sql: str,
+        schema_recommendations: Optional[Dict[str, Any]] = None,
+        row_count: Optional[int] = None,
+        is_limited: Optional[bool] = False
+    ) -> Dict[str, Any]:
+        """Generate chart configuration and SQL."""
+        
+        messages = self._build_chart_messages(
+            natural_language_query, 
+            main_sql, 
+            schema_recommendations,
+            row_count,
+            is_limited
+        )
+        
+        try:
+            response = await self._call_external_llm(messages=messages)
+            
+            if not response.get("success"):
+                return response
+            
+            content = response.get("content", "")
+            # Try to extract JSON first, otherwise parse the text
+            import re
+            import json
+            
+            chart_config = {}
+            
+            # Look for JSON block
+            json_match = re.search(r"```json\s*(.*?)\s*```", content, re.DOTALL)
+            if json_match:
+                try:
+                    chart_config = json.loads(json_match.group(1))
+                except:
+                    pass
+            
+            if not chart_config:
+                # Try parsing raw JSON if no code block
+                try:
+                    # Remove non-json text around the first { and last }
+                    start = content.find("{")
+                    end = content.rfind("}") + 1
+                    if start != -1 and end != -1:
+                        chart_config = json.loads(content[start:end])
+                except:
+                    pass
+            
+            if not chart_config:
+                return {
+                    "success": False,
+                    "error": "Failed to parse chart configuration from LLM",
+                    "raw_response": content
+                }
+                
+            # Extract SQL if not in JSON (or if JSON parsing failed but SQL block exists)
+            if "sql" not in chart_config:
+                sql = self._extract_sql_from_response(content)
+                if sql:
+                    chart_config["sql"] = sql
+            
+            return {
+                "success": True,
+                "chart_config": chart_config
+            }
+            
+        except Exception as e:
+            self.logger.error("Chart generation failed", error=str(e))
+            return {"success": False, "error": str(e)}
+
+    def _build_chart_messages(
+        self,
+        query: str,
+        main_sql: str,
+        schema_recommendations: Optional[Dict[str, Any]] = None,
+        row_count: Optional[int] = None,
+        is_limited: Optional[bool] = False
+    ) -> List[Dict[str, str]]:
+        """Build messages for chart generation with system/user roles."""
+        
+        system_prompt = """You are a data visualization expert using Plotly.js.
+
+Available chart types:
+- Basic: bar, line, area, scatter, pie
+- Statistical: histogram, box, violin, histogram2d
+- Scientific: heatmap, contour, scatter3d, surface
+- Financial: candlestick, ohlc, waterfall, funnel
+- Hierarchical: treemap, sunburst
+- Flow: sankey
+- Other: radar, parcoords (parallel coordinates), scatterpolar
+
+Task:
+1. Analyze the user's request and data to suggest the BEST chart type.
+2. Write a NEW SQL query specifically optimized for this chart.
+   - It MUST aggregate data (GROUP BY) if the main SQL does not.
+   - Limit results appropriately (e.g. 20-50 for bar/pie, 100-500 for line/scatter, 10-20 categories for treemap).
+   - Use correct Trino SQL syntax.
+3. Identify axis/dimension columns based on chart type.
+
+Return ONLY a JSON object:
+{
+  "type": "bar",
+  "sql": "SELECT category, SUM(value) as total FROM ... GROUP BY category ORDER BY total DESC LIMIT 20",
+  "title": "Descriptive Chart Title",
+  "x_axis": "column_name",
+  "y_axis": "column_name",
+  "series": "optional_grouping_column",
+  "orientation": "v or h (for bar charts)",
+  "mode": "lines, markers, lines+markers (for scatter/line)"
+}
+"""
+        user_content = f"""User Request: "{query}"
+Generated SQL (Main Data):
+```sql
+{main_sql}
+```
+"""
+        
+        if row_count is not None:
+            if is_limited:
+                user_content += f"\nNote: The main query returned {row_count} rows (TRUNCATED at limit). The actual dataset is likely larger. Ensure your chart SQL includes proper aggregation and grouping.\n"
+            else:
+                user_content += f"\nNote: The main query returned {row_count} rows (complete result set). Consider appropriate aggregation for visualization.\n"
+        
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content}
+        ]
+
+    def _build_chart_prompt(
+        self,
+        query: str,
+        main_sql: str,
+        schema_recommendations: Optional[Dict[str, Any]] = None
+    ) -> str:
+        # Deprecated in favor of _build_chart_messages
+        return ""
+
     async def aclose(self):
         """Close the HTTP client."""
         await self.client.aclose()
@@ -164,11 +304,11 @@ Focus on proper Trino SQL syntax and table/column names.
         prompt_parts.append("\nSQL Query:")
         return "\n".join(prompt_parts)
     
-    async def _call_external_llm(self, prompt: str) -> Dict[str, Any]:
+    async def _call_external_llm(self, prompt: str = None, messages: List[Dict[str, str]] = None) -> Dict[str, Any]:
         """Call external LLM API using OpenAI-compatible format (works with all providers)."""
         
         try:
-            return await self._call_openai_compatible_api(prompt)
+            return await self._call_openai_compatible_api(prompt, messages)
         except Exception as e:
             self.logger.error("External LLM API call failed", error=str(e))
             return {
@@ -177,7 +317,7 @@ Focus on proper Trino SQL syntax and table/column names.
                 "error_type": "NETWORK_ERROR"
             }
     
-    async def _call_openai_compatible_api(self, prompt: str) -> Dict[str, Any]:
+    async def _call_openai_compatible_api(self, prompt: str = None, messages: List[Dict[str, str]] = None) -> Dict[str, Any]:
         """Call OpenAI-compatible API (works with OpenAI, Perplexity, Claude, etc.)."""
         
         headers = {
@@ -185,14 +325,20 @@ Focus on proper Trino SQL syntax and table/column names.
             "Content-Type": "application/json"
         }
         
-        payload = {
-            "model": settings.external_llm_model,
-            "messages": [
+        # Construct messages if not provided
+        if not messages:
+            if not prompt:
+                raise ValueError("Either 'prompt' or 'messages' must be provided")
+            messages = [
                 {
                     "role": "user",
                     "content": prompt
                 }
-            ],
+            ]
+        
+        payload = {
+            "model": settings.external_llm_model,
+            "messages": messages,
             "max_tokens": settings.external_llm_max_tokens,
             "temperature": settings.external_llm_temperature
         }

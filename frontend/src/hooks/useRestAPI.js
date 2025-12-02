@@ -59,7 +59,44 @@ export const useProcessNaturalLanguage = (options = {}) => {
         }
 
         const transformedResults = transformQueryResults(executeResponse.query_results);
-        const chartData = transformedResults ? transformToChartData(transformedResults) : null;
+        let chartData = transformedResults ? transformToChartData(transformedResults) : null;
+        
+        // Smart Chart Logic: If too many rows, ask backend for aggregated chart
+        if (transformedResults && transformedResults.rowCount > 20) {
+          try {
+            const chartResponse = await RestService.generateChart(
+              nlQuery, 
+              generatedSql, 
+              { 
+                recommendations: generateResponse.schema_recommendations,
+                row_count: transformedResults.rowCount,
+                is_limited: transformedResults.rowCount >= 100  // Check if we hit the max_results limit
+              }
+            );
+            
+            if (chartResponse.success && chartResponse.chart_data) {
+              // Transform backend chart data to frontend format
+              // Backend returns { columns: [], rows: [] } similar to query_results
+              const backendChartResults = transformQueryResults(chartResponse.chart_data);
+              
+              chartData = {
+                chart: {
+                  type: chartResponse.chart_config.type || 'bar',
+                  config: {
+                    xField: chartResponse.chart_config.x_axis,
+                    yField: chartResponse.chart_config.y_axis,
+                    title: chartResponse.chart_config.title
+                  },
+                  fallback: false
+                },
+                data: backendChartResults,
+                cached: false
+              };
+            }
+          } catch (err) {
+            console.warn("Smart chart generation failed, falling back to local", err);
+          }
+        }
         
         return {
           success: true,

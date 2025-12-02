@@ -60,6 +60,28 @@ async def read_users_me(current_user: dict = Depends(get_current_user)):
 # Protected Query Endpoints
 # =============================================================================
 
+class ChartRequest(BaseModel):
+    nl_query: str
+    sql: str
+    schema_context: Optional[Dict[str, Any]] = None
+    row_count: Optional[int] = None
+    is_limited: Optional[bool] = False
+
+@router.post("/generate-chart")
+async def generate_chart(
+    request: ChartRequest,
+    current_user: dict = Depends(require_viewer)
+):
+    """Generate chart configuration and aggregated data asynchronously."""
+    result = await orchestration_service.generate_chart_data(
+        request.nl_query,
+        request.sql,
+        request.schema_context,
+        request.row_count,
+        request.is_limited
+    )
+    return result
+
 @router.post("/generate-sql")
 async def generate_sql(
     request: GenerateSQLRequest,

@@ -10,7 +10,6 @@ const CHART_TYPES = {
     { id: 'pie', label: 'Pie', icon: '🥧', description: 'Show parts of whole', requiresNumeric: true, requiresCategory: true },
     { id: 'scatter', label: 'Scatter', icon: '⚫', description: 'Show correlations', requiresNumeric: true, minNumericCols: 2 },
     { id: 'area', label: 'Area', icon: '📉', description: 'Show cumulative values', requiresNumeric: true, requiresCategory: true },
-    { id: 'table', label: 'Table', icon: '📋', description: 'Raw data view', requiresNumeric: false, requiresCategory: false },
   ],
   // Statistical Charts
   statistical: [
@@ -53,39 +52,37 @@ const ChartTypeSelector = ({
   const { isDark } = useTheme();
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Analyze data columns to determine compatible chart types
-  const analyzeDataCompatibility = () => {
-    if (!dataColumns || dataColumns.length === 0) {
-      return { numericCols: 0, categoryCols: 0, dateCols: 0 };
+  // Simplified chart compatibility check
+  // LLM handles intelligent column selection, we just check basic requirements
+  const isChartCompatible = (chartType) => {
+    // If no data columns info, allow all
+    if (!dataColumns || dataColumns.length === 0) return true;
+    
+    const totalCols = dataColumns.length;
+    const chartId = chartType.id;
+
+    // Most charts need at least 2 columns
+    if (['bar', 'line', 'area', 'pie', 'scatter', 'box', 'violin', 'treemap', 'sunburst', 'funnel', 'waterfall'].includes(chartId)) {
+      return totalCols >= 2;
     }
 
-    const numericCols = dataColumns.filter(col => 
-      col.type === 'number' || col.type === 'integer' || col.type === 'float'
-    ).length;
-    
-    const categoryCols = dataColumns.filter(col => 
-      col.type === 'string' || col.type === 'varchar'
-    ).length;
-    
-    const dateCols = dataColumns.filter(col => 
-      col.type === 'date' || col.type === 'timestamp' || col.type === 'datetime'
-    ).length;
+    // Histogram only needs 1 column
+    if (chartId === 'histogram') {
+      return totalCols >= 1;
+    }
 
-    return { numericCols, categoryCols, dateCols, totalCols: dataColumns.length };
-  };
+    // Heatmap/Contour/Sankey need 3 columns
+    if (['heatmap', 'contour', 'sankey'].includes(chartId)) {
+      return totalCols >= 3;
+    }
 
-  const dataInfo = analyzeDataCompatibility();
+    // Candlestick needs 5 columns (date + OHLC)
+    if (chartId === 'candlestick') {
+      return totalCols >= 5;
+    }
 
-  // Check if a chart type is compatible with current data
-  const isChartCompatible = (chartType) => {
-    if (!dataColumns || dataColumns.length === 0) return true; // Allow all if no data yet
-
-    if (chartType.requiresNumeric && dataInfo.numericCols === 0) return false;
-    if (chartType.requiresCategory && dataInfo.categoryCols === 0) return false;
-    if (chartType.minNumericCols && dataInfo.numericCols < chartType.minNumericCols) return false;
-    if (chartType.minCols && dataInfo.totalCols < chartType.minCols) return false;
-
-    return true;
+    // Default: allow if we have at least 2 columns
+    return totalCols >= 2;
   };
 
   const handleTypeSelect = (typeId) => {

@@ -4,6 +4,7 @@ import Plot from 'react-plotly.js';
 import { Alert } from './ui';
 import { useTheme } from '../contexts/ThemeContext';
 import ChartTypeSelector from './ChartTypeSelector';
+import ManualAxisSelector from './ManualAxisSelector';
 
 // Color palette for charts
 const CHART_COLORS = [
@@ -19,76 +20,181 @@ const CHART_COLORS = [
   'rgba(168, 85, 247, 0.8)',   // Violet
 ];
 
+/**
+ * Chart component with two modes:
+ * 1. LLM Mode: Uses LLM-recommended x/y axes from NL query
+ * 2. Manual Mode: User selects axes (for direct SQL execution or override)
+ * 
+ * Manual mode uses cached queryResults - no re-execution needed.
+ */
 const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = null }) => {
   const { isDark } = useTheme();
   const [plotData, setPlotData] = useState([]);
   const [layout, setLayout] = useState({});
   const [chartInfo, setChartInfo] = useState(null);
   const [selectedChartType, setSelectedChartType] = useState('bar');
+  
+  // Manual mode state
+  // Triggered when: 1) Direct SQL execution (no LLM), 2) User clicks "Configure" to override
+  const [isManualMode, setIsManualMode] = useState(false);
+  const [manualXAxis, setManualXAxis] = useState('');
+  const [manualYAxis, setManualYAxis] = useState('');
+  const [manualChartConfigured, setManualChartConfigured] = useState(false);
 
-  // Memoized chart processing
+  // Create Plotly data based on chart type
+  const createPlotlyDataForType = useCallback((chartType, queryData, chartConfig) => {
+    if (!queryData || !queryData.data || !queryData.columns) {
+      return { plotData: [], layout: {} };
+    }
+
+    const config = chartConfig || {
+      xField: queryData.columns[0]?.name,
+      yField: queryData.columns[1]?.name
+    };
+
+    const processedData = createPlotlyData(chartType, config, queryData);
+    const processedLayout = createPlotlyLayout(chartType, config, queryData);
+
+    return { plotData: processedData, layout: processedLayout };
+  }, [isDark]);
+
+  // Process chart data when chartData changes
   const processChartData = useCallback((data, overrideType = null) => {
     try {
-      console.log('Chart component received data:', data);
+      console.log('Chart component processing data:', data, 'overrideType:', overrideType);
       const { chart, data: queryData } = data;
-      const chartType = overrideType || chart.type || 'bar';
+      const chartType = overrideType || chart?.type || 'bar';
 
-      setPlotData([]);
-      setLayout({});
-      
       // Set chart info for display
       setChartInfo({
         type: chartType,
         cached: data.cached || false,
-        rowCount: queryData.rowCount || 0,
-        fallback: chart.fallback || false
+        rowCount: queryData?.rowCount || 0,
+        fallback: chart?.fallback || false
       });
 
       // Process chart configuration
-      if (queryData.data) {
+      if (queryData?.data) {
         console.log('Processing chart with type:', chartType);
-        const config = chart.config || {
-          xField: queryData.columns[0]?.name,
-          yField: queryData.columns[1]?.name
-        };
-        const processedData = createPlotlyData(chartType, config, queryData);
-        const processedLayout = createPlotlyLayout(chartType, config, queryData);
+        const { plotData: newPlotData, layout: newLayout } = createPlotlyDataForType(
+          chartType, 
+          queryData, 
+          chart?.config
+        );
         
-        console.log('Processed plotly data:', processedData);
-        setTimeout(() => {
-          setPlotData(processedData);
-          setLayout(processedLayout);
-        }, 10);
+        console.log('Setting plotData:', newPlotData);
+        setPlotData(newPlotData);
+        setLayout(newLayout);
+      } else {
+        console.log('No queryData.data available');
+        setPlotData([]);
+        setLayout({});
       }
     } catch (err) {
       console.error('Error processing chart data:', err);
       setPlotData([]);
       setLayout({});
     }
-  }, [isDark]);
+  }, [createPlotlyDataForType]);
 
   useEffect(() => {
-    if (chartData && chartData.chart && chartData.data) {
-      const chartType = chartData.chart.type || 'bar';
-      setSelectedChartType(chartType);
-      processChartData(chartData, chartType);
+    if (chartData && chartData.data) {
+      // Check if we have LLM recommendation (config with xField/yField)
+      const hasLLMRecommendation = chartData.chart?.config?.xField && chartData.chart?.config?.yField;
+      const isFallback = chartData.chart?.fallback === true;
+      const isManualRequired = chartData.chart?.source === 'manual-required';
+      
+      if (hasLLMRecommendation && !isFallback && !isManualRequired) {
+        // LLM provided recommendation - use it directly
+        // But don't reset if user has manually configured (they may want to keep their config)
+        if (!manualChartConfigured) {
+          setIsManualMode(false);
+          const chartType = chartData.chart.type || 'bar';
+          setSelectedChartType(chartType);
+          processChartData(chartData, chartType);
+        }
+      } else if (manualChartConfigured && manualXAxis && manualYAxis) {
+        // Manual mode already configured - keep showing chart with user's selection
+        // This uses the cached queryResults, no re-execution
+      } else {
+        // No LLM recommendation (direct SQL execution) - enter manual mode
+        console.log('Manual mode: Direct SQL execution or no LLM recommendation');
+        setIsManualMode(true);
+        setManualChartConfigured(false);
+        setPlotData([]);
+        setLayout({});
+        // Reset manual selections when NEW data comes in
+        setManualXAxis('');
+        setManualYAxis('');
+      }
     } else {
       setPlotData([]);
       setLayout({});
       setChartInfo(null);
+      setIsManualMode(false);
+      setManualChartConfigured(false);
     }
+    // Note: Only depend on chartData changes, not manual state (to avoid loops)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chartData, processChartData]);
 
   // Handle chart type change from selector
-  const handleChartTypeChange = (newType) => {
+  const handleChartTypeChange = useCallback((newType) => {
+    console.log('Chart type changed to:', newType);
     setSelectedChartType(newType);
+    
+    // Reprocess chart data with new type
     if (chartData && chartData.data) {
-      processChartData(chartData, newType);
+      console.log('Reprocessing chart with new type:', newType);
+      
+      // Get config from existing chart or use manual selections
+      const config = isManualMode 
+        ? { xField: manualXAxis, yField: manualYAxis }
+        : (chartData.chart?.config || {});
+      
+      if (config.xField && config.yField) {
+        // Create new plot data directly
+        const newPlotData = createPlotlyData(newType, config, chartData.data);
+        const newLayout = createPlotlyLayout(newType, config, chartData.data);
+        
+        console.log('New plot data:', newPlotData);
+        setPlotData(newPlotData);
+        setLayout(newLayout);
+      }
     }
+    
     if (onChartTypeChange) {
       onChartTypeChange(newType);
     }
-  };
+  }, [chartData, onChartTypeChange, isDark, isManualMode, manualXAxis, manualYAxis]);
+
+  // Handle manual chart generation
+  const handleManualApply = useCallback(() => {
+    if (!manualXAxis || !manualYAxis || !chartData?.data) {
+      return;
+    }
+
+    console.log('Applying manual chart config:', { xAxis: manualXAxis, yAxis: manualYAxis, type: selectedChartType });
+    
+    const config = {
+      xField: manualXAxis,
+      yField: manualYAxis
+    };
+
+    const newPlotData = createPlotlyData(selectedChartType, config, chartData.data);
+    const newLayout = createPlotlyLayout(selectedChartType, config, chartData.data);
+
+    setPlotData(newPlotData);
+    setLayout(newLayout);
+    setManualChartConfigured(true);
+    setChartInfo({
+      type: selectedChartType,
+      cached: false,
+      rowCount: chartData.data?.rowCount || 0,
+      fallback: false,
+      manual: true
+    });
+  }, [manualXAxis, manualYAxis, selectedChartType, chartData]);
 
   const createPlotlyData = (chartType, config, queryData) => {
     const { data, columns } = queryData;
@@ -97,9 +203,13 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
       return [];
     }
 
+    // Use LLM-provided config, fallback to simple column order
+    // LLM recommendation is the source of truth for x/y columns
     const xField = config.xField || columns[0]?.name;
     const yField = config.yField || columns[1]?.name;
     const seriesField = config.series;
+    
+    console.log('Chart columns:', { xField, yField, seriesField, source: config.xField ? 'LLM' : 'fallback' });
     
     switch (chartType) {
       case 'bar':
@@ -446,20 +556,47 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
   // Get columns for compatibility checking
   const dataColumns = chartData?.data?.columns || [];
 
+  // Show manual mode selector when we have data but no LLM recommendation
+  // This happens for: 1) Direct SQL execution, 2) User clicked "Configure" to override
+  if (isManualMode && !manualChartConfigured && chartData?.data?.columns) {
+    const rowCount = chartData.data?.rowCount || chartData.data?.data?.length || 0;
+    
+    return (
+      <div className="w-full h-full flex flex-col p-4">
+        <ManualAxisSelector
+          columns={dataColumns}
+          xAxis={manualXAxis}
+          yAxis={manualYAxis}
+          onXAxisChange={setManualXAxis}
+          onYAxisChange={setManualYAxis}
+          onApply={handleManualApply}
+          chartType={selectedChartType}
+          onChartTypeChange={setSelectedChartType}
+        />
+        
+        <div className="flex-1 flex items-center justify-center mt-4">
+          <div className="text-center">
+            <div className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center ${isDark ? 'bg-blue-900/30' : 'bg-blue-100'}`}>
+              <span className="text-3xl">📊</span>
+            </div>
+            <Typography variant="h6" color="text.secondary" gutterBottom className="font-semibold">
+              Configure Your Chart
+            </Typography>
+            <Typography variant="body2" color="text.secondary" className="max-w-md mb-2">
+              Select columns from your query results ({rowCount} rows) to create a visualization.
+            </Typography>
+            <Typography variant="caption" color="text.secondary" className="opacity-70">
+              💡 Tip: Use natural language queries for automatic chart recommendations
+            </Typography>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!chartData || !plotData || plotData.length === 0) {
     return (
       <div className="w-full h-full flex flex-col">
-        {/* Chart Type Selector - always show if we have data structure */}
-        {chartData?.data?.columns && (
-          <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-            <ChartTypeSelector
-              selectedType={selectedChartType}
-              onTypeChange={handleChartTypeChange}
-              dataColumns={dataColumns}
-              compact={true}
-            />
-          </div>
-        )}
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center">
@@ -479,37 +616,43 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
     );
   }
 
-  // Handle table view separately
-  if (selectedChartType === 'table') {
-    return (
-      <div className="w-full h-full flex flex-col">
-        <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+  return (
+    <div className="w-full h-full flex flex-col">
+      {/* Chart Type Selector */}
+      <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+        <div className="flex items-center justify-between">
           <ChartTypeSelector
             selectedType={selectedChartType}
             onTypeChange={handleChartTypeChange}
             dataColumns={dataColumns}
             compact={true}
           />
+          
+          {/* Show reconfigure button for manual mode or allow switching to manual */}
+          <div className="flex items-center gap-2">
+            {chartInfo?.manual && (
+              <span className={`text-xs px-2 py-1 rounded ${isDark ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>
+                Manual Config
+              </span>
+            )}
+            <button
+              onClick={() => {
+                setManualChartConfigured(false);
+                setIsManualMode(true);
+              }}
+              className={`
+                text-xs px-2 py-1 rounded transition-colors
+                ${isDark 
+                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }
+              `}
+              title="Reconfigure chart axes"
+            >
+              ⚙️ Configure
+            </button>
+          </div>
         </div>
-        <div className="flex-1 flex items-center justify-center">
-          <Typography variant="body1" color="text.secondary">
-            Table view - See the data grid panel for tabular data
-          </Typography>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="w-full h-full flex flex-col">
-      {/* Chart Type Selector */}
-      <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-        <ChartTypeSelector
-          selectedType={selectedChartType}
-          onTypeChange={handleChartTypeChange}
-          dataColumns={dataColumns}
-          compact={true}
-        />
       </div>
       
       {/* Chart Area */}

@@ -23,19 +23,23 @@ export const transformQueryResults = (queryResults) => {
   };
 };
 
+/**
+ * Creates chart data structure WITHOUT axis configuration.
+ * This triggers manual mode in the Chart component, allowing users to select axes.
+ * LLM chart_recommendation should be used when available for intelligent column selection.
+ */
 export const transformToChartData = (transformedResults, chartType = 'bar') => {
   if (!transformedResults || !transformedResults.columns) {
     return null;
   }
 
+  // Return without xField/yField to trigger manual mode
   return {
     chart: {
       type: chartType,
-      config: {
-        xField: transformedResults.columns[0]?.name || 'x',
-        yField: transformedResults.columns[1]?.name || 'y'
-      },
-      fallback: false
+      config: {}, // Empty config triggers manual mode
+      fallback: true,
+      source: 'manual-required'
     },
     data: transformedResults,
     cached: false

@@ -60,13 +60,17 @@ class LLMService:
                     "error_type": "PARSING_ERROR"
                 }
             
+            # Extract chart recommendations from response
+            chart_recommendation = self._extract_chart_recommendation(generated_text)
+            
             self.logger.info(
                 "SQL generated successfully",
                 sql_length=len(sql),
-                provider=settings.external_llm_provider
+                provider=settings.external_llm_provider,
+                has_chart_recommendation=chart_recommendation is not None
             )
             
-            return {
+            result = {
                 "success": True,
                 "sql": sql,
                 "confidence": 0.85,  # Default confidence for external LLM
@@ -76,6 +80,12 @@ class LLMService:
                     "model": settings.external_llm_model
                 }
             }
+            
+            # Add chart recommendation if found
+            if chart_recommendation:
+                result["chart_recommendation"] = chart_recommendation
+            
+            return result
             
         except Exception as e:
             self.logger.error("Failed to generate SQL with external LLM", error=str(e))
@@ -273,16 +283,21 @@ Generated SQL (Main Data):
         schema_recommendations: Optional[Dict[str, Any]] = None,
         conversation_history: Optional[List[str]] = None
     ) -> str:
-        """Build SQL generation prompt with schema context."""
+        """Build SQL generation prompt with schema context and chart recommendations."""
         
         prompt_parts = [
-            "You are an expert SQL developer. Generate a Trino SQL query for the following request.",
-            "\nRules:",
-            "- Generate ONLY the SQL query, no explanations",
+            "You are an expert SQL developer and data visualization specialist.",
+            "Generate a Trino SQL query for the following request, AND recommend the best chart configuration.",
+            "\nRules for SQL:",
             "- Use Trino SQL syntax",
             "- Include proper table aliases",
             "- Use appropriate JOINs when needed",
             "- Format the query cleanly",
+            "\nRules for Chart Recommendation:",
+            "- Identify which column should be the X-axis (usually a category/dimension like name, date, category)",
+            "- Identify which column should be the Y-axis (usually a measure/metric like sales, count, amount)",
+            "- Recommend the best chart type: bar, line, pie, scatter, area, histogram",
+            "- Consider: bar for comparisons, line for trends over time, pie for parts of whole, scatter for correlations",
             "\nRequest: " + query
         ]
         
@@ -301,7 +316,14 @@ Generated SQL (Main Data):
             for msg in conversation_history[-3:]:  # Last 3 messages
                 prompt_parts.append(f"- {msg}")
         
-        prompt_parts.append("\nSQL Query:")
+        prompt_parts.append("\nRespond in this EXACT format:")
+        prompt_parts.append("```sql")
+        prompt_parts.append("YOUR SQL QUERY HERE")
+        prompt_parts.append("```")
+        prompt_parts.append("```json")
+        prompt_parts.append('{"chart_type": "bar", "x_column": "column_name", "y_column": "column_name", "title": "Chart Title"}')
+        prompt_parts.append("```")
+        
         return "\n".join(prompt_parts)
     
     async def _call_external_llm(self, prompt: str = None, messages: List[Dict[str, str]] = None) -> Dict[str, Any]:
@@ -435,6 +457,51 @@ Generated SQL (Main Data):
         
         if sql_lines:
             return "\n".join(sql_lines)
+    
+    def _extract_chart_recommendation(self, response_text: str) -> Optional[Dict[str, Any]]:
+        """Extract chart recommendation JSON from LLM response."""
+        import re
+        
+        try:
+            # Look for JSON code block
+            json_match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL | re.IGNORECASE)
+            if json_match:
+                json_str = json_match.group(1).strip()
+                chart_rec = json.loads(json_str)
+                
+                # Validate required fields
+                if chart_rec.get('x_column') and chart_rec.get('y_column'):
+                    return {
+                        "chart_type": chart_rec.get('chart_type', 'bar'),
+                        "x_column": chart_rec.get('x_column'),
+                        "y_column": chart_rec.get('y_column'),
+                        "title": chart_rec.get('title', ''),
+                        "series_column": chart_rec.get('series_column')
+                    }
+            
+            # Fallback: Look for JSON object anywhere in text
+            json_pattern = r'\{[^{}]*"(?:x_column|y_column|chart_type)"[^{}]*\}'
+            json_match = re.search(json_pattern, response_text, re.IGNORECASE)
+            if json_match:
+                try:
+                    chart_rec = json.loads(json_match.group(0))
+                    if chart_rec.get('x_column') and chart_rec.get('y_column'):
+                        return {
+                            "chart_type": chart_rec.get('chart_type', 'bar'),
+                            "x_column": chart_rec.get('x_column'),
+                            "y_column": chart_rec.get('y_column'),
+                            "title": chart_rec.get('title', ''),
+                            "series_column": chart_rec.get('series_column')
+                        }
+                except:
+                    pass
+            
+            self.logger.debug("No chart recommendation found in LLM response")
+            return None
+            
+        except Exception as e:
+            self.logger.warning("Failed to parse chart recommendation", error=str(e))
+            return None
         
         # Fallback: return the whole response if it contains SQL keywords
         if any(keyword in text.upper() for keyword in ["SELECT", "FROM", "WHERE"]):

@@ -80,6 +80,9 @@ pytorch_model.bin
 # Docker
 .dockerignore
 
+# Trino generated catalog files (credentials injected at runtime)
+docker/trino/catalog/postgres.properties
+
 # Temporary files
 *.tmp
 *.temp

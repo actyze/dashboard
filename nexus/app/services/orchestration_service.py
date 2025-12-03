@@ -114,7 +114,7 @@ class OrchestrationService:
             
             processing_time = (asyncio.get_event_loop().time() - start_time) * 1000
             
-            return {
+            result = {
                 "success": True,
                 "nl_query": nl_query,
                 "generated_sql": generated_sql,
@@ -123,6 +123,17 @@ class OrchestrationService:
                 "model_reasoning": sql_generation.get("reasoning"),
                 "processing_time": processing_time
             }
+            
+            # Include chart recommendation if LLM provided one
+            if sql_generation.get("chart_recommendation"):
+                result["chart_recommendation"] = sql_generation.get("chart_recommendation")
+                self.logger.info("Chart recommendation included", 
+                    chart_type=sql_generation["chart_recommendation"].get("chart_type"),
+                    x_column=sql_generation["chart_recommendation"].get("x_column"),
+                    y_column=sql_generation["chart_recommendation"].get("y_column")
+                )
+            
+            return result
             
         except Exception as e:
             self.logger.error("SQL generation error", error=str(e))

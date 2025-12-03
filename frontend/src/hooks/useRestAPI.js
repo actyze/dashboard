@@ -12,6 +12,11 @@ export const useGenerateSql = (options = {}) => {
   });
 };
 
+/**
+ * Hook for direct SQL execution (manual mode).
+ * Returns data with manual-required chart config - user must select axes.
+ * Query results are cached in component state for chart re-rendering.
+ */
 export const useExecuteSql = (options = {}) => {
   return useMutation({
     mutationFn: async ({ sql, maxResults = 100, timeoutSeconds = 30, nlQuery = null, conversationHistory = [] }) => {
@@ -19,7 +24,19 @@ export const useExecuteSql = (options = {}) => {
       
       if (response.success && response.query_results) {
         const transformedResults = transformQueryResults(response.query_results);
-        const chartData = transformedResults ? transformToChartData(transformedResults) : null;
+        
+        // For direct SQL execution, always trigger manual mode
+        // User selects chart axes from cached results (no re-fetch)
+        const chartData = transformedResults ? {
+          chart: {
+            type: 'bar',
+            config: {}, // Empty = manual mode
+            fallback: true,
+            source: 'manual-required'
+          },
+          data: transformedResults,
+          cached: false
+        } : null;
         
         return {
           ...response,
@@ -59,10 +76,49 @@ export const useProcessNaturalLanguage = (options = {}) => {
         }
 
         const transformedResults = transformQueryResults(executeResponse.query_results);
-        let chartData = transformedResults ? transformToChartData(transformedResults) : null;
+        
+        // Use LLM chart recommendation if available, otherwise trigger manual mode
+        const chartRecommendation = generateResponse.chart_recommendation;
+        let chartData = null;
+        
+        if (transformedResults) {
+          if (chartRecommendation && chartRecommendation.x_column && chartRecommendation.y_column) {
+            // Use LLM's intelligent recommendation
+            console.log('Using LLM chart recommendation:', chartRecommendation);
+            chartData = {
+              chart: {
+                type: chartRecommendation.chart_type || 'bar',
+                config: {
+                  xField: chartRecommendation.x_column,
+                  yField: chartRecommendation.y_column,
+                  title: chartRecommendation.title || '',
+                  series: chartRecommendation.series_column
+                },
+                fallback: false,
+                source: 'llm'
+              },
+              data: transformedResults,
+              cached: false
+            };
+          } else {
+            // No LLM recommendation - trigger manual mode (no auto-detection)
+            console.log('No LLM recommendation, triggering manual chart configuration');
+            chartData = {
+              chart: {
+                type: 'bar',
+                config: {}, // Empty config triggers manual mode
+                fallback: true,
+                source: 'manual-required'
+              },
+              data: transformedResults,
+              cached: false
+            };
+          }
+        }
         
         // Smart Chart Logic: If too many rows, ask backend for aggregated chart
-        if (transformedResults && transformedResults.rowCount > 20) {
+        // Only attempt if we already have a valid LLM recommendation
+        if (transformedResults && transformedResults.rowCount > 20 && chartRecommendation) {
           try {
             const chartResponse = await RestService.generateChart(
               nlQuery, 
@@ -70,31 +126,31 @@ export const useProcessNaturalLanguage = (options = {}) => {
               { 
                 recommendations: generateResponse.schema_recommendations,
                 row_count: transformedResults.rowCount,
-                is_limited: transformedResults.rowCount >= 100  // Check if we hit the max_results limit
+                is_limited: transformedResults.rowCount >= 100
               }
             );
             
-            if (chartResponse.success && chartResponse.chart_data) {
-              // Transform backend chart data to frontend format
-              // Backend returns { columns: [], rows: [] } similar to query_results
+            if (chartResponse.success && chartResponse.chart_data && 
+                chartResponse.chart_config?.x_axis && chartResponse.chart_config?.y_axis) {
               const backendChartResults = transformQueryResults(chartResponse.chart_data);
               
               chartData = {
                 chart: {
-                  type: chartResponse.chart_config.type || 'bar',
+                  type: chartResponse.chart_config.type || chartRecommendation?.chart_type || 'bar',
                   config: {
                     xField: chartResponse.chart_config.x_axis,
                     yField: chartResponse.chart_config.y_axis,
-                    title: chartResponse.chart_config.title
+                    title: chartResponse.chart_config.title || chartRecommendation?.title || ''
                   },
-                  fallback: false
+                  fallback: false,
+                  source: 'llm-aggregated'
                 },
                 data: backendChartResults,
                 cached: false
               };
             }
           } catch (err) {
-            console.warn("Smart chart generation failed, falling back to local", err);
+            console.warn("Smart chart generation failed, keeping initial recommendation", err);
           }
         }
         
@@ -103,6 +159,7 @@ export const useProcessNaturalLanguage = (options = {}) => {
           generatedSql,
           queryResults: transformedResults,
           chartData,
+          chartRecommendation, // Pass through for debugging/display
           processingTime: generateResponse.processing_time,
           executionTime: executeResponse.execution_time,
           error: null

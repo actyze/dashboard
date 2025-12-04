@@ -215,7 +215,7 @@ Focus on proper Trino SQL syntax and table/column names.
     ) -> List[Dict[str, str]]:
         """Build messages for chart generation with system/user roles."""
         
-        system_prompt = """You are a data visualization expert using Plotly.js.
+        system_prompt = """You are a data visualization expert using Plotly.js with Trino SQL.
 
 Available chart types:
 - Basic: bar, line, area, scatter, pie
@@ -226,18 +226,24 @@ Available chart types:
 - Flow: sankey
 - Other: radar, parcoords (parallel coordinates), scatterpolar
 
+CRITICAL SQL RULES:
+- ALWAYS use fully qualified table names: catalog.schema.table (e.g., postgres.demo_ecommerce.customers)
+- Copy the exact table paths from the main SQL provided - do NOT shorten them
+- Use Trino SQL syntax (not PostgreSQL or MySQL specific syntax)
+
 Task:
 1. Analyze the user's request and data to suggest the BEST chart type.
 2. Write a NEW SQL query specifically optimized for this chart.
-   - It MUST aggregate data (GROUP BY) if the main SQL does not.
-   - Limit results appropriately (e.g. 20-50 for bar/pie, 100-500 for line/scatter, 10-20 categories for treemap).
-   - Use correct Trino SQL syntax.
+   - MUST use fully qualified table names (catalog.schema.table) exactly as shown in the main SQL
+   - MUST aggregate data (GROUP BY) if the main SQL does not
+   - Limit results appropriately (e.g. 20-50 for bar/pie, 100-500 for line/scatter)
+   - Use correct Trino SQL syntax
 3. Identify axis/dimension columns based on chart type.
 
 Return ONLY a JSON object:
 {
   "type": "bar",
-  "sql": "SELECT category, SUM(value) as total FROM ... GROUP BY category ORDER BY total DESC LIMIT 20",
+  "sql": "SELECT category, SUM(value) as total FROM postgres.schema.table GROUP BY category ORDER BY total DESC LIMIT 20",
   "title": "Descriptive Chart Title",
   "x_axis": "column_name",
   "y_axis": "column_name",

@@ -48,20 +48,13 @@ const QueryPage = () => {
       setQueryResults(results);
       setChartData(chartData);
     },
-    // Error callback for any stage
-    onError: (error, stage) => {
-      console.error(`AI Query failed at stage ${stage}:`, error);
-      setQueryError(`${stage === 'generate' ? 'SQL Generation' : 'Execution'} failed: ${error}`);
-    },
-    // Final success/error handler
+    // Final success/error handler (react-query's onSuccess)
     onSuccess: (data) => {
       if (!data.success && data.error) {
-        // Error already handled by onError callback, but set error state if not already set
-        if (!data.generatedSql) {
-          setQueryError(data.error);
-        }
+        setQueryError(data.error);
       }
     },
+    // React-query's onError for network/unexpected errors
     onError: (error) => {
       console.error('AI Query failed:', error);
       setQueryError(error.message || 'Failed to process natural language query');

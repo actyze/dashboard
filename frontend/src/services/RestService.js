@@ -58,7 +58,7 @@ export class RestService {
    * Generate Chart Configuration and Data
    * @param {string} nlQuery - Natural language query
    * @param {string} sql - Main SQL query
-   * @param {Object} schemaContext - Schema recommendations
+   * @param {Object} schemaContext - Schema recommendations with row_count and is_limited
    * @returns {Promise} API response containing chart config and data
    */
   static async generateChart(nlQuery, sql, schemaContext = null) {
@@ -66,7 +66,9 @@ export class RestService {
     const payload = {
       nl_query: nlQuery,
       sql: sql,
-      schema_context: schemaContext
+      schema_context: schemaContext?.recommendations || null,
+      row_count: schemaContext?.row_count || null,
+      is_limited: schemaContext?.is_limited || false
     };
 
     try {

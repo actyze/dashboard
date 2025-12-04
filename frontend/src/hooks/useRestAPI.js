@@ -83,7 +83,7 @@ export const useProcessNaturalLanguage = (options = {}) => {
         
         if (transformedResults) {
           if (chartRecommendation && chartRecommendation.x_column && chartRecommendation.y_column) {
-            // Use LLM's intelligent recommendation
+            // Use LLM's intelligent recommendation with the grid data
             console.log('Using LLM chart recommendation:', chartRecommendation);
             chartData = {
               chart: {
@@ -116,50 +116,15 @@ export const useProcessNaturalLanguage = (options = {}) => {
           }
         }
         
-        // Smart Chart Logic: If too many rows, ask backend for aggregated chart
-        // Only attempt if we already have a valid LLM recommendation
-        if (transformedResults && transformedResults.rowCount > 20 && chartRecommendation) {
-          try {
-            const chartResponse = await RestService.generateChart(
-              nlQuery, 
-              generatedSql, 
-              { 
-                recommendations: generateResponse.schema_recommendations,
-                row_count: transformedResults.rowCount,
-                is_limited: transformedResults.rowCount >= 500
-              }
-            );
-            
-            if (chartResponse.success && chartResponse.chart_data && 
-                chartResponse.chart_config?.x_axis && chartResponse.chart_config?.y_axis) {
-              const backendChartResults = transformQueryResults(chartResponse.chart_data);
-              
-              chartData = {
-                chart: {
-                  type: chartResponse.chart_config.type || chartRecommendation?.chart_type || 'bar',
-                  config: {
-                    xField: chartResponse.chart_config.x_axis,
-                    yField: chartResponse.chart_config.y_axis,
-                    title: chartResponse.chart_config.title || chartRecommendation?.title || ''
-                  },
-                  fallback: false,
-                  source: 'llm-aggregated'
-                },
-                data: backendChartResults,
-                cached: false
-              };
-            }
-          } catch (err) {
-            console.warn("Smart chart generation failed, keeping initial recommendation", err);
-          }
-        }
-        
+        // Return results IMMEDIATELY - don't block on chart generation
+        // Chart aggregation happens separately if user needs it
         return {
           success: true,
           generatedSql,
           queryResults: transformedResults,
           chartData,
-          chartRecommendation, // Pass through for debugging/display
+          chartRecommendation,
+          schemaRecommendations: generateResponse.schema_recommendations,
           processingTime: generateResponse.processing_time,
           executionTime: executeResponse.execution_time,
           error: null

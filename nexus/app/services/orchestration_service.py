@@ -362,18 +362,23 @@ class OrchestrationService:
             processing_time = (asyncio.get_event_loop().time() - start_time) * 1000
             
             if not result.get("success"):
+                self.logger.error("Chart SQL execution failed", error=result.get("error"), sql=chart_sql)
                 return {
                     "success": False,
                     "error": result.get("error"),
-                    "chart_config": config
+                    "chart_config": config,
+                    "chart_sql": chart_sql
                 }
+            
+            # Trino service returns query_results with columns and rows
+            query_results = result.get("query_results", {})
             
             return {
                 "success": True,
                 "chart_config": config,
                 "chart_data": {
-                    "columns": result.get("columns"),
-                    "rows": result.get("data") # Trino service returns 'data' not 'rows' usually
+                    "columns": query_results.get("columns"),
+                    "rows": query_results.get("rows")
                 },
                 "processing_time": processing_time
             }

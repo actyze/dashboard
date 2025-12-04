@@ -35,15 +35,31 @@ const QueryPage = () => {
   }, [id]);
 
   const { mutate: processNaturalLanguage, isPending: aiQueryLoading } = useProcessNaturalLanguage({
+    // PROGRESSIVE CALLBACK: SQL generated - show immediately!
+    onSqlGenerated: (sql, chartRecommendation) => {
+      console.log('SQL generated, updating editor immediately');
+      const commentPrefix = `-- Generated from natural language query\n`;
+      setSqlQuery(commentPrefix + sql);
+      setQueryError(null);
+    },
+    // PROGRESSIVE CALLBACK: Results ready - show immediately!
+    onResultsReady: (results, chartData) => {
+      console.log('Results ready, updating grid and chart immediately');
+      setQueryResults(results);
+      setChartData(chartData);
+    },
+    // Error callback for any stage
+    onError: (error, stage) => {
+      console.error(`AI Query failed at stage ${stage}:`, error);
+      setQueryError(`${stage === 'generate' ? 'SQL Generation' : 'Execution'} failed: ${error}`);
+    },
+    // Final success/error handler
     onSuccess: (data) => {
-      if (data.success) {
-        const commentPrefix = `-- Generated from natural language query\n`;
-        setSqlQuery(commentPrefix + data.generatedSql);
-        setQueryResults(data.queryResults);
-        setChartData(data.chartData);
-        setQueryError(null);
-      } else {
-        setQueryError(data.error || 'Failed to process natural language query');
+      if (!data.success && data.error) {
+        // Error already handled by onError callback, but set error state if not already set
+        if (!data.generatedSql) {
+          setQueryError(data.error);
+        }
       }
     },
     onError: (error) => {

@@ -169,6 +169,34 @@ export const useProcessNaturalLanguage = (options = {}) => {
           onResultsReady(transformedResults, chartData);
         }
         
+        // STAGE 3 (Async): Generate aggregated chart if needed
+        // This runs in the background and doesn't block the UI
+        if (transformedResults && transformedResults.rowCount > 20) {
+          console.log('Stage 3: Generating aggregated chart (async)...', {
+            rowCount: transformedResults.rowCount,
+            isLimited: transformedResults.rowCount >= 500
+          });
+          
+          
+          // Don't await - let it run in background
+          RestService.generateChart(
+            nlQuery,
+            generatedSql,
+            { 
+              recommendations: schemaRecommendations,
+              row_count: transformedResults.rowCount,
+              is_limited: transformedResults.rowCount >= 500
+            }
+          ).then(chartResponse => {
+            console.log('Stage 3: Chart generation completed', chartResponse);
+            // You can optionally call another callback here if needed
+            // For now, the backend chart is generated but not used
+            // The UI will still show the initial chart from LLM recommendation
+          }).catch(err => {
+            console.error('Stage 3: Chart generation failed', err);
+          });
+        }
+        
         // Return complete result
         return {
           success: true,

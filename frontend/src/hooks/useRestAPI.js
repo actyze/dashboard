@@ -51,18 +51,61 @@ export const useExecuteSql = (options = {}) => {
   });
 };
 
+/**
+ * Progressive NL-to-SQL hook with callbacks for non-blocking UI updates.
+ * Each stage updates the UI immediately without waiting for subsequent stages.
+ * 
+ * Options:
+ * - onSqlGenerated(sql, chartRecommendation): Called when SQL is generated
+ * - onResultsReady(results, chartData): Called when execution results are ready
+ * - onError(error, stage): Called on error at any stage
+ */
 export const useProcessNaturalLanguage = (options = {}) => {
+  const { onSqlGenerated, onResultsReady, onError, ...mutationOptions } = options;
+  
   return useMutation({
     mutationFn: async ({ nlQuery, conversationHistory = [] }) => {
+      let generatedSql = null;
+      let chartRecommendation = null;
+      let schemaRecommendations = null;
+      let processingTime = null;
+      
+      // STAGE 1: Generate SQL
       try {
+        console.log('Stage 1: Generating SQL...');
         const generateResponse = await RestService.generateSql(nlQuery, conversationHistory);
         
         if (!generateResponse.success) {
-          throw new Error(generateResponse.error || 'Failed to generate SQL');
+          const error = generateResponse.error || 'Failed to generate SQL';
+          if (onError) onError(error, 'generate');
+          throw new Error(error);
         }
         
-        const generatedSql = generateResponse.generated_sql;
+        generatedSql = generateResponse.generated_sql;
+        chartRecommendation = generateResponse.chart_recommendation;
+        schemaRecommendations = generateResponse.schema_recommendations;
+        processingTime = generateResponse.processing_time;
         
+        // CALLBACK: SQL is ready - update UI immediately!
+        if (onSqlGenerated) {
+          onSqlGenerated(generatedSql, chartRecommendation);
+        }
+        
+      } catch (error) {
+        if (onError) onError(error.message, 'generate');
+        return {
+          success: false,
+          error: error.message,
+          stage: 'generate'
+        };
+      }
+      
+      // STAGE 2: Execute SQL
+      let transformedResults = null;
+      let executionTime = null;
+      
+      try {
+        console.log('Stage 2: Executing SQL...');
         const executeResponse = await RestService.executeSql(
           generatedSql, 
           500, 
@@ -72,19 +115,26 @@ export const useProcessNaturalLanguage = (options = {}) => {
         );
         
         if (!executeResponse.success) {
-          throw new Error(executeResponse.error || 'Failed to execute SQL');
+          const error = executeResponse.error || 'Failed to execute SQL';
+          if (onError) onError(error, 'execute');
+          // Still return partial success with SQL
+          return {
+            success: false,
+            error: error,
+            stage: 'execute',
+            generatedSql,
+            chartRecommendation,
+            processingTime
+          };
         }
-
-        const transformedResults = transformQueryResults(executeResponse.query_results);
         
-        // Use LLM chart recommendation if available, otherwise trigger manual mode
-        const chartRecommendation = generateResponse.chart_recommendation;
+        transformedResults = transformQueryResults(executeResponse.query_results);
+        executionTime = executeResponse.execution_time;
+        
+        // Build chart data from LLM recommendation
         let chartData = null;
-        
         if (transformedResults) {
           if (chartRecommendation && chartRecommendation.x_column && chartRecommendation.y_column) {
-            // Use LLM's intelligent recommendation with the grid data
-            console.log('Using LLM chart recommendation:', chartRecommendation);
             chartData = {
               chart: {
                 type: chartRecommendation.chart_type || 'bar',
@@ -101,12 +151,10 @@ export const useProcessNaturalLanguage = (options = {}) => {
               cached: false
             };
           } else {
-            // No LLM recommendation - trigger manual mode (no auto-detection)
-            console.log('No LLM recommendation, triggering manual chart configuration');
             chartData = {
               chart: {
                 type: 'bar',
-                config: {}, // Empty config triggers manual mode
+                config: {},
                 fallback: true,
                 source: 'manual-required'
               },
@@ -116,30 +164,37 @@ export const useProcessNaturalLanguage = (options = {}) => {
           }
         }
         
-        // Return results IMMEDIATELY - don't block on chart generation
-        // Chart aggregation happens separately if user needs it
+        // CALLBACK: Results are ready - update UI immediately!
+        if (onResultsReady) {
+          onResultsReady(transformedResults, chartData);
+        }
+        
+        // Return complete result
         return {
           success: true,
           generatedSql,
           queryResults: transformedResults,
           chartData,
           chartRecommendation,
-          schemaRecommendations: generateResponse.schema_recommendations,
-          processingTime: generateResponse.processing_time,
-          executionTime: executeResponse.execution_time,
+          schemaRecommendations,
+          processingTime,
+          executionTime,
           error: null
         };
+        
       } catch (error) {
+        if (onError) onError(error.message, 'execute');
         return {
           success: false,
-          error: error.message || 'Failed to process natural language query',
-          generatedSql: null,
-          queryResults: null,
-          chartData: null
+          error: error.message,
+          stage: 'execute',
+          generatedSql,
+          chartRecommendation,
+          processingTime
         };
       }
     },
-    ...options,
+    ...mutationOptions,
   });
 };
 

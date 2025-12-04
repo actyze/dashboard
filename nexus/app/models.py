@@ -16,7 +16,7 @@ class ConversationInput(BaseModel):
 class SQLInput(BaseModel):
     """Input for direct SQL execution."""
     sql: str = Field(..., description="SQL query to execute")
-    max_results: Optional[int] = Field(default=100, description="Maximum number of results")
+    max_results: Optional[int] = Field(default=500, description="Maximum number of results")
     timeout_seconds: Optional[int] = Field(default=30, description="Query timeout in seconds")
 
 
@@ -90,7 +90,7 @@ class ConversationInputGQL:
 class SQLInputGQL:
     """GraphQL input for direct SQL execution."""
     sql: str = strawberry.field(description="SQL query to execute")
-    max_results: Optional[int] = strawberry.field(default=100, description="Maximum number of results")
+    max_results: Optional[int] = strawberry.field(default=500, description="Maximum number of results")
     timeout_seconds: Optional[int] = strawberry.field(default=30, description="Query timeout in seconds")
 
 

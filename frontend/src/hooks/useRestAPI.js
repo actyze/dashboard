@@ -19,7 +19,7 @@ export const useGenerateSql = (options = {}) => {
  */
 export const useExecuteSql = (options = {}) => {
   return useMutation({
-    mutationFn: async ({ sql, maxResults = 100, timeoutSeconds = 30, nlQuery = null, conversationHistory = [] }) => {
+    mutationFn: async ({ sql, maxResults = 500, timeoutSeconds = 30, nlQuery = null, conversationHistory = [] }) => {
       const response = await RestService.executeSql(sql, maxResults, timeoutSeconds, nlQuery, conversationHistory);
       
       if (response.success && response.query_results) {
@@ -65,7 +65,7 @@ export const useProcessNaturalLanguage = (options = {}) => {
         
         const executeResponse = await RestService.executeSql(
           generatedSql, 
-          100, 
+          500, 
           30, 
           nlQuery,
           conversationHistory
@@ -126,7 +126,7 @@ export const useProcessNaturalLanguage = (options = {}) => {
               { 
                 recommendations: generateResponse.schema_recommendations,
                 row_count: transformedResults.rowCount,
-                is_limited: transformedResults.rowCount >= 100
+                is_limited: transformedResults.rowCount >= 500
               }
             );
             

@@ -21,7 +21,7 @@ class GenerateSQLRequest(BaseModel):
 
 class ExecuteSQLRequest(BaseModel):
     sql: str
-    max_results: Optional[int] = 100
+    max_results: Optional[int] = 500
     timeout_seconds: Optional[int] = 30
     nl_query: Optional[str] = None
     conversation_history: Optional[List[str]] = []

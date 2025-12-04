@@ -525,14 +525,14 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
 
   if (loading) {
     return (
-      <div className="w-full h-full flex items-center justify-center">
-        <div className="text-center">
+      <div className="w-full h-full min-h-[300px] flex items-center justify-center">
+        <div className="flex flex-col items-center justify-center">
           <div className="relative mb-4">
-            <div className="w-12 h-12 rounded-full border-4 border-blue-200 dark:border-blue-800 animate-spin border-t-blue-500 dark:border-t-blue-400"></div>
+            <div className="w-10 h-10 rounded-full border-3 border-blue-200 dark:border-blue-900 animate-spin border-t-blue-500 dark:border-t-blue-400"></div>
           </div>
-          <Typography variant="body2" color="text.secondary" className="font-medium">
+          <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
             Generating chart...
-          </Typography>
+          </p>
         </div>
       </div>
     );
@@ -628,28 +628,52 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
             compact={true}
           />
           
-          {/* Show reconfigure button for manual mode or allow switching to manual */}
+          {/* Show mode badge and configure button */}
           <div className="flex items-center gap-2">
-            {chartInfo?.manual && (
-              <span className={`text-xs px-2 py-1 rounded ${isDark ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-100 text-blue-700'}`}>
-                Manual Config
-              </span>
+            {/* Mode Badge - AI Powered or Custom */}
+            {chartInfo && (
+              chartInfo.manual ? (
+                <span className={`
+                  inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-full
+                  ${isDark ? 'bg-amber-500/15 text-amber-400' : 'bg-amber-100 text-amber-700'}
+                `}>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Custom
+                </span>
+              ) : (
+                <span className={`
+                  inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-full
+                  ${isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}
+                `}>
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                  </svg>
+                  AI Powered
+                </span>
+              )
             )}
+            
             <button
               onClick={() => {
                 setManualChartConfigured(false);
                 setIsManualMode(true);
               }}
               className={`
-                text-xs px-2 py-1 rounded transition-colors
+                inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors
                 ${isDark 
-                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' 
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
                 }
               `}
-              title="Reconfigure chart axes"
+              title="Customize chart configuration"
             >
-              ⚙️ Configure
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Customize
             </button>
           </div>
         </div>

@@ -176,7 +176,7 @@ class Mutation:
         
         result = await orchestration_service.execute_sql_directly(
             sql=input.sql,
-            max_results=input.max_results or 100,
+            max_results=input.max_results or 500,
             timeout_seconds=input.timeout_seconds or 30
         )
         

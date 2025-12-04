@@ -24,7 +24,7 @@ class TrinoService:
     async def execute_query(
         self,
         sql: str,
-        max_results: int = 100,
+        max_results: int = 500,
         timeout_seconds: int = 30
     ) -> Dict[str, Any]:
         """Execute SQL query against Trino."""

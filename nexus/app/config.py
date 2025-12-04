@@ -98,7 +98,7 @@ class Settings(BaseSettings):
     # =============================================================================
     # Query Processing Configuration
     # =============================================================================
-    default_max_results: int = 100
+    default_max_results: int = 500
     default_timeout_seconds: int = 30
     max_query_length: int = 10000
     max_result_rows: int = 1000

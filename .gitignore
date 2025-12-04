@@ -78,7 +78,7 @@ optimizer.pt
 pytorch_model.bin
 
 # Docker
-.dockerignore
+# Note: .dockerignore files SHOULD be committed to optimize Docker builds
 
 # Trino generated catalog files (credentials injected at runtime)
 docker/trino/catalog/postgres.properties

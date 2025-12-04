@@ -27,7 +27,7 @@ const ChatInput = ({ onSubmit }) => {
     } catch {
       await onSubmit('Error: Could not reach backend.');
     }
-    setChatInput('');
+    // Keep the input text after processing for reference
   };
 
   return (

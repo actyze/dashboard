@@ -19,8 +19,7 @@ const AIQueryInput = ({ onSubmit, loading = false }) => {
   const handleSubmit = () => {
     if (query.trim() && !loading) {
       onSubmit(query.trim());
-      setQuery('');
-      setIsExpanded(false);
+      // Keep the input text after processing for reference
     }
   };
 

@@ -1,6 +1,6 @@
 import React from 'react';
-import { useTheme } from '../contexts/ThemeContext';
-import { Button } from './ui';
+import { useTheme } from '../../contexts/ThemeContext';
+import { Button } from '../ui';
 
 const ThemeToggle = ({ className = '' }) => {
   const { isDark, toggleTheme } = useTheme();

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Grid, IconButton, Typography, Menu, MenuItem } from '@mui/material';
-import { Card, Button } from './ui';
-import { useTheme } from '../contexts/ThemeContext';
+import { Card, Button } from '../ui';
+import { useTheme } from '../../contexts/ThemeContext';
 import SqlTileModal from './SqlTileModal';
-import QueryResults from './QueryResults';
-import Chart from './Chart';
-import { QueryExecutionService } from '../services/QueryExecutionService';
+import { QueryResults } from '../QueryExplorer';
+import { Chart } from '../Charts';
+import { QueryExecutionService } from '../../services/QueryExecutionService';
 
 const Dashboard = () => {
   const { isDark } = useTheme();

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { useTheme } from '../contexts/ThemeContext';
-import { Card, Text, Button } from './ui';
+import { useTheme } from '../../contexts/ThemeContext';
+import { Card, Text, Button } from '../ui';
 
 const Login = () => {
   const { isDark } = useTheme();

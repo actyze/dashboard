@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useTheme } from '../contexts/ThemeContext';
-import { Button, TextArea } from './ui';
+import { useTheme } from '../../contexts/ThemeContext';
+import { Button, TextArea } from '../ui';
 
 const AIQueryInput = ({ onSubmit, loading = false }) => {
   const { isDark } = useTheme();

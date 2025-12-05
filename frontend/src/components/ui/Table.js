@@ -16,15 +16,15 @@ const Table = ({
   const { isDark } = useTheme();
   
   const sizeClasses = {
-    sm: 'text-sm',
-    md: 'text-base', 
-    lg: 'text-lg',
+    sm: 'text-xs',
+    md: 'text-sm', 
+    lg: 'text-base',
   };
   
   const cellPaddingClasses = {
-    sm: 'px-3 py-2',
-    md: 'px-4 py-3',
-    lg: 'px-6 py-4',
+    sm: 'px-2 py-1.5',
+    md: 'px-3 py-2',
+    lg: 'px-4 py-3',
   };
   
   const LoadingSpinner = () => (
@@ -176,14 +176,14 @@ Table.Row = ({ children, className = '', hoverable = true, ...props }) => (
 
 // TableCell component
 Table.Cell = ({ children, className = '', ...props }) => (
-  <td className={`px-4 py-3 text-gray-900 dark:text-white ${className}`} {...props}>
+  <td className={`px-3 py-2 text-sm text-gray-900 dark:text-white ${className}`} {...props}>
     {children}
   </td>
 );
 
 // TableHeaderCell component
 Table.HeaderCell = ({ children, className = '', ...props }) => (
-  <th className={`px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${className}`} {...props}>
+  <th className={`px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${className}`} {...props}>
     {children}
   </th>
 );

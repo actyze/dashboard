@@ -23,8 +23,12 @@ COPY schema_service.py download_models.py ./
 COPY app ./app
 COPY .env* ./
 
-# Create directory for model cache
-RUN mkdir -p /app/model_cache
+# Create directories for model cache
+RUN mkdir -p /app/models /app/model_cache
+
+# IMPORTANT: Download models during BUILD time (baked into image)
+# This ensures models are ALWAYS available, even without volume mount
+RUN python download_models.py || echo "⚠️ Model download failed, will retry at runtime"
 
 # Expose port
 EXPOSE 8001
@@ -33,5 +37,6 @@ EXPOSE 8001
 HEALTHCHECK --interval=30s --timeout=15s --start-period=120s --retries=5 \
     CMD curl -f http://localhost:8001/health || exit 1
 
-# Download models at startup if not cached, then run the application
+# At runtime: check if models exist (from volume or image), re-download only if missing
+# Then run the application
 CMD ["sh", "-c", "python download_models.py && python schema_service.py"]

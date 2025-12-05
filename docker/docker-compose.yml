@@ -24,6 +24,12 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../helm/dashboard/sql:/docker-entrypoint-initdb.d:ro
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nexus_service} -d ${POSTGRES_DB:-dashboard}"]
       interval: 10s
@@ -57,6 +63,12 @@ services:
       postgres:
         condition: service_healthy
         required: false  # Don't require postgres if using external
+    deploy:
+      resources:
+        limits:
+          memory: 3G     # Trino needs more for query processing
+        reservations:
+          memory: 2G
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/v1/info || exit 1"]
       interval: 30s
@@ -114,7 +126,13 @@ services:
         condition: service_healthy
         required: false  # Optional - can use external Trino
     volumes:
-      - schema_models:/app/models
+      - schema_models:/app/model_cache  # Fixed: match the actual cache directory
+    deploy:
+      resources:
+        limits:
+          memory: 2.5G  # Hard limit: prevent OOM crashes (extra safety for large schemas)
+        reservations:
+          memory: 1.5G  # Soft limit: guarantee this amount on startup
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -178,6 +196,12 @@ services:
         required: false  # Optional - can use external Trino
       schema-service:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 512M
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
@@ -204,6 +228,12 @@ services:
     depends_on:
       nexus:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:80 || exit 1"]
       interval: 30s

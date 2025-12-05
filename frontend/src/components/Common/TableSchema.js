@@ -1,6 +1,6 @@
 import React from 'react';
-import { useTheme } from '../contexts/ThemeContext';
-import { Text } from './ui';
+import { useTheme } from '../../contexts/ThemeContext';
+import { Text } from '../ui';
 
 const TableSchema = ({ tableName, tableDetails }) => {
   const { isDark } = useTheme();

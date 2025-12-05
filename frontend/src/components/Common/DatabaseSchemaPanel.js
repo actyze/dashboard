@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { useTheme } from '../contexts/ThemeContext';
-import { Text, Button } from './ui';
+import { useTheme } from '../../contexts/ThemeContext';
+import { Text, Button } from '../ui';
 import TableSchema from './TableSchema';
-import { useGetDatabases } from '../hooks/useRestAPI';
-import { RestService } from '../services/RestService';
+import { useGetDatabases } from '../../hooks/useRestAPI';
+import { RestService } from '../../services/RestService';
 
 const DatabaseSchemaPanel = ({ 
   isCollapsed, 

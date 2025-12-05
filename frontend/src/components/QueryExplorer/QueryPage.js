@@ -1,14 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { useTheme } from '../contexts/ThemeContext';
-import DatabaseSchemaPanel from './DatabaseSchemaPanel';
+import { useTheme } from '../../contexts/ThemeContext';
+import { DatabaseSchemaPanel, ViewToggle } from '../Common';
 import AIQueryInput from './AIQueryInput';
 import SqlQuery from './SqlQuery';
 import QueryResults from './QueryResults';
-import Chart from './Chart';
-import ViewToggle from './ViewToggle';
-import { Text } from './ui';
-import { useProcessNaturalLanguage, useExecuteSql } from '../hooks';
+import { Chart } from '../Charts';
+import { Text } from '../ui';
+import { useProcessNaturalLanguage, useExecuteSql } from '../../hooks';
 
 const QueryPage = () => {
   const { id } = useParams();
@@ -26,6 +25,11 @@ const QueryPage = () => {
   const [queryError, setQueryError] = useState(null);
   const [queryResults, setQueryResults] = useState(null);
   const [chartData, setChartData] = useState(null);
+  
+  // Editable title state
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+  const titleInputRef = useRef(null);
 
   useEffect(() => {
     if (id && id !== 'new') {
@@ -33,6 +37,35 @@ const QueryPage = () => {
       setSelectedQuery({ id, title: `Query ${id}`, query: defaultQuery });
     }
   }, [id]);
+  
+  // Focus input when entering edit mode
+  useEffect(() => {
+    if (isEditingTitle && titleInputRef.current) {
+      titleInputRef.current.focus();
+      titleInputRef.current.select();
+    }
+  }, [isEditingTitle]);
+  
+  const handleTitleClick = () => {
+    const currentTitle = selectedQuery?.title || 'Untitled Query';
+    setEditedTitle(currentTitle);
+    setIsEditingTitle(true);
+  };
+  
+  const handleTitleSave = () => {
+    if (editedTitle.trim()) {
+      setSelectedQuery(prev => ({ ...prev, title: editedTitle.trim() }));
+    }
+    setIsEditingTitle(false);
+  };
+  
+  const handleTitleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleTitleSave();
+    } else if (e.key === 'Escape') {
+      setIsEditingTitle(false);
+    }
+  };
 
   const { mutate: processNaturalLanguage, isPending: aiQueryLoading } = useProcessNaturalLanguage({
     // PROGRESSIVE CALLBACK: SQL generated - show immediately!
@@ -100,32 +133,53 @@ const QueryPage = () => {
               {/* Back Button */}
               <button
                 onClick={() => navigate('/queries')}
-                  className={`
-                    p-2 rounded-lg transition-colors
-                    ${isDark 
-                      ? 'hover:bg-gray-700 text-gray-300 hover:text-white' 
-                      : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
-                    }
-                  `}
-                  title="Back to Queries"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-              
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                className={`
+                  p-2 rounded-lg transition-colors
+                  ${isDark 
+                    ? 'hover:bg-gray-700 text-gray-300 hover:text-white' 
+                    : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'
+                  }
+                `}
+                title="Back to Queries"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
-              </div>
-              <div>
-                <Text variant="h5" className="font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent dark:from-white dark:to-gray-300">
-                  {selectedQuery ? selectedQuery.title : 'Analytics Dashboard'}
-                </Text>
-                <Text color="secondary" className="mt-0.5 text-sm">
-                  {selectedQuery ? selectedQuery.description : 'Explore your data with AI-powered natural language queries'}
-                </Text>
+              </button>
+              
+              {/* Editable Title */}
+              <div className="flex-1">
+                {isEditingTitle ? (
+                  <input
+                    ref={titleInputRef}
+                    type="text"
+                    value={editedTitle}
+                    onChange={(e) => setEditedTitle(e.target.value)}
+                    onBlur={handleTitleSave}
+                    onKeyDown={handleTitleKeyDown}
+                    className={`
+                      text-lg font-bold w-full max-w-xs px-1 py-0.5 
+                      bg-transparent border-0 border-b-2 border-blue-500 
+                      outline-none transition-all
+                      ${isDark ? 'text-white' : 'text-gray-900'}
+                    `}
+                    placeholder="Enter query name..."
+                  />
+                ) : (
+                  <button
+                    onClick={handleTitleClick}
+                    className={`
+                      text-lg font-bold px-1 py-0.5 transition-all text-left border-b-2 border-transparent
+                      ${isDark 
+                        ? 'text-white hover:border-gray-600' 
+                        : 'text-gray-900 hover:border-gray-300'
+                      }
+                    `}
+                    title="Click to edit title"
+                  >
+                    {selectedQuery?.title || 'Untitled Query'}
+                  </button>
+                )}
               </div>
             </div>
           </div>

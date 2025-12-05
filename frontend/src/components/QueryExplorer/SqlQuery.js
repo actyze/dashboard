@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, TextArea, Button } from './ui';
+import { Card, TextArea, Button } from '../ui';
 
 const SqlQuery = ({ sqlQuery, setSqlQuery, backendResponse, onExecute }) => (
   <div className="h-full w-full">

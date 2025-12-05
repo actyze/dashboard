@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { useTheme } from '../contexts/ThemeContext';
-import { Text } from './ui';
+import { useTheme } from '../../contexts/ThemeContext';
+import { Text } from '../ui';
 
 const Sidebar = ({ isCollapsed, onToggle }) => {
   const { isDark, toggleTheme } = useTheme();
@@ -176,9 +176,6 @@ const Sidebar = ({ isCollapsed, onToggle }) => {
               <div className="flex-1 min-w-0">
                 <Text className={`font-medium text-sm truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
                   Uddish Verma
-                </Text>
-                <Text className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                  PUBLIC
                 </Text>
               </div>
             )}

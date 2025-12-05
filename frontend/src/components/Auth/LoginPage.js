@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 // Color palette - single source of truth
 const colors = {
@@ -92,30 +92,9 @@ const LoginPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [leftMousePos, setLeftMousePos] = useState({ x: 0, y: 0 });
-  const [rightMousePos, setRightMousePos] = useState({ x: 0, y: 0 });
-  const [isHoveringLeft, setIsHoveringLeft] = useState(false);
-  const [isHoveringRight, setIsHoveringRight] = useState(false);
-  const leftPanelRef = useRef(null);
-  const rightPanelRef = useRef(null);
   const navigate = useNavigate();
 
   const styles = getStyles(isDark);
-
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (leftPanelRef.current) {
-        const rect = leftPanelRef.current.getBoundingClientRect();
-        setLeftMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-      }
-      if (rightPanelRef.current) {
-        const rect = rightPanelRef.current.getBoundingClientRect();
-        setRightMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-      }
-    };
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -139,9 +118,6 @@ const LoginPage = () => {
 
       {/* Left Panel - Animated Fluid Gradient */}
       <div
-        ref={leftPanelRef}
-        onMouseEnter={() => setIsHoveringLeft(true)}
-        onMouseLeave={() => setIsHoveringLeft(false)}
         className="hidden lg:flex lg:w-1/2 relative overflow-hidden"
         style={{ backgroundColor: isDark ? '#050a18' : '#1a3a8f' }}
       >
@@ -171,20 +147,6 @@ const LoginPage = () => {
           }} 
         />
 
-        {/* Cursor follower glow */}
-        <div
-          className="absolute rounded-full pointer-events-none transition-all duration-500 ease-out"
-          style={{
-            width: 300,
-            height: 300,
-            left: leftMousePos.x - 150,
-            top: leftMousePos.y - 150,
-            background: 'radial-gradient(circle, rgba(147, 180, 255, 0.4) 0%, transparent 60%)',
-            opacity: isHoveringLeft ? 1 : 0,
-            filter: 'blur(40px)',
-          }}
-        />
-
         {/* Center content */}
         <div className="relative z-10 flex flex-col items-center justify-center w-full px-12">
           <h1 
@@ -205,26 +167,8 @@ const LoginPage = () => {
 
       {/* Right Panel - Login Form */}
       <div 
-        ref={rightPanelRef}
-        onMouseEnter={() => setIsHoveringRight(true)}
-        onMouseLeave={() => setIsHoveringRight(false)}
         className={`w-full lg:w-1/2 flex items-center justify-center p-8 relative overflow-hidden ${isDark ? 'bg-gray-950' : 'bg-slate-50'}`}
       >
-        {/* Cursor follower glow for right panel */}
-        <div
-          className="absolute rounded-full pointer-events-none transition-all duration-500 ease-out"
-          style={{
-            width: 250,
-            height: 250,
-            left: rightMousePos.x - 125,
-            top: rightMousePos.y - 125,
-            background: isDark 
-              ? 'radial-gradient(circle, rgba(48, 100, 255, 0.15) 0%, transparent 60%)'
-              : 'radial-gradient(circle, rgba(48, 100, 255, 0.1) 0%, transparent 60%)',
-            opacity: isHoveringRight ? 1 : 0,
-            filter: 'blur(40px)',
-          }}
-        />
         <div className="w-full max-w-md relative z-10">
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-10">

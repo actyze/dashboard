@@ -59,16 +59,9 @@ const DashboardsList = () => {
       {/* Header */}
       <div className={`${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b px-6 py-4`}>
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 12a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1v-7z" />
-              </svg>
-            </div>
-            <Text variant="h4" className="font-semibold">
-              Dashboards
-            </Text>
-          </div>
+          <Text variant="h4" className="font-semibold">
+            Dashboards
+          </Text>
           
           {/* Search and New Button */}
           <div className="flex items-center space-x-3">
@@ -115,11 +108,7 @@ const DashboardsList = () => {
       </div>
 
       {/* Dashboards List */}
-      <div className="flex-1 px-6 pt-6 overflow-hidden flex flex-col">
-        <Text variant="h6" className="mb-4 font-medium">
-          Your Dashboards
-        </Text>
-        
+      <div className="flex-1 px-6 pt-4 overflow-hidden flex flex-col">
         {/* Tabs */}
         <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
           <nav className="flex space-x-8">

@@ -197,8 +197,8 @@ const QueryPage = () => {
         />
         
         {/* Main Dashboard */}
-        <div className="flex-1 flex flex-col">
-          <div className="flex-1 overflow-auto p-4 space-y-4">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4">
             {/* SQL Query Editor */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -319,70 +319,71 @@ const QueryPage = () => {
         </div>
 
         {/* Right Panel - AI Query Input */}
-        <div className={`${aiPanelCollapsed ? 'w-0' : 'w-80'} transition-all duration-300 overflow-hidden ${isDark ? 'bg-gray-800/50 border-gray-700/50 backdrop-blur-sm' : 'bg-white/50 border-gray-200/50 backdrop-blur-sm'} border-l flex flex-col`}>
-            <div className={`${aiPanelCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'} transition-opacity duration-300 flex-1 flex flex-col`}>
-              <div className="p-3 border-b border-gray-200/50 dark:border-gray-700/50">
-                <div className="flex items-center space-x-2 mb-1">
-                  <div className="w-5 h-5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center">
-                    <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  </div>
-                  <Text variant="h6" className="font-bold text-sm">
-                    AI Assistant
-                  </Text>
+        <div 
+          style={{ width: aiPanelCollapsed ? 0 : 320, minWidth: aiPanelCollapsed ? 0 : 320 }}
+          className={`
+            transition-all duration-300 flex-shrink-0
+            ${isDark ? 'bg-gray-800/50 border-gray-700/50 backdrop-blur-sm' : 'bg-white/50 border-gray-200/50 backdrop-blur-sm'} 
+            border-l flex flex-col overflow-hidden
+          `}
+        >
+          <div className={`${aiPanelCollapsed ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300 flex-1 flex flex-col`} style={{ width: 320 }}>
+            <div className="p-3 border-b border-gray-200/50 dark:border-gray-700/50">
+              <div className="flex items-center space-x-2 mb-1">
+                <div className="w-5 h-5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
                 </div>
-                <Text color="secondary" className="text-xs">
-                  Ask questions about your data in natural language
+                <Text variant="h6" className="font-bold text-sm whitespace-nowrap">
+                  AI Assistant
                 </Text>
               </div>
+              <Text color="secondary" className="text-xs">
+                Ask questions about your data in natural language
+              </Text>
+            </div>
+            
+            <div className="flex-1 p-3 overflow-y-auto">
+              <AIQueryInput 
+                onSubmit={handleAIQuery}
+                loading={queryLoading}
+              />
               
-              <div className="flex-1 p-3 overflow-y-auto">
-                <AIQueryInput 
-                  onSubmit={handleAIQuery}
-                  loading={queryLoading}
-                />
-                
-                {/* Recent Queries */}
-                <div className="mt-3">
-                  <Text variant="subtitle2" className="font-medium mb-2 text-xs text-gray-600 dark:text-gray-400">
-                    Recent Queries
-                  </Text>
-                  <div className="space-y-1">
-                    {[
-                      "Show me sales data from the last quarter",
-                      "Create a chart of customer demographics",
-                      "Find all orders over $1000 this month",
-                      "Compare revenue by region",
-                    ].map((query, index) => (
-                      <button
-                        key={index}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          if (!queryLoading) {
-                            handleAIQuery(query);
-                          }
-                        }}
-                        disabled={queryLoading}
-                        className={`
-                          w-full text-left p-1.5 rounded border transition-all duration-200 cursor-pointer relative z-10
-                          ${queryLoading 
-                            ? 'opacity-50 cursor-not-allowed pointer-events-none'
-                            : isDark
-                              ? 'bg-gray-800/60 border-gray-700/60 hover:bg-gray-700/70 text-gray-200 hover:border-gray-600/70' 
-                              : 'bg-white/80 border-gray-200/60 hover:bg-white text-gray-700 hover:border-gray-300/80'
-                          }
-                          hover:shadow-md text-xs pointer-events-auto
-                        `}
-                        type="button"
-                      >
-                        {query}
-                      </button>
-                    ))}
-                  </div>
+              {/* Recent Queries */}
+              <div className="mt-4">
+                <Text variant="subtitle2" className="font-medium mb-2 text-xs text-gray-600 dark:text-gray-400">
+                  Recent Queries
+                </Text>
+                <div className="space-y-1.5">
+                  {[
+                    "Show me sales data from the last quarter",
+                    "Create a chart of customer demographics",
+                    "Find all orders over $1000 this month",
+                    "Compare revenue by region",
+                  ].map((query, index) => (
+                    <button
+                      key={index}
+                      onClick={() => !queryLoading && handleAIQuery(query)}
+                      disabled={queryLoading}
+                      className={`
+                        w-full text-left p-2 rounded-lg border transition-all duration-200
+                        ${queryLoading 
+                          ? 'opacity-50 cursor-not-allowed'
+                          : isDark
+                            ? 'bg-gray-800/60 border-gray-700/60 hover:bg-gray-700/70 text-gray-200 hover:border-gray-600/70' 
+                            : 'bg-white/80 border-gray-200/60 hover:bg-white text-gray-700 hover:border-gray-300/80'
+                        }
+                        text-xs
+                      `}
+                      type="button"
+                    >
+                      {query}
+                    </button>
+                  ))}
                 </div>
               </div>
+            </div>
           </div>
         </div>
       </div>

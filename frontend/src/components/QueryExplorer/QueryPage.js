@@ -6,6 +6,7 @@ import AIQueryInput from './AIQueryInput';
 import SqlQuery from './SqlQuery';
 import QueryResults from './QueryResults';
 import { Chart } from '../Charts';
+import { ReasoningBanner } from '../Common';
 import { Text } from '../ui';
 import { useProcessNaturalLanguage, useExecuteSql } from '../../hooks';
 
@@ -25,6 +26,7 @@ const QueryPage = () => {
   const [queryError, setQueryError] = useState(null);
   const [queryResults, setQueryResults] = useState(null);
   const [chartData, setChartData] = useState(null);
+  const [queryReasoning, setQueryReasoning] = useState(null);
   
   // Editable title state
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -69,10 +71,11 @@ const QueryPage = () => {
 
   const { mutate: processNaturalLanguage, isPending: aiQueryLoading } = useProcessNaturalLanguage({
     // PROGRESSIVE CALLBACK: SQL generated - show immediately!
-    onSqlGenerated: (sql, chartRecommendation) => {
+    onSqlGenerated: (sql, chartRecommendation, reasoning) => {
       console.log('SQL generated, updating editor immediately');
       const commentPrefix = `-- Generated from natural language query\n`;
       setSqlQuery(commentPrefix + sql);
+      setQueryReasoning(reasoning);
       setQueryError(null);
     },
     // PROGRESSIVE CALLBACK: Results ready - show immediately!
@@ -117,6 +120,7 @@ const QueryPage = () => {
 
   const handleExecuteQuery = () => {
     setQueryError(null);
+    setQueryReasoning(null); // Clear reasoning for manual queries
     executeSql({ sql: sqlQuery });
   };
 
@@ -284,6 +288,14 @@ const QueryPage = () => {
                     </button>
                   </div>
                 </div>
+              
+              {/* Query Reasoning Banner */}
+              {queryReasoning && (
+                <ReasoningBanner 
+                  reasoning={queryReasoning}
+                  className="mb-2"
+                />
+              )}
                 
               <SqlQuery 
                 sqlQuery={sqlQuery}

@@ -1,12 +1,9 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router';
-import Layout from './components/Layout';
-import LoginPage from './components/LoginPage';
-import Signup from './components/Signup'; // Assuming this exists or placeholder
-import QueryPage from './components/QueryPage';
-import QueriesList from './components/QueriesList';
-import Dashboard from './components/Dashboard';
-import DashboardsList from './components/DashboardsList';
+import { Layout } from './components/Common';
+import { LoginPage, Signup } from './components/Auth';
+import { QueryPage, QueriesList } from './components/QueryExplorer';
+import { Dashboard, DashboardsList } from './components/Dashboard';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 // Private Route Wrapper

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useTheme } from '../contexts/ThemeContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const ResizablePanel = ({ children, isFullScreen, onToggleFullScreen }) => {
   const { isDark } = useTheme();

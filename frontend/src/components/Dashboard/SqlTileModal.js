@@ -7,8 +7,8 @@ import {
   IconButton,
   Typography
 } from '@mui/material';
-import { Button, Alert } from './ui';
-import { useTheme } from '../contexts/ThemeContext';
+import { Button, Alert } from '../ui';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
   const { isDark } = useTheme();

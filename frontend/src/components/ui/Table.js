@@ -82,7 +82,7 @@ const Table = ({
   }
   
   return (
-    <div className={`overflow-hidden bg-white dark:bg-gray-800 shadow rounded-lg ${className}`} {...props}>
+    <div className={`overflow-hidden bg-white dark:bg-gray-800 ${className}`} {...props}>
       <div className="overflow-x-auto">
         <table className={`min-w-full divide-y divide-gray-200 dark:divide-gray-700 ${sizeClasses[size]}`}>
           <thead className="bg-gray-50 dark:bg-gray-700">
@@ -116,22 +116,31 @@ const Table = ({
                   ${bordered ? 'border-b border-gray-200 dark:border-gray-700' : ''}
                 `.trim().replace(/\s+/g, ' ')}
               >
-                {columns.map((column, colIndex) => (
-                  <td
-                    key={`${rowIndex}-${column.key || colIndex}`}
-                    className={`
-                      ${cellPaddingClasses[size]}
-                      text-gray-900 dark:text-white
-                      ${column.cellClassName || ''}
-                    `.trim().replace(/\s+/g, ' ')}
-                    style={column.cellStyle}
-                  >
-                    {column.render ? 
-                      column.render(row[column.key || column.dataIndex], row, rowIndex) : 
-                      row[column.key || column.dataIndex]
-                    }
-                  </td>
-                ))}
+                {columns.map((column, colIndex) => {
+                  const cellValue = column.render 
+                    ? column.render(row[column.key || column.dataIndex], row, rowIndex) 
+                    : row[column.key || column.dataIndex];
+                  const displayValue = cellValue != null ? String(cellValue) : '';
+                  
+                  return (
+                    <td
+                      key={`${rowIndex}-${column.key || colIndex}`}
+                      className={`
+                        ${cellPaddingClasses[size]}
+                        text-gray-900 dark:text-white max-w-[250px]
+                        ${column.cellClassName || ''}
+                      `.trim().replace(/\s+/g, ' ')}
+                      style={column.cellStyle}
+                    >
+                      <div 
+                        className="whitespace-nowrap overflow-hidden text-ellipsis"
+                        title={displayValue}
+                      >
+                        {cellValue}
+                      </div>
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>

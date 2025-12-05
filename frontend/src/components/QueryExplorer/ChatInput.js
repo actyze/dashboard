@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Box } from '@mui/material';
-import { Input, Button } from './ui';
+import { Input, Button } from '../ui';
 
 const ChatInput = ({ onSubmit }) => {
   const [chatInput, setChatInput] = useState('');

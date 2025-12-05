@@ -60,21 +60,23 @@ class LLMService:
                     "error_type": "PARSING_ERROR"
                 }
             
-            # Extract chart recommendations from response
+            # Extract chart recommendations and reasoning from response
             chart_recommendation = self._extract_chart_recommendation(generated_text)
+            reasoning = self._extract_reasoning(generated_text, chart_recommendation)
             
             self.logger.info(
                 "SQL generated successfully",
                 sql_length=len(sql),
                 provider=settings.external_llm_provider,
-                has_chart_recommendation=chart_recommendation is not None
+                has_chart_recommendation=chart_recommendation is not None,
+                has_reasoning=bool(reasoning)
             )
             
             result = {
                 "success": True,
                 "sql": sql,
                 "confidence": 0.85,  # Default confidence for external LLM
-                "reasoning": "Generated using external LLM API",
+                "reasoning": reasoning,
                 "model_info": {
                     "provider": settings.external_llm_provider,
                     "model": settings.external_llm_model
@@ -291,30 +293,41 @@ Generated SQL (Main Data):
     ) -> str:
         """Build SQL generation prompt with schema context and chart recommendations."""
         
+        # Build strict prompt that enforces using ONLY provided tables
         prompt_parts = [
             "You are an expert SQL developer and data visualization specialist.",
-            "Generate a Trino SQL query for the following request, AND recommend the best chart configuration.",
-            "\nRules for SQL:",
-            "- Use Trino SQL syntax",
-            "- Include proper table aliases",
-            "- Use appropriate JOINs when needed",
-            "- Format the query cleanly",
-            "\nRules for Chart Recommendation:",
+            "Generate a Trino SQL query for the following request, AND recommend the best chart configuration."
+        ]
+        
+        # Add schema context FIRST (before rules) to make it prominent
+        if schema_recommendations and schema_recommendations.get("recommendations"):
+            prompt_parts.append("\n=== AVAILABLE TABLES (USE ONLY THESE) ===")
+            for rec in schema_recommendations["recommendations"][:7]:  # Top 7 recommendations
+                table_info = f"✓ {rec.get('full_name', 'unknown')}"
+                if rec.get('columns'):
+                    columns_str = ", ".join(rec['columns'][:10])  # Show first 10 columns
+                    table_info += f"\n  Columns: {columns_str}"
+                prompt_parts.append(table_info)
+            prompt_parts.append("===========================================\n")
+        
+        prompt_parts.extend([
+            "⚠️ CRITICAL RULES FOR SQL:",
+            "1. YOU MUST ONLY USE TABLES FROM THE 'AVAILABLE TABLES' LIST ABOVE",
+            "2. DO NOT use tables from your training data (tpch, tpcds, etc.) - ONLY use the provided tables",
+            "3. Use the EXACT full table names as shown (catalog.schema.table)",
+            "4. Use Trino SQL syntax",
+            "5. Include proper table aliases",
+            "6. Use appropriate JOINs when needed",
+            "7. Format the query cleanly",
+            "",
+            "Rules for Chart Recommendation:",
             "- Identify which column should be the X-axis (usually a category/dimension like name, date, category)",
             "- Identify which column should be the Y-axis (usually a measure/metric like sales, count, amount)",
             "- Recommend the best chart type: bar, line, pie, scatter, area, histogram",
             "- Consider: bar for comparisons, line for trends over time, pie for parts of whole, scatter for correlations",
-            "\nRequest: " + query
-        ]
-        
-        # Add schema context if available
-        if schema_recommendations and schema_recommendations.get("recommendations"):
-            prompt_parts.append("\nAvailable tables and schemas:")
-            for rec in schema_recommendations["recommendations"][:5]:  # Top 5 recommendations
-                table_info = f"- {rec.get('full_name', 'unknown')} (confidence: {rec.get('confidence', 0):.2f})"
-                if rec.get('columns'):
-                    table_info += f" - Columns: {rec['columns'][:100]}..."
-                prompt_parts.append(table_info)
+            "",
+            f"User Request: {query}"
+        ])
         
         # Add conversation context if available
         if conversation_history:
@@ -327,7 +340,13 @@ Generated SQL (Main Data):
         prompt_parts.append("YOUR SQL QUERY HERE")
         prompt_parts.append("```")
         prompt_parts.append("```json")
-        prompt_parts.append('{"chart_type": "bar", "x_column": "column_name", "y_column": "column_name", "title": "Chart Title"}')
+        prompt_parts.append('{')
+        prompt_parts.append('  "reasoning": "Brief explanation of table selection, joins, filters used (max 2 sentences)",')
+        prompt_parts.append('  "chart_type": "bar",')
+        prompt_parts.append('  "x_column": "column_name",')
+        prompt_parts.append('  "y_column": "column_name",')
+        prompt_parts.append('  "title": "Chart Title"')
+        prompt_parts.append('}')
         prompt_parts.append("```")
         
         return "\n".join(prompt_parts)
@@ -508,6 +527,33 @@ Generated SQL (Main Data):
         except Exception as e:
             self.logger.warning("Failed to parse chart recommendation", error=str(e))
             return None
+    
+    def _extract_reasoning(self, response_text: str, chart_rec: Optional[Dict[str, Any]] = None) -> str:
+        """Extract reasoning from LLM response or chart recommendation JSON."""
+        import re
+        
+        try:
+            # First, try to extract reasoning from the JSON block (where chart recommendation is)
+            json_match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL | re.IGNORECASE)
+            if json_match:
+                json_str = json_match.group(1).strip()
+                data = json.loads(json_str)
+                reasoning = data.get('reasoning', '').strip()
+                if reasoning:
+                    return reasoning
+            
+            # If chart_rec was already parsed, it might have reasoning
+            if chart_rec and isinstance(chart_rec, dict):
+                reasoning = chart_rec.get('reasoning', '').strip()
+                if reasoning:
+                    return reasoning
+            
+            # Fallback: return generic message
+            return "Query generated based on schema analysis"
+            
+        except Exception as e:
+            self.logger.warning("Failed to extract reasoning", error=str(e))
+            return "Query generated using AI"
         
         # Fallback: return the whole response if it contains SQL keywords
         if any(keyword in text.upper() for keyword in ["SELECT", "FROM", "WHERE"]):

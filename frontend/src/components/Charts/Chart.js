@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Typography } from '@mui/material';
 import Plot from 'react-plotly.js';
-import { Alert } from './ui';
-import { useTheme } from '../contexts/ThemeContext';
+import { Alert } from '../ui';
+import { useTheme } from '../../contexts/ThemeContext';
 import ChartTypeSelector from './ChartTypeSelector';
 import ManualAxisSelector from './ManualAxisSelector';
 
@@ -528,7 +528,10 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
       <div className="w-full h-full min-h-[300px] flex items-center justify-center">
         <div className="flex flex-col items-center justify-center">
           <div className="relative mb-4">
-            <div className="w-10 h-10 rounded-full border-3 border-blue-200 dark:border-blue-900 animate-spin border-t-blue-500 dark:border-t-blue-400"></div>
+            <svg className="w-10 h-10 animate-spin text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
           </div>
           <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
             Generating chart...
@@ -597,19 +600,19 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
   if (!chartData || !plotData || plotData.length === 0) {
     return (
       <div className="w-full h-full flex flex-col">
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center min-h-[300px]">
           <div className="text-center">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 flex items-center justify-center">
               <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </div>
-            <Typography variant="h6" color="text.secondary" gutterBottom className="font-semibold">
+            <h3 className="text-base font-semibold text-gray-700 dark:text-gray-300 mb-1">
               No Chart Data
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
               Execute a query to generate a chart
-            </Typography>
+            </p>
           </div>
         </div>
       </div>
@@ -700,3 +703,4 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
 };
 
 export default Chart;
+

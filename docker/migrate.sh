@@ -23,3 +23,5 @@ fi
 
 echo "✅ Database migration process finished"
 
+# Exit successfully so docker-compose knows we're done
+exit 0

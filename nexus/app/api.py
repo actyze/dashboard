@@ -139,6 +139,86 @@ async def query(
         raise HTTPException(status_code=400, detail="Invalid query type. Use 'sql' or 'auto'.")
 
 # =============================================================================
+# Query History Endpoints
+# =============================================================================
+
+class UpdateQueryNameRequest(BaseModel):
+    query_name: str
+
+@router.get("/query-history")
+async def get_query_history(
+    limit: int = 50,
+    offset: int = 0,
+    query_type: Optional[str] = None,
+    current_user: dict = Depends(require_viewer)
+):
+    """Get query execution history for the current user."""
+    user_id = current_user.get("id")
+    result = await user_service.get_query_history(
+        user_id=user_id,
+        limit=limit,
+        offset=offset,
+        query_type=query_type
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error"))
+    return result
+
+@router.patch("/query-history/{query_id}/name")
+async def update_query_name(
+    query_id: int,
+    request: UpdateQueryNameRequest,
+    current_user: dict = Depends(require_viewer)
+):
+    """Update the name of a query in history."""
+    user_id = current_user.get("id")
+    result = await user_service.update_query_name(
+        query_id=query_id,
+        user_id=user_id,
+        query_name=request.query_name
+    )
+    if not result.get("success"):
+        if "not found" in result.get("error", "").lower():
+            raise HTTPException(status_code=404, detail=result.get("error"))
+        raise HTTPException(status_code=500, detail=result.get("error"))
+    return result
+
+@router.post("/query-history/manual")
+async def save_manual_query(
+    request: ExecuteSQLRequest,
+    current_user: dict = Depends(require_viewer)
+):
+    """Execute and save a manual SQL query to history."""
+    from datetime import datetime
+    
+    # Execute the SQL
+    result = await orchestration_service.execute_sql_directly(
+        request.sql,
+        request.max_results,
+        request.timeout_seconds
+    )
+    
+    # Save to history
+    user_id = current_user.get("id")
+    session_id = f"manual-{datetime.utcnow().timestamp()}"
+    
+    await user_service.save_query_execution(
+        user_id=user_id,
+        session_id=session_id,
+        natural_language_query="",  # Empty for manual queries
+        generated_sql=request.sql,
+        execution_status="success" if result.get("success") else "error",
+        execution_time_ms=int(result.get("execution_time", 0) or 0),
+        row_count=result.get("query_results", {}).get("row_count") if result.get("query_results") else None,
+        error_message=result.get("error"),
+        query_type='manual',
+        generated_at=datetime.utcnow(),
+        executed_at=datetime.utcnow()
+    )
+    
+    return result
+
+# =============================================================================
 # Explorer Endpoints
 # =============================================================================
 

@@ -61,7 +61,6 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
   // Process chart data when chartData changes
   const processChartData = useCallback((data, overrideType = null) => {
     try {
-      console.log('Chart component processing data:', data, 'overrideType:', overrideType);
       const { chart, data: queryData } = data;
       const chartType = overrideType || chart?.type || 'bar';
 
@@ -75,18 +74,15 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
 
       // Process chart configuration
       if (queryData?.data) {
-        console.log('Processing chart with type:', chartType);
         const { plotData: newPlotData, layout: newLayout } = createPlotlyDataForType(
           chartType, 
           queryData, 
           chart?.config
         );
         
-        console.log('Setting plotData:', newPlotData);
         setPlotData(newPlotData);
         setLayout(newLayout);
       } else {
-        console.log('No queryData.data available');
         setPlotData([]);
         setLayout({});
       }
@@ -118,7 +114,6 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
         // This uses the cached queryResults, no re-execution
       } else {
         // No LLM recommendation (direct SQL execution) - enter manual mode
-        console.log('Manual mode: Direct SQL execution or no LLM recommendation');
         setIsManualMode(true);
         setManualChartConfigured(false);
         setPlotData([]);
@@ -140,12 +135,10 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
 
   // Handle chart type change from selector
   const handleChartTypeChange = useCallback((newType) => {
-    console.log('Chart type changed to:', newType);
     setSelectedChartType(newType);
     
     // Reprocess chart data with new type
     if (chartData && chartData.data) {
-      console.log('Reprocessing chart with new type:', newType);
       
       // Get config from existing chart or use manual selections
       const config = isManualMode 
@@ -157,7 +150,6 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
         const newPlotData = createPlotlyData(newType, config, chartData.data);
         const newLayout = createPlotlyLayout(newType, config, chartData.data);
         
-        console.log('New plot data:', newPlotData);
         setPlotData(newPlotData);
         setLayout(newLayout);
       }
@@ -174,8 +166,6 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
       return;
     }
 
-    console.log('Applying manual chart config:', { xAxis: manualXAxis, yAxis: manualYAxis, type: selectedChartType });
-    
     const config = {
       xField: manualXAxis,
       yField: manualYAxis
@@ -208,8 +198,6 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
     const xField = config.xField || columns[0]?.name;
     const yField = config.yField || columns[1]?.name;
     const seriesField = config.series;
-    
-    console.log('Chart columns:', { xField, yField, seriesField, source: config.xField ? 'LLM' : 'fallback' });
     
     switch (chartType) {
       case 'bar':

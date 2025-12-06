@@ -72,7 +72,6 @@ const QueryPage = () => {
   const { mutate: processNaturalLanguage, isPending: aiQueryLoading } = useProcessNaturalLanguage({
     // PROGRESSIVE CALLBACK: SQL generated - show immediately!
     onSqlGenerated: (sql, chartRecommendation, reasoning) => {
-      console.log('SQL generated, updating editor immediately');
       const commentPrefix = `-- Generated from natural language query\n`;
       setSqlQuery(commentPrefix + sql);
       setQueryReasoning(reasoning);
@@ -80,7 +79,6 @@ const QueryPage = () => {
     },
     // PROGRESSIVE CALLBACK: Results ready - show immediately!
     onResultsReady: (results, chartData) => {
-      console.log('Results ready, updating grid and chart immediately');
       setQueryResults(results);
       setChartData(chartData);
     },

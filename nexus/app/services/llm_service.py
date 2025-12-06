@@ -303,7 +303,7 @@ Generated SQL (Main Data):
         if schema_recommendations and schema_recommendations.get("recommendations"):
             prompt_parts.append("\n=== AVAILABLE TABLES (USE ONLY THESE) ===")
             for rec in schema_recommendations["recommendations"][:7]:  # Top 7 recommendations
-                table_info = f"✓ {rec.get('full_name', 'unknown')}"
+                table_info = f"- {rec.get('full_name', 'unknown')}"
                 if rec.get('columns'):
                     columns_str = ", ".join(rec['columns'][:10])  # Show first 10 columns
                     table_info += f"\n  Columns: {columns_str}"
@@ -311,7 +311,7 @@ Generated SQL (Main Data):
             prompt_parts.append("===========================================\n")
         
         prompt_parts.extend([
-            "⚠️ CRITICAL RULES FOR SQL:",
+            "CRITICAL RULES FOR SQL:",
             "1. YOU MUST ONLY USE TABLES FROM THE 'AVAILABLE TABLES' LIST ABOVE",
             "2. DO NOT use tables from your training data (tpch, tpcds, etc.) - ONLY use the provided tables",
             "3. Use the EXACT full table names as shown (catalog.schema.table)",
@@ -320,11 +320,13 @@ Generated SQL (Main Data):
             "6. Use appropriate JOINs when needed",
             "7. Format the query cleanly",
             "",
-            "Rules for Chart Recommendation:",
-            "- Identify which column should be the X-axis (usually a category/dimension like name, date, category)",
-            "- Identify which column should be the Y-axis (usually a measure/metric like sales, count, amount)",
-            "- Recommend the best chart type: bar, line, pie, scatter, area, histogram",
-            "- Consider: bar for comparisons, line for trends over time, pie for parts of whole, scatter for correlations",
+            "CRITICAL RULES FOR CHART RECOMMENDATIONS:",
+            "- The x_column and y_column MUST BE ACTUAL COLUMN ALIASES FROM YOUR SQL SELECT LIST",
+            "- If you need customer name, create it in SQL: CONCAT(first_name, ' ', last_name) AS customer_name",
+            "- DO NOT recommend column names that don't exist in your SELECT clause",
+            "- X-axis: category/dimension (name, date, category, product, etc.)",
+            "- Y-axis: measure/metric (sales, count, amount, quantity, etc.)",
+            "- Chart types: bar (comparisons), line (trends), pie (parts of whole), scatter (correlations)",
             "",
             f"User Request: {query}"
         ])
@@ -335,6 +337,20 @@ Generated SQL (Main Data):
             for msg in conversation_history[-3:]:  # Last 3 messages
                 prompt_parts.append(f"- {msg}")
         
+        prompt_parts.append("\nEXAMPLE - Correct way to handle column names:")
+        prompt_parts.append("If you SELECT first_name, last_name separately, you have TWO options:")
+        prompt_parts.append("Option 1: Concatenate in SQL and use the alias:")
+        prompt_parts.append("```sql")
+        prompt_parts.append("SELECT CONCAT(first_name, ' ', last_name) AS customer_name, SUM(amount) AS total")
+        prompt_parts.append("```")
+        prompt_parts.append('```json\n{"x_column": "customer_name", "y_column": "total"}\n```')
+        prompt_parts.append("")
+        prompt_parts.append("Option 2: Use an existing column:")
+        prompt_parts.append("```sql")
+        prompt_parts.append("SELECT first_name, SUM(amount) AS total")
+        prompt_parts.append("```")
+        prompt_parts.append('```json\n{"x_column": "first_name", "y_column": "total"}\n```')
+        prompt_parts.append("")
         prompt_parts.append("\nRespond in this EXACT format:")
         prompt_parts.append("```sql")
         prompt_parts.append("YOUR SQL QUERY HERE")
@@ -343,11 +359,12 @@ Generated SQL (Main Data):
         prompt_parts.append('{')
         prompt_parts.append('  "reasoning": "Brief explanation of table selection, joins, filters used (max 2 sentences)",')
         prompt_parts.append('  "chart_type": "bar",')
-        prompt_parts.append('  "x_column": "column_name",')
-        prompt_parts.append('  "y_column": "column_name",')
+        prompt_parts.append('  "x_column": "actual_column_from_your_SELECT_clause",')
+        prompt_parts.append('  "y_column": "actual_column_from_your_SELECT_clause",')
         prompt_parts.append('  "title": "Chart Title"')
         prompt_parts.append('}')
         prompt_parts.append("```")
+        prompt_parts.append("\nREMINDER: x_column and y_column must EXACTLY match column names/aliases in your SELECT clause!")
         
         return "\n".join(prompt_parts)
     

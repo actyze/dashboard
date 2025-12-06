@@ -361,3 +361,285 @@ class UserService:
             except Exception as e:
                 self.logger.error("Failed to get query history", error=str(e))
                 return {"success": False, "error": str(e)}
+    
+    async def delete_query_history(self, query_id: int, user_id: str):
+        """Delete a query from history."""
+        async with db_manager.get_session() as session:
+            try:
+                result = await session.execute(
+                    select(QueryHistory).where(
+                        and_(
+                            QueryHistory.id == query_id,
+                            QueryHistory.user_id == uuid.UUID(user_id)
+                        )
+                    )
+                )
+                query = result.scalar_one_or_none()
+                
+                if not query:
+                    return {"success": False, "error": "Query not found or access denied"}
+                
+                await session.delete(query)
+                await session.commit()
+                
+                self.logger.info("Query history deleted", query_id=query_id)
+                return {"success": True}
+                
+            except Exception as e:
+                await session.rollback()
+                self.logger.error("Failed to delete query history", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    # =============================================================================
+    # Saved Queries CRUD Operations
+    # =============================================================================
+    
+    async def create_saved_query(
+        self,
+        user_id: str,
+        query_name: str,
+        natural_language_query: str,
+        generated_sql: str,
+        description: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        chart_recommendation: Optional[Dict] = None,
+        created_from_history_id: Optional[int] = None
+    ):
+        """Create a new saved query."""
+        async with db_manager.get_session() as session:
+            try:
+                saved_query = SavedQueries(
+                    user_id=uuid.UUID(user_id),
+                    query_name=query_name,
+                    description=description,
+                    natural_language_query=natural_language_query,
+                    generated_sql=generated_sql,
+                    tags=tags or [],
+                    chart_recommendation=chart_recommendation or {},
+                    created_from_history_id=created_from_history_id
+                )
+                session.add(saved_query)
+                await session.commit()
+                await session.refresh(saved_query)
+                
+                self.logger.info("Saved query created", query_id=saved_query.id, user_id=user_id)
+                return {"success": True, "query_id": saved_query.id}
+                
+            except Exception as e:
+                await session.rollback()
+                self.logger.error("Failed to create saved query", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    async def get_saved_queries(
+        self,
+        user_id: str,
+        limit: int = 50,
+        offset: int = 0,
+        favorites_only: bool = False
+    ):
+        """Get saved queries for a user."""
+        async with db_manager.get_session() as session:
+            try:
+                query = select(SavedQueries).where(
+                    SavedQueries.user_id == uuid.UUID(user_id)
+                )
+                
+                if favorites_only:
+                    query = query.where(SavedQueries.is_favorite == True)
+                
+                query = query.order_by(SavedQueries.updated_at.desc()).limit(limit).offset(offset)
+                
+                result = await session.execute(query)
+                queries = result.scalars().all()
+                
+                return {
+                    "success": True,
+                    "queries": [
+                        {
+                            "id": q.id,
+                            "query_name": q.query_name,
+                            "description": q.description,
+                            "natural_language_query": q.natural_language_query,
+                            "generated_sql": q.generated_sql,
+                            "is_favorite": q.is_favorite,
+                            "tags": q.tags,
+                            "chart_recommendation": q.chart_recommendation,
+                            "execution_count": q.execution_count,
+                            "last_executed_at": q.last_executed_at.isoformat() if q.last_executed_at else None,
+                            "created_at": q.created_at.isoformat(),
+                            "updated_at": q.updated_at.isoformat()
+                        }
+                        for q in queries
+                    ]
+                }
+            except Exception as e:
+                self.logger.error("Failed to get saved queries", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    async def get_saved_query(self, query_id: int, user_id: str):
+        """Get a specific saved query."""
+        async with db_manager.get_session() as session:
+            try:
+                result = await session.execute(
+                    select(SavedQueries).where(
+                        and_(
+                            SavedQueries.id == query_id,
+                            SavedQueries.user_id == uuid.UUID(user_id)
+                        )
+                    )
+                )
+                query = result.scalar_one_or_none()
+                
+                if not query:
+                    return {"success": False, "error": "Query not found or access denied"}
+                
+                return {
+                    "success": True,
+                    "query": {
+                        "id": query.id,
+                        "query_name": query.query_name,
+                        "description": query.description,
+                        "natural_language_query": query.natural_language_query,
+                        "generated_sql": query.generated_sql,
+                        "is_favorite": query.is_favorite,
+                        "tags": query.tags,
+                        "chart_recommendation": query.chart_recommendation,
+                        "execution_count": query.execution_count,
+                        "last_executed_at": query.last_executed_at.isoformat() if query.last_executed_at else None,
+                        "created_at": query.created_at.isoformat(),
+                        "updated_at": query.updated_at.isoformat()
+                    }
+                }
+            except Exception as e:
+                self.logger.error("Failed to get saved query", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    async def update_saved_query(
+        self,
+        query_id: int,
+        user_id: str,
+        query_name: Optional[str] = None,
+        description: Optional[str] = None,
+        natural_language_query: Optional[str] = None,
+        generated_sql: Optional[str] = None,
+        is_favorite: Optional[bool] = None,
+        tags: Optional[List[str]] = None
+    ):
+        """Update a saved query."""
+        async with db_manager.get_session() as session:
+            try:
+                result = await session.execute(
+                    select(SavedQueries).where(
+                        and_(
+                            SavedQueries.id == query_id,
+                            SavedQueries.user_id == uuid.UUID(user_id)
+                        )
+                    )
+                )
+                query = result.scalar_one_or_none()
+                
+                if not query:
+                    return {"success": False, "error": "Query not found or access denied"}
+                
+                # Update fields if provided
+                if query_name is not None:
+                    query.query_name = query_name
+                if description is not None:
+                    query.description = description
+                if natural_language_query is not None:
+                    query.natural_language_query = natural_language_query
+                if generated_sql is not None:
+                    query.generated_sql = generated_sql
+                if is_favorite is not None:
+                    query.is_favorite = is_favorite
+                if tags is not None:
+                    query.tags = tags
+                
+                query.updated_at = datetime.utcnow()
+                await session.commit()
+                
+                self.logger.info("Saved query updated", query_id=query_id)
+                return {"success": True}
+                
+            except Exception as e:
+                await session.rollback()
+                self.logger.error("Failed to update saved query", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    async def delete_saved_query(self, query_id: int, user_id: str):
+        """Delete a saved query."""
+        async with db_manager.get_session() as session:
+            try:
+                result = await session.execute(
+                    select(SavedQueries).where(
+                        and_(
+                            SavedQueries.id == query_id,
+                            SavedQueries.user_id == uuid.UUID(user_id)
+                        )
+                    )
+                )
+                query = result.scalar_one_or_none()
+                
+                if not query:
+                    return {"success": False, "error": "Query not found or access denied"}
+                
+                await session.delete(query)
+                await session.commit()
+                
+                self.logger.info("Saved query deleted", query_id=query_id)
+                return {"success": True}
+                
+            except Exception as e:
+                await session.rollback()
+                self.logger.error("Failed to delete saved query", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    async def save_query_from_history(
+        self,
+        user_id: str,
+        history_id: int,
+        query_name: str,
+        description: Optional[str] = None
+    ):
+        """Save a query from history to saved queries."""
+        async with db_manager.get_session() as session:
+            try:
+                # Get history record
+                result = await session.execute(
+                    select(QueryHistory).where(
+                        and_(
+                            QueryHistory.id == history_id,
+                            QueryHistory.user_id == uuid.UUID(user_id)
+                        )
+                    )
+                )
+                history = result.scalar_one_or_none()
+                
+                if not history:
+                    return {"success": False, "error": "Query history not found or access denied"}
+                
+                # Create saved query
+                saved_query = SavedQueries(
+                    user_id=uuid.UUID(user_id),
+                    query_name=query_name,
+                    description=description,
+                    natural_language_query=history.natural_language_query,
+                    generated_sql=history.generated_sql,
+                    chart_recommendation=history.chart_recommendation,
+                    created_from_history_id=history_id,
+                    tags=[]
+                )
+                session.add(saved_query)
+                await session.commit()
+                await session.refresh(saved_query)
+                
+                self.logger.info("Query saved from history", 
+                    history_id=history_id, 
+                    saved_query_id=saved_query.id
+                )
+                return {"success": True, "query_id": saved_query.id}
+                
+            except Exception as e:
+                await session.rollback()
+                self.logger.error("Failed to save query from history", error=str(e))
+                return {"success": False, "error": str(e)}

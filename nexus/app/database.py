@@ -140,16 +140,23 @@ class QueryHistory(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), nullable=False, index=True)
     session_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    query_name: Mapped[Optional[str]] = mapped_column(String(255))
+    query_type: Mapped[str] = mapped_column(String(20), nullable=False, default='natural_language', index=True)  # 'natural_language' or 'manual'
     natural_language_query: Mapped[str] = mapped_column(Text, nullable=False)
     generated_sql: Mapped[Optional[str]] = mapped_column(Text)
     execution_status: Mapped[str] = mapped_column(String(20), nullable=False)  # 'success', 'error', 'timeout'
     execution_time_ms: Mapped[Optional[int]] = mapped_column(Integer)
+    llm_response_time_ms: Mapped[Optional[int]] = mapped_column(Integer)
     row_count: Mapped[Optional[int]] = mapped_column(Integer)
     error_message: Mapped[Optional[str]] = mapped_column(Text)
     schema_recommendations: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON)
+    chart_recommendation: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON)
     model_confidence: Mapped[Optional[float]] = mapped_column()
     retry_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    generated_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    executed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
 
 
 class SavedQueries(Base):

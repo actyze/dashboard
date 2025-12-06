@@ -281,18 +281,33 @@ class OrchestrationService:
                         }
                     )
                     
+                    # Calculate timestamps
+                    from datetime import datetime, timedelta
+                    execution_end = datetime.utcnow()
+                    # Estimate generation time based on processing_time - execution_time
+                    llm_time_ms = int((response.get("processing_time", 0) or 0) - (response.get("execution_time", 0) or 0))
+                    execution_time_ms = int(response.get("execution_time", 0) or 0)
+                    
+                    # Calculate generated_at (before execution)
+                    generated_at = execution_end - timedelta(milliseconds=execution_time_ms) if execution_time_ms > 0 else execution_end
+                    
                     await self.user_service.save_query_execution(
                         user_id=user_id,
                         session_id=session_id,
                         natural_language_query=nl_query,
                         generated_sql=response.get("generated_sql"),
                         execution_status="success" if response["success"] else "error",
-                        execution_time_ms=int(response.get("execution_time", 0) or 0),
+                        execution_time_ms=execution_time_ms,
                         row_count=response.get("query_results", {}).get("row_count") if response.get("query_results") else None,
                         error_message=response.get("error"),
                         schema_recommendations={"recommendations": recommendations},
                         model_confidence=response.get("model_confidence"),
-                        retry_attempts=response.get("retry_attempts", 0)
+                        retry_attempts=response.get("retry_attempts", 0),
+                        query_type='natural_language',
+                        chart_recommendation=response.get("chart_recommendation"),
+                        llm_response_time_ms=llm_time_ms if llm_time_ms > 0 else None,
+                        generated_at=generated_at,
+                        executed_at=execution_end
                     )
                     
                 except Exception as e:

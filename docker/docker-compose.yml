@@ -97,6 +97,7 @@ services:
     volumes:
       - ../helm/dashboard/sql:/sql:ro
       - ./migrate.sh:/usr/local/bin/migrate.sh:ro
+    entrypoint: ["/bin/sh"]  # Override postgres entrypoint to use plain shell
     command: ["/usr/local/bin/migrate.sh"]
     networks:
       - dashboard

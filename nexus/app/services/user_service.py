@@ -212,6 +212,152 @@ class UserService:
             except Exception as e:
                 return {"success": False, "error": str(e)}
 
-    # I will implement a simplified version of the rest for brevity, assuming the pattern is clear
-    # The user prompt asked for "Create a Role-Based Access Control system", so authentication is key.
-    # I'll keep the file focused on Auth + User Management for now.
+    async def save_query_execution(
+        self,
+        user_id: str,
+        session_id: str,
+        natural_language_query: str,
+        generated_sql: str,
+        execution_status: str,
+        execution_time_ms: Optional[int] = None,
+        row_count: Optional[int] = None,
+        error_message: Optional[str] = None,
+        schema_recommendations: Optional[Dict] = None,
+        model_confidence: Optional[float] = None,
+        retry_attempts: int = 0,
+        query_name: Optional[str] = None,
+        query_type: str = 'natural_language',
+        chart_recommendation: Optional[Dict] = None,
+        llm_response_time_ms: Optional[int] = None,
+        generated_at: Optional[datetime] = None,
+        executed_at: Optional[datetime] = None
+    ):
+        """Save query execution to history with all tracking fields."""
+        async with db_manager.get_session() as session:
+            try:
+                # Set timestamps if not provided
+                now = datetime.utcnow()
+                if generated_at is None:
+                    generated_at = now
+                if executed_at is None:
+                    executed_at = now
+                
+                # For manual queries, generate a title if not provided
+                if query_type == 'manual' and not query_name and generated_sql:
+                    # Simple title generation based on SQL
+                    if 'SELECT' in generated_sql.upper():
+                        query_name = "Manual Query"
+                    else:
+                        query_name = "SQL Query"
+                
+                query_history = QueryHistory(
+                    user_id=uuid.UUID(user_id),
+                    session_id=session_id,
+                    query_name=query_name,
+                    query_type=query_type,
+                    natural_language_query=natural_language_query,
+                    generated_sql=generated_sql,
+                    execution_status=execution_status,
+                    execution_time_ms=execution_time_ms,
+                    row_count=row_count,
+                    error_message=error_message,
+                    schema_recommendations=schema_recommendations or {},
+                    model_confidence=model_confidence,
+                    retry_attempts=retry_attempts,
+                    chart_recommendation=chart_recommendation or {},
+                    llm_response_time_ms=llm_response_time_ms,
+                    generated_at=generated_at,
+                    executed_at=executed_at
+                )
+                session.add(query_history)
+                await session.commit()
+                await session.refresh(query_history)
+                
+                self.logger.info("Query execution saved to history",
+                    query_id=query_history.id,
+                    user_id=user_id,
+                    query_type=query_type,
+                    status=execution_status
+                )
+                
+                return {"success": True, "query_id": query_history.id}
+            except Exception as e:
+                await session.rollback()
+                self.logger.error("Failed to save query execution", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    async def update_query_name(self, query_id: int, user_id: str, query_name: str):
+        """Update the name of a saved query."""
+        async with db_manager.get_session() as session:
+            try:
+                result = await session.execute(
+                    select(QueryHistory).where(
+                        and_(
+                            QueryHistory.id == query_id,
+                            QueryHistory.user_id == uuid.UUID(user_id)
+                        )
+                    )
+                )
+                query = result.scalar_one_or_none()
+                
+                if not query:
+                    return {"success": False, "error": "Query not found or access denied"}
+                
+                query.query_name = query_name
+                query.updated_at = datetime.utcnow()
+                await session.commit()
+                
+                self.logger.info("Query name updated", query_id=query_id, new_name=query_name)
+                return {"success": True}
+                
+            except Exception as e:
+                await session.rollback()
+                self.logger.error("Failed to update query name", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    async def get_query_history(
+        self, 
+        user_id: str, 
+        limit: int = 50, 
+        offset: int = 0,
+        query_type: Optional[str] = None
+    ):
+        """Get query history for a user."""
+        async with db_manager.get_session() as session:
+            try:
+                query = select(QueryHistory).where(
+                    QueryHistory.user_id == uuid.UUID(user_id)
+                )
+                
+                if query_type:
+                    query = query.where(QueryHistory.query_type == query_type)
+                
+                query = query.order_by(QueryHistory.executed_at.desc()).limit(limit).offset(offset)
+                
+                result = await session.execute(query)
+                queries = result.scalars().all()
+                
+                return {
+                    "success": True,
+                    "queries": [
+                        {
+                            "id": q.id,
+                            "query_name": q.query_name,
+                            "query_type": q.query_type,
+                            "natural_language_query": q.natural_language_query,
+                            "generated_sql": q.generated_sql,
+                            "execution_status": q.execution_status,
+                            "execution_time_ms": q.execution_time_ms,
+                            "llm_response_time_ms": q.llm_response_time_ms,
+                            "row_count": q.row_count,
+                            "chart_recommendation": q.chart_recommendation,
+                            "generated_at": q.generated_at.isoformat() if q.generated_at else None,
+                            "executed_at": q.executed_at.isoformat() if q.executed_at else None,
+                            "created_at": q.created_at.isoformat()
+                        }
+                        for q in queries
+                    ]
+                }
+            except Exception as e:
+                self.logger.error("Failed to get query history", error=str(e))
+                return {"success": False, "error": str(e)}

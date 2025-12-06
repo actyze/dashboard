@@ -139,7 +139,7 @@ async def query(
         raise HTTPException(status_code=400, detail="Invalid query type. Use 'sql' or 'auto'.")
 
 # =============================================================================
-# Query History Endpoints
+# Query History Endpoints (Tab 1: Recent Queries)
 # =============================================================================
 
 class UpdateQueryNameRequest(BaseModel):
@@ -152,7 +152,7 @@ async def get_query_history(
     query_type: Optional[str] = None,
     current_user: dict = Depends(require_viewer)
 ):
-    """Get query execution history for the current user."""
+    """Get query execution history for the current user (Recent Queries tab)."""
     user_id = current_user.get("id")
     result = await user_service.get_query_history(
         user_id=user_id,
@@ -165,7 +165,7 @@ async def get_query_history(
     return result
 
 @router.patch("/query-history/{query_id}/name")
-async def update_query_name(
+async def update_query_history_name(
     query_id: int,
     request: UpdateQueryNameRequest,
     current_user: dict = Depends(require_viewer)
@@ -176,6 +176,23 @@ async def update_query_name(
         query_id=query_id,
         user_id=user_id,
         query_name=request.query_name
+    )
+    if not result.get("success"):
+        if "not found" in result.get("error", "").lower():
+            raise HTTPException(status_code=404, detail=result.get("error"))
+        raise HTTPException(status_code=500, detail=result.get("error"))
+    return result
+
+@router.delete("/query-history/{query_id}")
+async def delete_query_history(
+    query_id: int,
+    current_user: dict = Depends(require_viewer)
+):
+    """Delete a query from history."""
+    user_id = current_user.get("id")
+    result = await user_service.delete_query_history(
+        query_id=query_id,
+        user_id=user_id
     )
     if not result.get("success"):
         if "not found" in result.get("error", "").lower():
@@ -216,6 +233,149 @@ async def save_manual_query(
         executed_at=datetime.utcnow()
     )
     
+    return result
+
+# =============================================================================
+# Saved Queries Endpoints (Tab 2: Saved Queries)
+# =============================================================================
+
+class CreateSavedQueryRequest(BaseModel):
+    query_name: str
+    natural_language_query: str
+    generated_sql: str
+    description: Optional[str] = None
+    tags: Optional[List[str]] = None
+    chart_recommendation: Optional[Dict[str, Any]] = None
+    created_from_history_id: Optional[int] = None
+
+class UpdateSavedQueryRequest(BaseModel):
+    query_name: Optional[str] = None
+    description: Optional[str] = None
+    natural_language_query: Optional[str] = None
+    generated_sql: Optional[str] = None
+    is_favorite: Optional[bool] = None
+    tags: Optional[List[str]] = None
+
+class SaveFromHistoryRequest(BaseModel):
+    query_name: str
+    description: Optional[str] = None
+
+@router.get("/saved-queries")
+async def get_saved_queries(
+    limit: int = 50,
+    offset: int = 0,
+    favorites_only: bool = False,
+    current_user: dict = Depends(require_viewer)
+):
+    """Get saved queries for the current user (Saved Queries tab)."""
+    user_id = current_user.get("id")
+    result = await user_service.get_saved_queries(
+        user_id=user_id,
+        limit=limit,
+        offset=offset,
+        favorites_only=favorites_only
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error"))
+    return result
+
+@router.get("/saved-queries/{query_id}")
+async def get_saved_query(
+    query_id: int,
+    current_user: dict = Depends(require_viewer)
+):
+    """Get a specific saved query."""
+    user_id = current_user.get("id")
+    result = await user_service.get_saved_query(
+        query_id=query_id,
+        user_id=user_id
+    )
+    if not result.get("success"):
+        if "not found" in result.get("error", "").lower():
+            raise HTTPException(status_code=404, detail=result.get("error"))
+        raise HTTPException(status_code=500, detail=result.get("error"))
+    return result
+
+@router.post("/saved-queries")
+async def create_saved_query(
+    request: CreateSavedQueryRequest,
+    current_user: dict = Depends(require_viewer)
+):
+    """Create a new saved query."""
+    user_id = current_user.get("id")
+    result = await user_service.create_saved_query(
+        user_id=user_id,
+        query_name=request.query_name,
+        natural_language_query=request.natural_language_query,
+        generated_sql=request.generated_sql,
+        description=request.description,
+        tags=request.tags,
+        chart_recommendation=request.chart_recommendation,
+        created_from_history_id=request.created_from_history_id
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error"))
+    return result
+
+@router.put("/saved-queries/{query_id}")
+async def update_saved_query(
+    query_id: int,
+    request: UpdateSavedQueryRequest,
+    current_user: dict = Depends(require_viewer)
+):
+    """Update a saved query."""
+    user_id = current_user.get("id")
+    result = await user_service.update_saved_query(
+        query_id=query_id,
+        user_id=user_id,
+        query_name=request.query_name,
+        description=request.description,
+        natural_language_query=request.natural_language_query,
+        generated_sql=request.generated_sql,
+        is_favorite=request.is_favorite,
+        tags=request.tags
+    )
+    if not result.get("success"):
+        if "not found" in result.get("error", "").lower():
+            raise HTTPException(status_code=404, detail=result.get("error"))
+        raise HTTPException(status_code=500, detail=result.get("error"))
+    return result
+
+@router.delete("/saved-queries/{query_id}")
+async def delete_saved_query(
+    query_id: int,
+    current_user: dict = Depends(require_viewer)
+):
+    """Delete a saved query."""
+    user_id = current_user.get("id")
+    result = await user_service.delete_saved_query(
+        query_id=query_id,
+        user_id=user_id
+    )
+    if not result.get("success"):
+        if "not found" in result.get("error", "").lower():
+            raise HTTPException(status_code=404, detail=result.get("error"))
+        raise HTTPException(status_code=500, detail=result.get("error"))
+    return result
+
+@router.post("/saved-queries/from-history/{history_id}")
+async def save_query_from_history(
+    history_id: int,
+    request: SaveFromHistoryRequest,
+    current_user: dict = Depends(require_viewer)
+):
+    """Save a query from history to saved queries."""
+    user_id = current_user.get("id")
+    result = await user_service.save_query_from_history(
+        user_id=user_id,
+        history_id=history_id,
+        query_name=request.query_name,
+        description=request.description
+    )
+    if not result.get("success"):
+        if "not found" in result.get("error", "").lower():
+            raise HTTPException(status_code=404, detail=result.get("error"))
+        raise HTTPException(status_code=500, detail=result.get("error"))
     return result
 
 # =============================================================================

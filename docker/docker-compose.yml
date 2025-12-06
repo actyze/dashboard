@@ -82,8 +82,11 @@ services:
       - trino-only
 
   # Database initialization service - runs SQL scripts
+  # NOTE: Currently disabled - run migrations manually using: 
+  #   docker compose run --rm db-init
+  # Or apply SQL files directly to postgres if needed
   db-init:
-    image: postgres:15-alpine
+    image: alpine:latest  # Use latest for better compatibility
     container_name: dashboard-db-init
     depends_on:
       postgres:
@@ -98,11 +101,14 @@ services:
       - ../helm/dashboard/sql:/sql:ro
       - ./migrate.sh:/usr/local/bin/migrate.sh:ro
     entrypoint: ["/bin/sh", "-c"]
-    command: ["/usr/local/bin/migrate.sh && exit 0"]  # Ensure clean exit
+    command: 
+      - |
+        apk add --no-cache postgresql-client && 
+        sh /usr/local/bin/migrate.sh
     networks:
       - dashboard
     profiles:
-      - local
+      - manual  # Changed from 'local' to 'manual' - won't start automatically
     restart: "no"
 
   # Schema Service (FAISS-based table recommendations)

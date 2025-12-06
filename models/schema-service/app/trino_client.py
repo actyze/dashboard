@@ -107,12 +107,12 @@ class TrinoSchemaService:
         attempt = 0
         while True:
             try:
-                logger.info(f"🔍 Executing schema query (attempt {attempt + 1}/{retries})")
+                logger.info(f"Executing schema query (attempt {attempt + 1}/{retries})")
                 cursor = self.connection.cursor()
                 cursor.execute(query)
-                logger.info("📊 Query executed, fetching results...")
+                logger.info("Query executed, fetching results...")
                 rows = cursor.fetchall()
-                logger.info(f"✅ Fetched {len(rows)} raw rows from Trino")
+                logger.info(f"Fetched {len(rows)} raw rows from Trino")
                 cursor.close()
 
                 # Group by table
@@ -137,12 +137,12 @@ class TrinoSchemaService:
                 schema_names = set(f"{s['catalog']}.{s['schema']}" for s in schemas)
                 total_columns = sum(len(s['columns']) for s in schemas)
                 
-                logger.info("📊 SCHEMA SUMMARY:")
-                logger.info(f"  • Catalogs: {len(catalogs)} ({', '.join(sorted(catalogs))})")
-                logger.info(f"  • Schemas: {len(schema_names)}")
-                logger.info(f"  • Tables: {len(schemas)}")
-                logger.info(f"  • Total Columns: {total_columns}")
-                logger.info(f"  • Schema Objects: {len(schemas)}")
+                logger.info("SCHEMA SUMMARY:")
+                logger.info(f"  Catalogs: {len(catalogs)} ({', '.join(sorted(catalogs))})")
+                logger.info(f"  Schemas: {len(schema_names)}")
+                logger.info(f"  Tables: {len(schemas)}")
+                logger.info(f"  Total Columns: {total_columns}")
+                logger.info(f"  Schema Objects: {len(schemas)}")
                 
                 return schemas
 

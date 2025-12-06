@@ -95,21 +95,21 @@ class FAISSSchemaEmbedder:
 
     async def build_embeddings(self, schemas: List[Dict[str, Any]]):
         """Build FAISS index from schemas."""
-        logger.info(f"🔨 Building embeddings for {len(schemas)} schemas...")
+        logger.info(f"Building embeddings for {len(schemas)} schemas...")
         
         # Store raw schema data
         self.raw_schema_cache = self._build_raw_schema_cache(schemas)
-        logger.info(f"💾 Cached {len(self.raw_schema_cache)} raw schema entries")
+        logger.info(f"Cached {len(self.raw_schema_cache)} raw schema entries")
         
-        logger.info("📝 Step 1: Converting schemas to text representations...")
+        logger.info("Step 1: Converting schemas to text representations...")
         texts = [self._schema_to_text(s) for s in schemas]
-        logger.info(f"✅ Generated {len(texts)} text representations")
+        logger.info(f"Generated {len(texts)} text representations")
         
         if texts:
             sample_text = texts[0][:200] + "..." if len(texts[0]) > 200 else texts[0]
-            logger.info(f"📄 Sample text: {sample_text}")
+            logger.info(f"Sample text: {sample_text}")
 
-        logger.info("🧠 Step 2: Encoding texts with SentenceTransformer model...")
+        logger.info("Step 2: Encoding texts with SentenceTransformer model...")
         loop = asyncio.get_event_loop()
         
         def encode_with_progress(texts):
@@ -117,7 +117,7 @@ class FAISSSchemaEmbedder:
             total_texts = len(texts)
             all_embeddings = []
             
-            logger.info(f"📊 Processing {total_texts} schemas in batches of {batch_size}")
+            logger.info(f"Processing {total_texts} schemas in batches of {batch_size}")
             
             for i in range(0, total_texts, batch_size):
                 batch_texts = texts[i:i + batch_size]
@@ -126,26 +126,26 @@ class FAISSSchemaEmbedder:
                 
                 processed = min(i + batch_size, total_texts)
                 progress_pct = (processed / total_texts) * 100
-                logger.info(f"🔄 Progress: {processed}/{total_texts} schemas encoded ({progress_pct:.1f}%)")
+                logger.info(f"Progress: {processed}/{total_texts} schemas encoded ({progress_pct:.1f}%)")
             
             return np.vstack(all_embeddings)
         
         embeddings = await loop.run_in_executor(None, encode_with_progress, texts)
-        logger.info(f"✅ Generated embeddings shape: {embeddings.shape}")
+        logger.info(f"Generated embeddings shape: {embeddings.shape}")
         
-        logger.info("🔄 Step 3: Converting to float32 for FAISS compatibility...")
+        logger.info("Step 3: Converting to float32 for FAISS compatibility...")
         embeddings = np.asarray(embeddings, dtype=np.float32)
-        logger.info(f"✅ Converted to float32, memory usage: ~{embeddings.nbytes / 1024 / 1024:.1f} MB")
+        logger.info(f"Converted to float32, memory usage: ~{embeddings.nbytes / 1024 / 1024:.1f} MB")
         
-        logger.info("📐 Step 4: Normalizing L2 for cosine similarity...")
+        logger.info("Step 4: Normalizing L2 for cosine similarity...")
         faiss.normalize_L2(embeddings)
-        logger.info("✅ L2 normalization complete")
+        logger.info("L2 normalization complete")
 
-        logger.info("🏗️ Step 5: Building FAISS index...")
+        logger.info("Step 5: Building FAISS index...")
         emb32 = embeddings.astype(np.float32, copy=False)
         new_index = faiss.IndexFlatIP(self.dimension)
         new_index.add(emb32)
-        logger.info(f"✅ FAISS index built with {new_index.ntotal} vectors")
+        logger.info(f"FAISS index built with {new_index.ntotal} vectors")
 
         # Atomic swap
         self.index = new_index

@@ -81,25 +81,34 @@ class OrchestrationService:
             self.logger.info("=== STEP 2: SQL GENERATION (LLM) ===")
             
             cache_key = f"{nl_query}_{len(conversation_history)}_{len(recommendations)}"
-            cached_sql = await self.cache_service.get_llm_response(
+            cached_response = await self.cache_service.get_llm_response(
                 cache_key, {"type": "sql_generation"}
             )
             
-            if cached_sql and isinstance(cached_sql, str):
-                self.logger.info("Using cached SQL generation")
-                sql_generation = {
-                    "success": True,
-                    "sql": cached_sql,
-                    "confidence": 0.85,
-                    "reasoning": "Retrieved from cache"
-                }
+            if cached_response:
+                # Check if cache is old format (string) or new format (dict)
+                if isinstance(cached_response, str):
+                    self.logger.info("Using cached SQL generation (legacy format)")
+                    sql_generation = {
+                        "success": True,
+                        "sql": cached_response,
+                        "confidence": 0.85,
+                        "reasoning": "Retrieved from cache"
+                    }
+                else:
+                    self.logger.info("Using cached SQL generation (full response)", 
+                        has_chart_rec=bool(cached_response.get("chart_recommendation")),
+                        has_reasoning=bool(cached_response.get("reasoning"))
+                    )
+                    sql_generation = cached_response
             else:
                 sql_generation = await self.llm_service.generate_sql(
                     nl_query, conversation_history, schema_recommendations
                 )
+                # Cache the entire response (SQL + chart_recommendation + reasoning)
                 if sql_generation.get("success") and sql_generation.get("sql"):
                     await self.cache_service.cache_llm_response(
-                        cache_key, {"type": "sql_generation"}, sql_generation.get("sql")
+                        cache_key, {"type": "sql_generation"}, sql_generation
                     )
             
             if not sql_generation.get("success"):
@@ -126,12 +135,24 @@ class OrchestrationService:
             
             # Include chart recommendation if LLM provided one
             if sql_generation.get("chart_recommendation"):
-                result["chart_recommendation"] = sql_generation.get("chart_recommendation")
-                self.logger.info("Chart recommendation included", 
-                    chart_type=sql_generation["chart_recommendation"].get("chart_type"),
-                    x_column=sql_generation["chart_recommendation"].get("x_column"),
-                    y_column=sql_generation["chart_recommendation"].get("y_column")
-                )
+                chart_rec = sql_generation.get("chart_recommendation")
+                
+                # Validate and fix column names to match actual SQL columns
+                validated_chart = self._validate_chart_columns(chart_rec, generated_sql)
+                
+                if validated_chart:
+                    result["chart_recommendation"] = validated_chart
+                    self.logger.info("Chart recommendation validated and included", 
+                        chart_type=validated_chart.get("chart_type"),
+                        x_column=validated_chart.get("x_column"),
+                        y_column=validated_chart.get("y_column"),
+                        was_fixed=validated_chart.get("x_column") != chart_rec.get("x_column")
+                    )
+                else:
+                    self.logger.warning("Chart recommendation validation failed - columns don't match SQL",
+                        recommended_x=chart_rec.get("x_column"),
+                        recommended_y=chart_rec.get("y_column")
+                    )
             
             return result
             
@@ -219,6 +240,13 @@ class OrchestrationService:
                 "retry_attempts": sql_result.get("retry_attempts", 0),
                 "error_history": sql_result.get("error_history", [])
             }
+            
+            # Include chart recommendation if available
+            if generation_result.get("chart_recommendation"):
+                response["chart_recommendation"] = generation_result["chart_recommendation"]
+                self.logger.info("Chart recommendation added to workflow response",
+                    chart_type=generation_result["chart_recommendation"].get("chart_type")
+                )
             
             if not sql_result.get("success"):
                 response.update({
@@ -320,6 +348,96 @@ class OrchestrationService:
             "error_type": error_type,
             "processing_time": processing_time
         }
+    
+    def _validate_chart_columns(self, chart_rec: Dict[str, Any], sql: str) -> Optional[Dict[str, Any]]:
+        """
+        Validate that chart x_column and y_column exist in the SQL SELECT clause.
+        If they don't match, try to fix them automatically.
+        """
+        import re
+        
+        try:
+            # Extract column names/aliases from SELECT clause
+            # Match pattern: SELECT ... FROM
+            select_match = re.search(r'SELECT\s+(.*?)\s+FROM', sql, re.IGNORECASE | re.DOTALL)
+            if not select_match:
+                self.logger.warning("Could not parse SELECT clause from SQL")
+                return None
+            
+            select_clause = select_match.group(1)
+            
+            # Extract column aliases (handle AS keyword and implicit aliases)
+            # Patterns: "column AS alias", "expression AS alias", "column" (implicit)
+            columns = []
+            for part in select_clause.split(','):
+                part = part.strip()
+                # Check for AS alias
+                as_match = re.search(r'\s+AS\s+(\w+)', part, re.IGNORECASE)
+                if as_match:
+                    columns.append(as_match.group(1).lower())
+                else:
+                    # Get last word (implicit alias or column name)
+                    words = part.split()
+                    if words:
+                        # Clean up any trailing parentheses or special chars
+                        last_word = re.sub(r'[^\w]', '', words[-1])
+                        if last_word:
+                            columns.append(last_word.lower())
+            
+            self.logger.info("Extracted SQL columns", columns=columns)
+            
+            x_col = chart_rec.get("x_column", "").lower()
+            y_col = chart_rec.get("y_column", "").lower()
+            
+            # Check if recommended columns exist
+            x_exists = x_col in columns
+            y_exists = y_col in columns
+            
+            if x_exists and y_exists:
+                # Perfect - columns match
+                return chart_rec
+            
+            # Try to fix mismatched columns
+            fixed_rec = chart_rec.copy()
+            
+            # Fix X column
+            if not x_exists:
+                # Try common mappings
+                if x_col == "customer_name" and ("first_name" in columns or "last_name" in columns):
+                    fixed_rec["x_column"] = "first_name"  # Use first available name field
+                    self.logger.info("Fixed x_column", original=x_col, fixed="first_name")
+                elif x_col == "product_name" and "product_name" not in columns and "product_id" in columns:
+                    fixed_rec["x_column"] = "product_id"
+                    self.logger.info("Fixed x_column", original=x_col, fixed="product_id")
+                elif columns:
+                    # Fallback: use first column
+                    fixed_rec["x_column"] = columns[0]
+                    self.logger.info("Fixed x_column to first column", original=x_col, fixed=columns[0])
+                else:
+                    self.logger.warning("Cannot fix x_column", original=x_col, available=columns)
+                    return None
+            
+            # Fix Y column
+            if not y_exists:
+                # Try to find numeric/aggregate column
+                numeric_keywords = ['total', 'sum', 'count', 'avg', 'amount', 'sales', 'revenue', 'price']
+                numeric_col = next((col for col in columns if any(kw in col for kw in numeric_keywords)), None)
+                if numeric_col:
+                    fixed_rec["y_column"] = numeric_col
+                    self.logger.info("Fixed y_column", original=y_col, fixed=numeric_col)
+                elif len(columns) > 1:
+                    # Use second column as fallback
+                    fixed_rec["y_column"] = columns[1]
+                    self.logger.info("Fixed y_column to second column", original=y_col, fixed=columns[1])
+                else:
+                    self.logger.warning("Cannot fix y_column", original=y_col, available=columns)
+                    return None
+            
+            return fixed_rec
+            
+        except Exception as e:
+            self.logger.error("Chart validation error", error=str(e))
+            return chart_rec  # Return original if validation fails
     
     async def generate_chart_data(
         self,

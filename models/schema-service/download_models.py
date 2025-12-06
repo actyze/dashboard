@@ -29,11 +29,11 @@ def download_sentence_transformer_model():
         # Download model with custom cache directory
         model = SentenceTransformer(model_name, cache_folder=cache_dir)
         
-        logger.info(f"✅ SentenceTransformer model cached in {cache_dir}")
+        logger.info(f"SentenceTransformer model cached in {cache_dir}")
         return True
         
     except Exception as e:
-        logger.error(f"❌ Failed to download SentenceTransformer model: {e}")
+        logger.error(f"Failed to download SentenceTransformer model: {e}")
         return False
 
 def download_spacy_model():
@@ -51,11 +51,11 @@ def download_spacy_model():
         
         # Test loading
         nlp = spacy.load(model_name)
-        logger.info(f"✅ spaCy model {model_name} downloaded and verified")
+        logger.info(f"spaCy model {model_name} downloaded and verified")
         return True
         
     except Exception as e:
-        logger.error(f"❌ Failed to download spaCy model: {e}")
+        logger.error(f"Failed to download spaCy model: {e}")
         return False
 
 def check_model_cache():
@@ -78,14 +78,14 @@ def check_model_cache():
         spacy_cached = False
     
     logger.info(f"Model cache status:")
-    logger.info(f"  • SentenceTransformer: {'✅ Cached' if st_cached else '❌ Missing'}")
-    logger.info(f"  • spaCy en_core_web_md: {'✅ Cached' if spacy_cached else '❌ Missing'}")
+    logger.info(f"  SentenceTransformer: {'Cached' if st_cached else 'Missing'}")
+    logger.info(f"  spaCy en_core_web_md: {'Cached' if spacy_cached else 'Missing'}")
     
     return st_cached and spacy_cached
 
 def main():
     """Main model download function."""
-    logger.info("🚀 Model Download and Caching Script")
+    logger.info("Model Download and Caching Script")
     logger.info("=" * 50)
     
     # Create model cache directory
@@ -94,7 +94,7 @@ def main():
     
     # Check if models are already cached
     if check_model_cache():
-        logger.info("✅ All models already cached - skipping download")
+        logger.info("All models already cached - skipping download")
         return True
     
     success = True
@@ -108,9 +108,9 @@ def main():
         success = False
     
     if success:
-        logger.info("✅ All models downloaded and cached successfully")
+        logger.info("All models downloaded and cached successfully")
     else:
-        logger.error("❌ Some models failed to download")
+        logger.error("Some models failed to download")
     
     return success
 

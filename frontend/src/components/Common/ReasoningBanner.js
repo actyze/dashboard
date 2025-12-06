@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useTheme } from '../contexts/ThemeContext';
-import { Text } from './ui';
+import { useTheme } from '../../contexts/ThemeContext';
+import { Text } from '../ui';
 
 const ReasoningBanner = ({ reasoning, className = '' }) => {
   const { isDark } = useTheme();

@@ -79,12 +79,14 @@ SELECT
     (ARRAY['Credit Card','Credit Card','Credit Card','PayPal','PayPal','Debit Card','Debit Card','Apple Pay','Google Pay','Bank Transfer'])[1 + (random() * 9)::int] as payment_method,
     c.address || ', ' || c.city || ', ' || c.state as shipping_address
 FROM demo_ecommerce.customers c
-CROSS JOIN generate_series(1, 3) as orders_per_customer;
+CROSS JOIN generate_series(1, 3) as orders_per_customer
+WHERE c.customer_id > 10  -- Only new customers
+  AND (SELECT COUNT(*) FROM demo_ecommerce.orders WHERE customer_id = c.customer_id) < 3;  -- Skip if already has 3 orders
 
 -- Reset sequence for orders
 SELECT setval('demo_ecommerce.orders_order_id_seq', (SELECT COALESCE(MAX(order_id), 1) FROM demo_ecommerce.orders));
 
--- Generate order items (1-3 items per order)
+-- Generate order items (1-3 items per order) - LIMITED TO NEW ORDERS ONLY
 INSERT INTO demo_ecommerce.order_items (order_id, product_id, quantity, unit_price, total_price)
 SELECT
     o.order_id,
@@ -99,7 +101,9 @@ CROSS JOIN LATERAL (
     ORDER BY random() 
     LIMIT (1 + (random() * 2)::int)
 ) p
-WHERE o.order_id > 10;
+WHERE o.order_id > 10 
+  AND NOT EXISTS (SELECT 1 FROM demo_ecommerce.order_items oi WHERE oi.order_id = o.order_id)  -- Skip if already has items
+LIMIT 20000;  -- Safety limit to prevent runaway inserts
 
 -- Update order totals based on actual items
 UPDATE demo_ecommerce.orders o

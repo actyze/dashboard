@@ -185,7 +185,7 @@ class TrinoService:
             result = await self.execute_query(current_sql, max_results, timeout_seconds)
             
             if result["success"]:
-                self.logger.info(f"✅ SQL EXECUTION SUCCESSFUL on attempt {attempt + 1}")
+                self.logger.info(f"SQL EXECUTION SUCCESSFUL on attempt {attempt + 1}")
                 result.update({
                     "retry_attempts": attempt,
                     "error_history": error_history,

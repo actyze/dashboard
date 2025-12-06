@@ -97,8 +97,8 @@ services:
     volumes:
       - ../helm/dashboard/sql:/sql:ro
       - ./migrate.sh:/usr/local/bin/migrate.sh:ro
-    entrypoint: ["/bin/sh"]  # Override postgres entrypoint to use plain shell
-    command: ["/usr/local/bin/migrate.sh"]
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["/usr/local/bin/migrate.sh && exit 0"]  # Ensure clean exit
     networks:
       - dashboard
     profiles:
@@ -187,8 +187,6 @@ services:
       DEBUG: ${DEBUG:-true}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
-      db-init:
-        condition: service_completed_successfully
       postgres:
         condition: service_healthy
         required: false  # Optional - can use external PostgreSQL
@@ -197,6 +195,7 @@ services:
         required: false  # Optional - can use external Trino
       schema-service:
         condition: service_healthy
+    # Note: db-init runs independently - nexus doesn't wait for it
     deploy:
       resources:
         limits:

@@ -31,13 +31,6 @@ class ExecuteSQLRequest(BaseModel):
     schema_recommendations: Optional[List[dict]] = None
     llm_response_time_ms: Optional[int] = None
 
-class QueryRequest(BaseModel):
-    input: str
-    type: str = 'auto' # 'auto' (NL) or 'sql'
-    includeChart: Optional[bool] = False
-    chartType: Optional[str] = None
-    conversation_history: Optional[List[str]] = []
-
 # =============================================================================
 # Authentication Endpoints
 # =============================================================================
@@ -112,7 +105,8 @@ async def execute_sql(
     user_id = current_user.get("id")
     session_id = request.session_id if hasattr(request, 'session_id') and request.session_id else f"session-{datetime.utcnow().timestamp()}"
     
-    # Track execution time
+    # Track execution time and timestamps
+    generated_at = datetime.utcnow()
     execution_start = asyncio.get_event_loop().time()
     
     # Execute SQL
@@ -125,6 +119,7 @@ async def execute_sql(
     )
     
     execution_end = asyncio.get_event_loop().time()
+    executed_at = datetime.utcnow()
     execution_time_ms = int((execution_end - execution_start) * 1000)
     
     # Save to query history (fire and forget - don't block response)
@@ -149,8 +144,8 @@ async def execute_sql(
                 query_type=query_type,
                 chart_recommendation=request.chart_recommendation,
                 llm_response_time_ms=request.llm_response_time_ms,
-                generated_at=datetime.fromtimestamp(execution_start),
-                executed_at=datetime.fromtimestamp(execution_end)
+                generated_at=generated_at,
+                executed_at=executed_at
             )
         )
     except Exception as e:
@@ -159,34 +154,6 @@ async def execute_sql(
         logger.warning("Failed to save query history", error=str(e), user_id=user_id)
     
     return result
-
-@router.post("/query")
-async def query(
-    request: QueryRequest,
-    current_user: dict = Depends(require_viewer)
-):
-    """
-    Unified endpoint for query execution.
-    Supports both raw SQL execution and Natural Language processing.
-    """
-    # Pass user context to workflow if needed
-    user_id = current_user.get("id")
-    
-    if request.type == 'sql':
-        result = await orchestration_service.execute_sql_directly(request.input)
-        return result
-    elif request.type == 'auto':
-        result = await orchestration_service.process_natural_language_workflow(
-            nl_query=request.input,
-            conversation_history=request.conversation_history,
-            include_chart=request.includeChart,
-            chart_type=request.chartType,
-            user_id=None, # Can pass user_id converted to int if service expects it, but currently service uses int IDs
-            session_id=None 
-        )
-        return result
-    else:
-        raise HTTPException(status_code=400, detail="Invalid query type. Use 'sql' or 'auto'.")
 
 # =============================================================================
 # Query History Endpoints (Tab 1: Recent Queries)

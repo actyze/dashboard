@@ -5,11 +5,14 @@ from typing import List, Optional, Dict, Any
 from app.services.orchestration_service import orchestration_service
 from app.services.user_service import UserService
 from app.services.schema_service import SchemaService
+from app.services.dashboard_service import dashboard_service
 from app.auth.dependencies import get_current_user, require_viewer, require_editor, require_admin
 
 router = APIRouter(prefix="/api", tags=["REST API"])
 auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
 explorer_router = APIRouter(prefix="/api/explorer", tags=["Schema Explorer"])
+dashboard_router = APIRouter(prefix="/api/dashboards", tags=["Dashboards"])
+public_router = APIRouter(prefix="/api/public", tags=["Public Access (No Auth)"])
 
 user_service = UserService()
 schema_service_client = SchemaService()
@@ -429,3 +432,437 @@ async def search_objects(
 ):
     """Search for database objects."""
     return await schema_service_client.search_database_objects(query, database, schema, object_type)
+
+# =============================================================================
+# Dashboard Endpoints (with RBAC)
+# =============================================================================
+
+class CreateDashboardRequest(BaseModel):
+    title: str
+    description: Optional[str] = None
+    configuration: Optional[Dict[str, Any]] = None
+    layout_config: Optional[Dict[str, Any]] = None
+    tags: Optional[List[str]] = None
+    is_public: bool = False
+    owner_group_id: Optional[str] = None
+
+class UpdateDashboardRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    configuration: Optional[Dict[str, Any]] = None
+    layout_config: Optional[Dict[str, Any]] = None
+    tags: Optional[List[str]] = None
+    is_public: Optional[bool] = None
+    is_favorite: Optional[bool] = None
+
+class CreateTileRequest(BaseModel):
+    title: str
+    sql_query: str
+    chart_type: str
+    position_x: int = 0
+    position_y: int = 0
+    width: int = 6
+    height: int = 4
+    description: Optional[str] = None
+    natural_language_query: Optional[str] = None
+    chart_config: Optional[Dict[str, Any]] = None
+    refresh_interval_seconds: Optional[int] = None
+
+class UpdateTileRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    sql_query: Optional[str] = None
+    natural_language_query: Optional[str] = None
+    chart_type: Optional[str] = None
+    chart_config: Optional[Dict[str, Any]] = None
+    position_x: Optional[int] = None
+    position_y: Optional[int] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    refresh_interval_seconds: Optional[int] = None
+
+class GrantPermissionRequest(BaseModel):
+    target_user_id: Optional[str] = None
+    target_group_id: Optional[str] = None
+    can_view: bool = True
+    can_edit: bool = False
+    can_delete: bool = False
+    can_share: bool = False
+    expires_at: Optional[str] = None  # ISO format datetime
+
+@dashboard_router.get("")
+async def list_dashboards(
+    include_public: bool = True,
+    favorites_only: bool = False,
+    current_user: dict = Depends(require_viewer)
+):
+    """
+    Get all dashboards accessible by current user with RBAC verification.
+    Returns only dashboards user has permission to view.
+    """
+    try:
+        user_id = current_user.get("id")
+        dashboards = await dashboard_service.get_user_dashboards(
+            user_id=user_id,
+            include_public=include_public,
+            favorites_only=favorites_only
+        )
+        
+        return {
+            "success": True,
+            "dashboards": dashboards,
+            "total": len(dashboards)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@dashboard_router.get("/{dashboard_id}")
+async def get_dashboard(
+    dashboard_id: str,
+    current_user: dict = Depends(require_viewer)
+):
+    """Get dashboard by ID (with permission check)."""
+    try:
+        user_id = current_user.get("id")
+        dashboard = await dashboard_service.get_dashboard_by_id(dashboard_id, user_id)
+        
+        if not dashboard:
+            raise HTTPException(
+                status_code=404, 
+                detail="Dashboard not found or access denied"
+            )
+        
+        return {
+            "success": True,
+            "dashboard": dashboard
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@dashboard_router.post("")
+async def create_dashboard(
+    request: CreateDashboardRequest,
+    current_user: dict = Depends(require_viewer)
+):
+    """Create new dashboard."""
+    try:
+        user_id = current_user.get("id")
+        dashboard = await dashboard_service.create_dashboard(
+            user_id=user_id,
+            title=request.title,
+            description=request.description,
+            configuration=request.configuration,
+            layout_config=request.layout_config,
+            tags=request.tags,
+            is_public=request.is_public,
+            owner_group_id=request.owner_group_id
+        )
+        
+        return {
+            "success": True,
+            "dashboard": dashboard
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@dashboard_router.put("/{dashboard_id}")
+async def update_dashboard(
+    dashboard_id: str,
+    request: UpdateDashboardRequest,
+    current_user: dict = Depends(require_viewer)
+):
+    """Update dashboard (requires edit permission)."""
+    try:
+        user_id = current_user.get("id")
+        success = await dashboard_service.update_dashboard(
+            dashboard_id=dashboard_id,
+            user_id=user_id,
+            title=request.title,
+            description=request.description,
+            configuration=request.configuration,
+            layout_config=request.layout_config,
+            tags=request.tags,
+            is_public=request.is_public,
+            is_favorite=request.is_favorite
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=403,
+                detail="Permission denied or dashboard not found"
+            )
+        
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@dashboard_router.delete("/{dashboard_id}")
+async def delete_dashboard(
+    dashboard_id: str,
+    current_user: dict = Depends(require_viewer)
+):
+    """Delete dashboard (requires delete permission)."""
+    try:
+        user_id = current_user.get("id")
+        success = await dashboard_service.delete_dashboard(dashboard_id, user_id)
+        
+        if not success:
+            raise HTTPException(
+                status_code=403,
+                detail="Permission denied or dashboard not found"
+            )
+        
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# -------------------------------------------------------------------------
+# Tile Endpoints
+# -------------------------------------------------------------------------
+
+@dashboard_router.get("/{dashboard_id}/tiles")
+async def get_dashboard_tiles(
+    dashboard_id: str,
+    current_user: dict = Depends(require_viewer)
+):
+    """Get all tiles for a dashboard (requires view permission)."""
+    try:
+        user_id = current_user.get("id")
+        tiles = await dashboard_service.get_dashboard_tiles(dashboard_id, user_id)
+        
+        return {
+            "success": True,
+            "tiles": tiles,
+            "total": len(tiles)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@dashboard_router.post("/{dashboard_id}/tiles")
+async def create_tile(
+    dashboard_id: str,
+    request: CreateTileRequest,
+    current_user: dict = Depends(require_viewer)
+):
+    """Create new tile in dashboard (requires edit permission)."""
+    try:
+        user_id = current_user.get("id")
+        tile = await dashboard_service.create_tile(
+            dashboard_id=dashboard_id,
+            user_id=user_id,
+            title=request.title,
+            sql_query=request.sql_query,
+            chart_type=request.chart_type,
+            position_x=request.position_x,
+            position_y=request.position_y,
+            width=request.width,
+            height=request.height,
+            description=request.description,
+            natural_language_query=request.natural_language_query,
+            chart_config=request.chart_config,
+            refresh_interval_seconds=request.refresh_interval_seconds
+        )
+        
+        return {
+            "success": True,
+            "tile": tile
+        }
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@dashboard_router.put("/{dashboard_id}/tiles/{tile_id}")
+async def update_tile(
+    dashboard_id: str,
+    tile_id: str,
+    request: UpdateTileRequest,
+    current_user: dict = Depends(require_viewer)
+):
+    """Update tile (requires edit permission on dashboard)."""
+    try:
+        user_id = current_user.get("id")
+        
+        # Filter out None values
+        updates = {k: v for k, v in request.dict().items() if v is not None}
+        
+        success = await dashboard_service.update_tile(
+            tile_id=tile_id,
+            user_id=user_id,
+            **updates
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=403,
+                detail="Permission denied or tile not found"
+            )
+        
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@dashboard_router.delete("/{dashboard_id}/tiles/{tile_id}")
+async def delete_tile(
+    dashboard_id: str,
+    tile_id: str,
+    current_user: dict = Depends(require_viewer)
+):
+    """Delete tile (requires edit permission on dashboard)."""
+    try:
+        user_id = current_user.get("id")
+        success = await dashboard_service.delete_tile(tile_id, user_id)
+        
+        if not success:
+            raise HTTPException(
+                status_code=403,
+                detail="Permission denied or tile not found"
+            )
+        
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# -------------------------------------------------------------------------
+# Permission / Sharing Endpoints
+# -------------------------------------------------------------------------
+
+@dashboard_router.post("/{dashboard_id}/permissions")
+async def grant_permission(
+    dashboard_id: str,
+    request: GrantPermissionRequest,
+    current_user: dict = Depends(require_viewer)
+):
+    """Grant permissions to user or group (requires share permission)."""
+    try:
+        user_id = current_user.get("id")
+        
+        from datetime import datetime
+        expires_at = None
+        if request.expires_at:
+            expires_at = datetime.fromisoformat(request.expires_at)
+        
+        success = await dashboard_service.grant_permission(
+            dashboard_id=dashboard_id,
+            granter_user_id=user_id,
+            target_user_id=request.target_user_id,
+            target_group_id=request.target_group_id,
+            can_view=request.can_view,
+            can_edit=request.can_edit,
+            can_delete=request.can_delete,
+            can_share=request.can_share,
+            expires_at=expires_at
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=403,
+                detail="Permission denied - you cannot share this dashboard"
+            )
+        
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@dashboard_router.delete("/{dashboard_id}/permissions")
+async def revoke_permission(
+    dashboard_id: str,
+    target_user_id: Optional[str] = None,
+    target_group_id: Optional[str] = None,
+    current_user: dict = Depends(require_viewer)
+):
+    """Revoke permissions from user or group (requires share permission)."""
+    try:
+        user_id = current_user.get("id")
+        success = await dashboard_service.revoke_permission(
+            dashboard_id=dashboard_id,
+            revoker_user_id=user_id,
+            target_user_id=target_user_id,
+            target_group_id=target_group_id
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=403,
+                detail="Permission denied"
+            )
+        
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =============================================================================
+# Public Endpoints (No Authentication Required)
+# =============================================================================
+
+@public_router.get("/dashboards")
+async def list_public_dashboards():
+    """
+    Get all anonymous-public dashboards (NO AUTHENTICATION REQUIRED).
+    These dashboards can be embedded or shared publicly.
+    """
+    try:
+        dashboards = await dashboard_service.get_anonymous_public_dashboards()
+        
+        return {
+            "success": True,
+            "dashboards": dashboards,
+            "total": len(dashboards)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@public_router.get("/dashboards/{dashboard_id}")
+async def get_public_dashboard(dashboard_id: str):
+    """
+    Get anonymous-public dashboard by ID (NO AUTHENTICATION REQUIRED).
+    Returns 404 if dashboard is not marked as anonymous-public.
+    """
+    try:
+        dashboard = await dashboard_service.get_anonymous_public_dashboard_by_id(dashboard_id)
+        
+        if not dashboard:
+            raise HTTPException(
+                status_code=404,
+                detail="Dashboard not found or not publicly accessible"
+            )
+        
+        return {
+            "success": True,
+            "dashboard": dashboard
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@public_router.get("/dashboards/{dashboard_id}/tiles")
+async def get_public_dashboard_tiles(dashboard_id: str):
+    """
+    Get tiles for anonymous-public dashboard (NO AUTHENTICATION REQUIRED).
+    Returns empty array if dashboard is not publicly accessible.
+    """
+    try:
+        tiles = await dashboard_service.get_anonymous_public_tiles(dashboard_id)
+        
+        return {
+            "success": True,
+            "tiles": tiles,
+            "total": len(tiles)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -9,7 +9,7 @@ from app.config import settings
 from app.logging import configure_logging
 from app.services.orchestration_service import orchestration_service
 from app.database import db_manager
-from app.api import router as api_router, auth_router, explorer_router
+from app.api import router as api_router, auth_router, explorer_router, dashboard_router, public_router
 
 # Configure logging
 configure_logging()
@@ -64,6 +64,8 @@ app.add_middleware(
 app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(explorer_router)
+app.include_router(dashboard_router)
+app.include_router(public_router)  # No authentication required
 
 
 @app.get("/")

@@ -3,6 +3,7 @@ export { QueryExecutionService } from './QueryExecutionService';
 export { RestService } from './RestService';
 export { API_CONFIG, ApiResponse, apiCall, mockDelay } from './apiConfig';
 export { Network, apiInstance } from './network';
+export { default as QueryManagementService } from './QueryManagementService';
 
 // Service configuration
 export const SERVICES_CONFIG = {

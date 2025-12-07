@@ -183,6 +183,12 @@ const QueriesList = () => {
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
+    
+    // Check for invalid date (like Unix epoch 0)
+    if (isNaN(date.getTime()) || date.getFullYear() < 2000) {
+      return 'N/A';
+    }
+    
     const now = new Date();
     const diffMs = now - date;
     const diffMins = Math.floor(diffMs / 60000);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, useLocation } from 'react-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { DatabaseSchemaPanel, ViewToggle } from '../Common';
 import AIQueryInput from './AIQueryInput';
@@ -13,6 +13,7 @@ import { useProcessNaturalLanguage, useExecuteSql } from '../../hooks';
 const QueryPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { isDark } = useTheme();
   const [selectedQuery, setSelectedQuery] = useState(null);
   const [databasePanelCollapsed, setDatabasePanelCollapsed] = useState(true);
@@ -32,6 +33,19 @@ const QueryPage = () => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
   const titleInputRef = useRef(null);
+
+  // Load query from navigation state (when coming from QueriesList)
+  useEffect(() => {
+    if (location.state?.sql) {
+      setSqlQuery(location.state.sql);
+      if (location.state.nlQuery) {
+        // If there's a natural language query, we might want to show it too
+        setQueryReasoning(location.state.nlQuery);
+      }
+      // Clear the location state so it doesn't repopulate on refresh
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, navigate]);
 
   useEffect(() => {
     if (id && id !== 'new') {

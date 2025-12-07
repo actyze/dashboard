@@ -1,14 +1,13 @@
-"""Main FastAPI application with GraphQL endpoint."""
+"""Main FastAPI application."""
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from strawberry.fastapi import GraphQLRouter
 import structlog
 
 from app.config import settings
 from app.logging import configure_logging
-from app.graphql.schema import schema, orchestration_service
+from app.services.orchestration_service import orchestration_service
 from app.database import db_manager
 from app.api import router as api_router, auth_router, explorer_router
 
@@ -44,7 +43,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app
 app = FastAPI(
     title="Nexus",
-    description="Python-based GraphQL API service - Central hub for natural language to SQL workflows",
+    description="Python-based REST API service - Central hub for natural language to SQL workflows",
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/docs",  # Swagger UI
@@ -61,17 +60,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create GraphQL router
-graphql_app = GraphQLRouter(
-    schema,
-    graphiql=settings.debug,  # Enable GraphiQL in debug mode
-    path="/graphql"
-)
-
-# Include GraphQL router
-app.include_router(graphql_app, prefix="")
-
-# Include REST API router
+# Include REST API routers
 app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(explorer_router)
@@ -83,9 +72,8 @@ async def root():
     return {
         "service": "Nexus",
         "version": "1.0.0",
-        "description": "Python-based GraphQL API service - Central hub for natural language to SQL workflows",
-        "graphql_endpoint": "/graphql",
-        "graphql_playground": "/graphql" if settings.debug else None,
+        "description": "Python-based REST API service - Central hub for natural language to SQL workflows",
+        "api_docs": "/docs",
         "status": "running"
     }
 

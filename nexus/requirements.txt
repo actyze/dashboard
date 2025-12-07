@@ -3,7 +3,6 @@ fastapi==0.104.1
 uvicorn[standard]==0.24.0
 
 # GraphQL
-strawberry-graphql[fastapi]==0.215.1
 
 # HTTP Client
 httpx==0.25.2

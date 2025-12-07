@@ -16,9 +16,11 @@ SELECT 'SUPERADMIN', 'Global root access: Manage all users, roles, groups, syste
 WHERE NOT EXISTS (SELECT 1 FROM nexus.roles WHERE LOWER(name) = 'superadmin');
 
 -- Update ADMIN role description to clarify it's scoped (not global root)
+-- Only update if description hasn't been customized by customer
 UPDATE nexus.roles 
 SET description = 'Scoped administrative access: Manage users and groups within assigned scope. Cannot promote other ADMINs.'
-WHERE LOWER(name) = 'admin';
+WHERE LOWER(name) = 'admin' 
+  AND description = 'Full global permissions: Manage users, groups, system config, billing'; -- Only update default description
 
 -- Assign SUPERADMIN role to bootstrap user
 INSERT INTO nexus.user_roles (user_id, role_id)

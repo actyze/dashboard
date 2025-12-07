@@ -286,6 +286,13 @@ postgres:
       memory: "512Mi"
       cpu: "250m"
 
+# Database Migrations Configuration
+migrations:
+  # Run DML (Data Manipulation Language) scripts?
+  # DDL (schema changes) always runs automatically
+  # DML (demo data inserts) only runs when enabled
+  runDML: true  # Set to false for production (no demo data)
+
 # FAISS Schema Service
 schemaService:
   replicaCount: 1

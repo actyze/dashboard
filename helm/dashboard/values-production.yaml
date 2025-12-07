@@ -279,6 +279,13 @@ monitoring:
     enabled: true
     scrapeInterval: 30s
 
+# Database Migrations Configuration
+migrations:
+  # Run DML (Data Manipulation Language) scripts?
+  # DDL (schema changes) always runs automatically
+  # DML (demo data inserts) only runs when enabled
+  runDML: false  # PRODUCTION: Never run demo data in production
+
 # ============================================================================
 # NOTE: API keys should be injected via Kubernetes secrets in production
 # Never commit actual API keys to version control

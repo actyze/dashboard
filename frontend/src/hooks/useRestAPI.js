@@ -113,7 +113,14 @@ export const useProcessNaturalLanguage = (options = {}) => {
           500, 
           30, 
           nlQuery,
-          conversationHistory
+          conversationHistory,
+          {
+            session_id: `nl-${Date.now()}`,
+            chart_recommendation: chartRecommendation,
+            model_reasoning: reasoning,
+            schema_recommendations: schemaRecommendations,
+            llm_response_time_ms: processingTime ? Math.round(processingTime) : null
+          }
         );
         
         if (!executeResponse.success) {

@@ -25,6 +25,11 @@ class ExecuteSQLRequest(BaseModel):
     timeout_seconds: Optional[int] = 30
     nl_query: Optional[str] = None
     conversation_history: Optional[List[str]] = []
+    session_id: Optional[str] = None
+    chart_recommendation: Optional[dict] = None
+    model_reasoning: Optional[str] = None
+    schema_recommendations: Optional[List[dict]] = None
+    llm_response_time_ms: Optional[int] = None
 
 class QueryRequest(BaseModel):
     input: str
@@ -100,7 +105,17 @@ async def execute_sql(
     request: ExecuteSQLRequest,
     current_user: dict = Depends(require_viewer)
 ):
-    """Execute raw SQL query directly."""
+    """Execute raw SQL query directly and save to query history."""
+    from datetime import datetime
+    import asyncio
+    
+    user_id = current_user.get("id")
+    session_id = request.session_id if hasattr(request, 'session_id') and request.session_id else f"session-{datetime.utcnow().timestamp()}"
+    
+    # Track execution time
+    execution_start = asyncio.get_event_loop().time()
+    
+    # Execute SQL
     result = await orchestration_service.execute_sql_directly(
         request.sql,
         request.max_results,
@@ -108,6 +123,41 @@ async def execute_sql(
         request.nl_query,
         request.conversation_history
     )
+    
+    execution_end = asyncio.get_event_loop().time()
+    execution_time_ms = int((execution_end - execution_start) * 1000)
+    
+    # Save to query history (fire and forget - don't block response)
+    try:
+        # Determine query type based on whether NL query was provided
+        query_type = 'natural_language' if request.nl_query else 'manual'
+        
+        # Save query execution to history
+        asyncio.create_task(
+            user_service.save_query_execution(
+                user_id=user_id,
+                session_id=session_id,
+                natural_language_query=request.nl_query or request.sql,
+                generated_sql=request.sql,
+                execution_status="success" if result.get("success") else "error",
+                execution_time_ms=execution_time_ms,
+                row_count=result.get("query_results", {}).get("row_count") if result.get("query_results") else None,
+                error_message=result.get("error"),
+                schema_recommendations={"recommendations": request.schema_recommendations} if request.schema_recommendations else None,
+                model_confidence=0.85 if request.chart_recommendation else None,  # Default confidence if LLM was used
+                retry_attempts=0,
+                query_type=query_type,
+                chart_recommendation=request.chart_recommendation,
+                llm_response_time_ms=request.llm_response_time_ms,
+                generated_at=datetime.fromtimestamp(execution_start),
+                executed_at=datetime.fromtimestamp(execution_end)
+            )
+        )
+    except Exception as e:
+        # Log but don't fail the request if history save fails
+        logger = orchestration_service.logger
+        logger.warning("Failed to save query history", error=str(e), user_id=user_id)
+    
     return result
 
 @router.post("/query")

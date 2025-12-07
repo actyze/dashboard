@@ -81,10 +81,9 @@ services:
       - local
       - trino-only
 
-  # Database initialization service - runs SQL scripts
-  # NOTE: Currently disabled - run migrations manually using: 
-  #   docker compose run --rm db-init
-  # Or apply SQL files directly to postgres if needed
+  # Database initialization service - runs SQL scripts automatically on startup
+  # Applies all migrations from helm/dashboard/sql/*.sql
+  # Runs once, then exits (doesn't block other services)
   db-init:
     image: alpine:latest  # Use latest for better compatibility
     container_name: dashboard-db-init
@@ -108,7 +107,7 @@ services:
     networks:
       - dashboard
     profiles:
-      - manual  # Changed from 'local' to 'manual' - won't start automatically
+      - local  # Runs automatically on 'docker compose up'
     restart: "no"
 
   # Schema Service (FAISS-based table recommendations)

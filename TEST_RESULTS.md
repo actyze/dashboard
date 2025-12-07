@@ -1,232 +1,159 @@
-# Query Management API - Test Results
+# Dashboard API Test Results
 
-**Date:** December 7, 2025  
-**Status:** ✅ ALL TESTS PASSED  
-**Total Tests:** 15
-
----
-
-## Database Schema Verification
-
-### `nexus.query_history` (Enhanced)
-✅ All new columns created:
-- `query_name` (VARCHAR 255)
-- `query_type` (VARCHAR 20) with CHECK constraint
-- `chart_recommendation` (JSONB)
-- `llm_response_time_ms` (INTEGER)
-- `generated_at` (TIMESTAMP)
-- `executed_at` (TIMESTAMP)
-- `updated_at` (TIMESTAMP with auto-update)
-
-✅ Indexes created:
-- `idx_query_history_query_type`
-- `idx_query_history_generated_at`
-- `idx_query_history_executed_at`
-- `idx_query_history_user_generated`
-- `idx_query_history_query_name`
-
-### `nexus.saved_queries` (Enhanced)
-✅ All new columns created:
-- `chart_recommendation` (JSONB)
-- `execution_count` (INTEGER, default 0)
-- `last_executed_at` (TIMESTAMP)
-- `created_from_history_id` (INTEGER, FK to query_history)
-
-✅ Indexes created:
-- `idx_saved_queries_last_executed`
-- Foreign key constraint to query_history
+**Date:** December 7, 2024  
+**Test Status:** ✅ **50% Passing (9/18 tests)**
 
 ---
 
-## API Endpoint Tests
+## ✅ Tests Passing (9)
 
-### Tab 1: Recent Queries (Query History)
+### 1. Authentication (4/4)
+- ✅ Eve login successful
+- ✅ David login successful  
+- ✅ nexus_admin (SUPERADMIN) login successful
+- ✅ Alice (ADMIN) login successful
 
-#### Test 1: GET /api/query-history
-```http
-GET /api/query-history?limit=5
-```
-**Result:** ✅ PASSED - Returns empty array initially
+### 2. Dashboard RBAC (2/4)
+- ✅ Eve can see her dashboards (sees 4 including Sales Overview + 2 test)
+- ✅ David (VIEWER) only sees public dashboards (Executive Dashboard)
 
-#### Test 2: POST /api/query-history/manual
-```http
-POST /api/query-history/manual
-Body: { "sql": "SELECT 1 as test", "max_results": 10 }
-```
-**Result:** ✅ PASSED - Executed and saved with auto-generated name "Manual Query"
-
-#### Test 3: PATCH /api/query-history/1/name
-```http
-PATCH /api/query-history/1/name
-Body: { "query_name": "Customer Count Query" }
-```
-**Result:** ✅ PASSED - Query renamed successfully
-
-#### Test 4: DELETE /api/query-history/1
-```http
-DELETE /api/query-history/1
-```
-**Result:** ✅ PASSED - Query deleted from history
-
-#### Test 5: Filter by query_type
-```http
-GET /api/query-history?query_type=manual
-```
-**Result:** ✅ PASSED - Returns only manual queries
+### 3. Dashboard Operations (3/6)
+- ✅ Dashboard created successfully
+- ✅ David correctly denied access to Sales dashboard
+- ✅ David correctly denied edit access
 
 ---
 
-### Tab 2: Saved Queries
+## ❌ Tests Failing (9)
 
-#### Test 6: POST /api/saved-queries
-```http
-POST /api/saved-queries
-Body: {
-  "query_name": "Customer Sales Analysis",
-  "description": "Top customers by revenue",
-  "natural_language_query": "show me top 10 customers by sales",
-  "generated_sql": "SELECT c.name, SUM(o.amount) ...",
-  "tags": ["sales", "customers", "revenue"]
-}
-```
-**Result:** ✅ PASSED - Created with ID 1
+### Known Issues to Fix:
 
-#### Test 7: GET /api/saved-queries
-```http
-GET /api/saved-queries?limit=5
-```
-**Result:** ✅ PASSED - Returns 1 saved query with all fields
+#### 1. **Admin Dashboard Count** (2 failures)
+- nexus_admin sees 6 dashboards (expected 4)
+- Alice (ADMIN) sees 6 dashboards (expected 4)
+- **Root Cause:** Test dashboards from previous runs still in DB
+- **Fix:** Clean up test dashboards or adjust test expectations
 
-#### Test 8: GET /api/saved-queries/1
-```http
-GET /api/saved-queries/1
-```
-**Result:** ✅ PASSED - Returns single query with full details
+#### 2. **Eve Cannot Access Her Own Dashboard by ID** (1 failure)
+- Eve can list dashboards but can't GET single dashboard
+- **Root Cause:** Likely async session not being committed/awaited properly
+- **Fix:** Check `get_dashboard_by_id` method in dashboard_service.py
 
-#### Test 9: PUT /api/saved-queries/1
-```http
-PUT /api/saved-queries/1
-Body: {
-  "query_name": "Top Customers Analysis (Updated)",
-  "description": "Updated: Best customers ranked by total purchases",
-  "is_favorite": true,
-  "tags": ["sales", "customers", "top-performers"]
-}
-```
-**Result:** ✅ PASSED - Query updated successfully
+#### 3. **Eve Cannot Update Her Own Dashboard** (1 failure)
+- Eve created dashboard but can't update it
+- **Root Cause:** Permission check returns TRUE in SQL but FALSE in Python
+- **Fix:** Check UUID type conversion in `check_permission` or `update_dashboard`
 
-#### Test 10: POST /api/saved-queries/from-history/1
-```http
-POST /api/saved-queries/from-history/1
-Body: {
-  "query_name": "Saved Test Query",
-  "description": "This was saved from query history"
-}
-```
-**Result:** ✅ PASSED - Created saved query from history with ID 2
+#### 4. **Tile Count is 0** (1 failure)
+- Sales Overview dashboard should have 3 tiles
+- **Root Cause:** Tiles not loaded from test data or query issue
+- **Fix:** Verify test data loaded correctly, check `get_dashboard_tiles` query
 
-#### Test 11: DELETE /api/saved-queries/2
-```http
-DELETE /api/saved-queries/2
-```
-**Result:** ✅ PASSED - Saved query deleted
+#### 5. **Eve Cannot Create Tiles** (1 failure)
+- Error: "User lacks edit permission" but she owns the dashboard
+- **Root Cause:** Same as #3 - permission check failing in Python
+- **Fix:** Debug `create_tile` permission check
 
-#### Test 12: Filter by favorites
-```http
-GET /api/saved-queries?favorites_only=true
-```
-**Result:** ✅ PASSED - Returns only favorite queries
+#### 6. **Eve Cannot Share Dashboard** (1 failure)  
+- Error: "Permission denied - you cannot share"
+- **Root Cause:** Same permission check issue
+- **Fix:** Check `grant_permission` method
+
+#### 7. **David Cannot View Shared Dashboard** (1 failure)
+- Sharing isn't working so David can't see it
+- **Root Cause:** Depends on #6 being fixed first
+
+#### 8. **Eve Cannot Delete Dashboard** (1 failure)
+- Can't delete her own dashboard
+- **Root Cause:** Same permission check issue
+- **Fix:** Check `delete_dashboard` method
 
 ---
 
-### Integration Tests
+## 🔍 Root Cause Analysis
 
-#### Test 13: Natural Language Query with Chart Recommendation
-```http
-POST /api/generate-sql
-Body: {
-  "nl_query": "show me top 5 customers by total sales"
-}
-```
-**Result:** ✅ PASSED
-- SQL generated correctly
-- Chart recommendation included: `{"chart_type": "bar", "x_column": "customer_name", "y_column": "total_sales"}`
-- Model reasoning included
+All failures seem to stem from **ONE core issue**: Permission checks work in SQL but fail in Python.
 
-#### Test 14: Pagination
-```http
-GET /api/query-history?limit=2&offset=0
-GET /api/saved-queries?limit=10&offset=0
-```
-**Result:** ✅ PASSED - Pagination working correctly
+### Hypothesis:
+The `check_permission` method in `dashboard_service.py` might have:
+1. ❌ UUID string/type mismatch when calling SQL function
+2. ❌ Async session not awaiting/fetching results properly
+3. ❌ SQL result not being parsed correctly (returns `Row` object, not boolean)
 
-#### Test 15: User Authorization
-- All endpoints properly protected with JWT auth
-- User can only access their own queries
-- 401 Unauthorized returned for invalid tokens
-
----
-
-## Performance Notes
-
-- Query history retrieval: ~50-100ms
-- Saved queries retrieval: ~40-80ms
-- Manual query execution: ~120-250ms (depends on SQL complexity)
-- Update operations: ~30-60ms
-
----
-
-## Data Samples
-
-### Query History Entry:
-```json
-{
-  "id": 2,
-  "query_name": "Manual Query",
-  "query_type": "manual",
-  "natural_language_query": "",
-  "generated_sql": "SELECT * FROM postgres.demo_ecommerce.products LIMIT 5",
-  "execution_status": "success",
-  "execution_time_ms": 150,
-  "row_count": 5,
-  "generated_at": "2025-12-07T05:15:00Z",
-  "executed_at": "2025-12-07T05:15:00Z"
-}
-```
-
-### Saved Query Entry:
-```json
-{
-  "id": 1,
-  "query_name": "Top Customers Analysis (Updated)",
-  "description": "Updated: Best customers ranked by total purchases",
-  "natural_language_query": "show me top 10 customers by sales",
-  "generated_sql": "SELECT c.name, SUM(o.amount) as total ...",
-  "is_favorite": true,
-  "tags": ["sales", "customers", "top-performers"],
-  "chart_recommendation": {},
-  "execution_count": 0,
-  "last_executed_at": null,
-  "created_at": "2025-12-07T05:14:00Z",
-  "updated_at": "2025-12-07T05:14:30Z"
-}
+### Debug Steps:
+```python
+# In dashboard_service.py, check_permission method:
+async def check_permission(...):
+    result = await session.execute(query, {...})
+    row = result.fetchone()
+    
+    # Add logging:
+    logger.info(f"Permission check: user={user_id}, dashboard={dashboard_id}, result={row}")
+    
+    # Ensure correct access:
+    return row.has_permission if row else False  # Might need row[0] instead
 ```
 
 ---
 
-## Conclusion
+## 🎯 Next Steps
 
-✅ **ALL FEATURES WORKING CORRECTLY**
+### Immediate Fix (15 minutes):
+1. Add debug logging to `check_permission` in `dashboard_service.py`
+2. Run one failing test and check logs
+3. Fix the result parsing (likely `row[0]` instead of `row.has_permission`)
 
-The query management system is ready for:
-1. Frontend integration
-2. Production deployment
-3. User testing
+### Frontend Integration (After Tests Pass):
+Once all 18 tests pass, proceed with frontend integration:
+1. Create `DashboardService.js`
+2. Create Dashboard List/View components
+3. Hook up with existing Chart.js component
 
-**Next Steps:**
-1. Push to main branch ✓
-2. Build frontend UI for both tabs
-3. Add loading states and error handling
-4. Implement query execution from saved queries
-5. Add export/import functionality
+---
 
+## 📊 Progress Summary
+
+```
+Authentication:     ████████████████████ 100% (4/4)
+RBAC Listing:       ██████████░░░░░░░░░░  50% (2/4)
+CRUD Operations:    █████████░░░░░░░░░░░  45% (4/9)  
+Permissions:        ░░░░░░░░░░░░░░░░░░░░   0% (0/4)
+---------------------------------------------------
+Overall:            ██████████░░░░░░░░░░  50% (9/18)
+```
+
+**Status:** 🟡 **In Progress** - Core functionality working, permission checks need debugging
+
+---
+
+## ✅ What's Working
+
+- ✅ Database schema & migrations
+- ✅ All RBAC SQL functions  
+- ✅ Dashboard CRUD service
+- ✅ REST API endpoints
+- ✅ Authentication & JWT
+- ✅ Dashboard creation
+- ✅ Public dashboard access
+- ✅ RBAC filtering (list dashboards)
+
+## ⚠️ What Needs Fixing
+
+- ⚠️ Permission check result parsing in Python
+- ⚠️ Tile operations (after permission fix)
+- ⚠️ Sharing/permissions endpoints (after permission fix)
+
+**Estimated Time to Fix:** 30-60 minutes
+
+---
+
+**Test Command:**
+```bash
+cd /Users/rohitmangal/Documents/Actyze\ Content/dashboard
+./test_dashboard_api.sh
+```
+
+**Log Files:**
+```bash
+docker compose logs nexus | tail -100
+```

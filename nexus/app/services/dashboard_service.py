@@ -257,6 +257,10 @@ class DashboardService:
                     "is_favorite": row.is_favorite,
                     "tags": row.tags or [],
                     "tile_count": row.tile_count,
+                    "status": row.status,
+                    "version": row.version,
+                    "published_at": row.published_at.isoformat() if row.published_at else None,
+                    "published_by": str(row.published_by) if row.published_by else None,
                     "permissions": permissions,
                     "created_at": row.created_at.isoformat() if row.created_at else None,
                     "updated_at": row.updated_at.isoformat() if row.updated_at else None,
@@ -290,7 +294,7 @@ class DashboardService:
                         :title, :description, CAST(:configuration AS jsonb), CAST(:layout_config AS jsonb),
                         :owner_user_id, :owner_group_id, :is_public, CAST(:tags AS jsonb)
                     )
-                    RETURNING id, created_at, updated_at
+                    RETURNING id, status, version, created_at, updated_at
                 """)
                 
                 result = await session.execute(query, {
@@ -317,6 +321,8 @@ class DashboardService:
                     "id": str(row.id),
                     "title": title,
                     "description": description,
+                    "status": row.status,
+                    "version": row.version,
                     "owner_user_id": user_id,
                     "is_public": is_public,
                     "created_at": row.created_at.isoformat(),
@@ -864,8 +870,8 @@ class DashboardService:
             async with db_manager.get_session() as session:
                 query = text("""
                     SELECT nexus.publish_dashboard(
-                        :dashboard_id::uuid,
-                        :user_id::uuid,
+                        CAST(:dashboard_id AS uuid),
+                        CAST(:user_id AS uuid),
                         :version_notes
                     )
                 """)
@@ -961,9 +967,9 @@ class DashboardService:
             async with db_manager.get_session() as session:
                 query = text("""
                     SELECT nexus.revert_dashboard_version(
-                        :dashboard_id::uuid,
-                        :target_version,
-                        :user_id::uuid
+                        CAST(:dashboard_id AS uuid),
+                        CAST(:target_version AS integer),
+                        CAST(:user_id AS uuid)
                     )
                 """)
                 

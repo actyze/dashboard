@@ -27,7 +27,7 @@ const CHART_COLORS = [
  * 
  * Manual mode uses cached queryResults - no re-execution needed.
  */
-const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = null }) => {
+const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = null, embedded = false }) => {
   const { isDark } = useTheme();
   const [plotData, setPlotData] = useState([]);
   const [layout, setLayout] = useState({});
@@ -609,66 +609,68 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
 
   return (
     <div className="w-full h-full flex flex-col">
-      {/* Chart Type Selector */}
-      <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <ChartTypeSelector
-            selectedType={selectedChartType}
-            onTypeChange={handleChartTypeChange}
-            dataColumns={dataColumns}
-            compact={true}
-          />
-          
-          {/* Show mode badge and configure button */}
-          <div className="flex items-center gap-2">
-            {/* Mode Badge - AI Powered or Custom */}
-            {chartInfo && (
-              chartInfo.manual ? (
-                <span className={`
-                  inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-full
-                  ${isDark ? 'bg-amber-500/15 text-amber-400' : 'bg-amber-100 text-amber-700'}
-                `}>
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  Custom
-                </span>
-              ) : (
-                <span className={`
-                  inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-full
-                  ${isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}
-                `}>
-                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                  </svg>
-                  AI Powered
-                </span>
-              )
-            )}
+      {/* Chart Type Selector - Hidden in embedded mode */}
+      {!embedded && (
+        <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <ChartTypeSelector
+              selectedType={selectedChartType}
+              onTypeChange={handleChartTypeChange}
+              dataColumns={dataColumns}
+              compact={true}
+            />
             
-            <button
-              onClick={() => {
-                setManualChartConfigured(false);
-                setIsManualMode(true);
-              }}
-              className={`
-                inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors
-                ${isDark 
-                  ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' 
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                }
-              `}
-              title="Customize chart configuration"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              Customize
-            </button>
+            {/* Show mode badge and configure button */}
+            <div className="flex items-center gap-2">
+              {/* Mode Badge - AI Powered or Custom */}
+              {chartInfo && (
+                chartInfo.manual ? (
+                  <span className={`
+                    inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-full
+                    ${isDark ? 'bg-amber-500/15 text-amber-400' : 'bg-amber-100 text-amber-700'}
+                  `}>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Custom
+                  </span>
+                ) : (
+                  <span className={`
+                    inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-full
+                    ${isDark ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}
+                  `}>
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                    </svg>
+                    AI Powered
+                  </span>
+                )
+              )}
+              
+              <button
+                onClick={() => {
+                  setManualChartConfigured(false);
+                  setIsManualMode(true);
+                }}
+                className={`
+                  inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors
+                  ${isDark 
+                    ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' 
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                  }
+                `}
+                title="Customize chart configuration"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Customize
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
       
       {/* Chart Area */}
       <div className="flex-1 min-h-0">
@@ -679,7 +681,7 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
           useResizeHandler={true}
           config={{ 
             responsive: true, 
-            displayModeBar: true,
+            displayModeBar: !embedded,
             displaylogo: false,
             modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'],
             doubleClick: 'reset'

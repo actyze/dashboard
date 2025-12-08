@@ -806,6 +806,99 @@ async def revoke_permission(
         raise HTTPException(status_code=500, detail=str(e))
 
 # =============================================================================
+# Dashboard Versioning & Publishing Endpoints
+# =============================================================================
+
+class PublishDashboardRequest(BaseModel):
+    version_notes: Optional[str] = None
+
+@dashboard_router.post("/{dashboard_id}/publish")
+async def publish_dashboard(
+    dashboard_id: str,
+    request: PublishDashboardRequest = PublishDashboardRequest(),
+    current_user: dict = Depends(require_editor)
+):
+    """
+    Publish dashboard - creates version snapshot and changes status to published.
+    Published dashboards become visible to others based on RBAC permissions.
+    Draft dashboards are only visible to the creator.
+    """
+    try:
+        user_id = current_user.get("id")
+        result = await dashboard_service.publish_dashboard(
+            dashboard_id=dashboard_id,
+            user_id=user_id,
+            version_notes=request.version_notes
+        )
+        
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=403 if "Permission denied" in result.get("error", "") else 500,
+                detail=result.get("error")
+            )
+        
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@dashboard_router.get("/{dashboard_id}/versions")
+async def list_dashboard_versions(
+    dashboard_id: str,
+    current_user: dict = Depends(require_viewer)
+):
+    """
+    Get version history for a dashboard.
+    Shows all published versions with metadata.
+    """
+    try:
+        user_id = current_user.get("id")
+        versions = await dashboard_service.get_dashboard_versions(
+            dashboard_id=dashboard_id,
+            user_id=user_id
+        )
+        
+        return {
+            "success": True,
+            "versions": versions,
+            "total": len(versions)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@dashboard_router.post("/{dashboard_id}/revert/{version}")
+async def revert_dashboard_version(
+    dashboard_id: str,
+    version: int,
+    current_user: dict = Depends(require_editor)
+):
+    """
+    Revert dashboard to a previous version.
+    This restores dashboard settings and all tiles to the specified version.
+    Status is set to draft after revert - you'll need to publish again.
+    """
+    try:
+        user_id = current_user.get("id")
+        result = await dashboard_service.revert_dashboard_version(
+            dashboard_id=dashboard_id,
+            target_version=version,
+            user_id=user_id
+        )
+        
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=403 if "Permission denied" in result.get("error", "") else 500,
+                detail=result.get("error")
+            )
+        
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# =============================================================================
 # Public Endpoints (No Authentication Required)
 # =============================================================================
 

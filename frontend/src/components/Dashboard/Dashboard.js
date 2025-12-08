@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router';
 import { Grid, IconButton, Typography, Menu, MenuItem, CircularProgress } from '@mui/material';
 import { Card, Button } from '../ui';
 import { useTheme } from '../../contexts/ThemeContext';

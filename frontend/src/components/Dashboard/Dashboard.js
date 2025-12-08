@@ -249,7 +249,24 @@ const Dashboard = () => {
 
       if (response.success) {
         console.log('Dashboard - Updated tile from API:', response.tile);
+        
+        // Clear old tile data first to force re-render
+        setTileData(prev => {
+          const newData = { ...prev };
+          delete newData[response.tile.id];
+          return newData;
+        });
+        
+        setTileErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors[response.tile.id];
+          return newErrors;
+        });
+        
+        // Update tile in list
         setTiles(prev => prev.map(t => t.id === response.tile.id ? response.tile : t));
+        
+        // Re-execute query with updated tile
         executeTileQuery(response.tile);
       } else {
         console.error('Dashboard - Update failed:', response.error);
@@ -283,6 +300,8 @@ const Dashboard = () => {
       return;
     }
     
+    // Clear editing state and close modal
+    setEditingTile(null);
     setModalOpen(false);
   };
 

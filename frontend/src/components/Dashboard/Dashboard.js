@@ -88,12 +88,16 @@ const Dashboard = () => {
   };
 
   const executeTileQuery = async (tile) => {
+    console.log('Executing tile query:', tile.id, tile.title);
     setLoadingTiles(prev => ({ ...prev, [tile.id]: true }));
     setTileErrors(prev => ({ ...prev, [tile.id]: null }));
 
     try {
       // Execute the SQL query
+      console.log('SQL Query:', tile.sql_query);
       const response = await QueryExecutionService.executeQuery(tile.sql_query);
+      
+      console.log('Query response:', response);
       
       if (response.error) {
         throw new Error(response.error);
@@ -107,17 +111,61 @@ const Dashboard = () => {
         rowCount: responseData.rowCount || 0
       };
 
+      console.log('Query data:', queryData);
+
+      // Prepare chart config - auto-detect if empty
+      let chartConfig = tile.chart_config || {};
+      
+      // If chart_config is empty or missing fields, auto-detect from columns
+      if (tile.chart_type !== 'table' && (!chartConfig.xField || !chartConfig.yField)) {
+        console.log('Auto-detecting chart config from columns:', queryData.columns);
+        
+        // Find first string column for x-axis
+        const stringColumn = queryData.columns.find(col => 
+          col.type === 'string' || col.type === 'varchar' || col.type === 'date'
+        );
+        
+        // Find first numeric column for y-axis
+        const numericColumn = queryData.columns.find(col => 
+          col.type === 'number' || col.type === 'integer' || col.type === 'bigint' || 
+          col.type === 'decimal' || col.type === 'double'
+        );
+        
+        if (stringColumn && numericColumn) {
+          chartConfig = {
+            ...chartConfig,
+            xField: stringColumn.name,
+            yField: numericColumn.name,
+            x_column: stringColumn.name,  // Backend format
+            y_column: numericColumn.name   // Backend format
+          };
+          console.log('Auto-detected chart config:', chartConfig);
+        } else if (queryData.columns.length >= 2) {
+          // Fallback to first two columns
+          chartConfig = {
+            ...chartConfig,
+            xField: queryData.columns[0]?.name || 'x',
+            yField: queryData.columns[1]?.name || 'y',
+            x_column: queryData.columns[0]?.name || 'x',
+            y_column: queryData.columns[1]?.name || 'y'
+          };
+          console.log('Fallback chart config:', chartConfig);
+        }
+      }
+
       // Prepare chart data if needed
       const chartData = tile.chart_type !== 'table' ? {
         chart: {
           type: tile.chart_type,
-          config: tile.chart_config || {},
+          config: chartConfig,
           fallback: false,
           source: 'tile'
         },
         data: queryData,
         cached: false
       } : null;
+
+      console.log('Setting tile data with chartData:', chartData);
 
       setTileData(prev => ({
         ...prev,

@@ -843,6 +843,154 @@ class DashboardService:
         except Exception as e:
             logger.error(f"Failed to revoke permission: {str(e)}")
             raise
+    
+    # =========================================================================
+    # DASHBOARD VERSIONING & PUBLISHING
+    # =========================================================================
+    
+    async def publish_dashboard(
+        self,
+        dashboard_id: str,
+        user_id: str,
+        version_notes: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Publish dashboard - creates version snapshot and changes status to published"""
+        try:
+            # Check if user has edit permission
+            has_permission = await self.check_permission(user_id, dashboard_id, "edit")
+            if not has_permission:
+                return {"success": False, "error": "Permission denied"}
+            
+            async with db_manager.get_session() as session:
+                query = text("""
+                    SELECT nexus.publish_dashboard(
+                        :dashboard_id::uuid,
+                        :user_id::uuid,
+                        :version_notes
+                    )
+                """)
+                
+                result = await session.execute(query, {
+                    "dashboard_id": dashboard_id,
+                    "user_id": user_id,
+                    "version_notes": version_notes
+                })
+                
+                await session.commit()
+                
+                row = result.fetchone()
+                result_json = row[0] if row else {}
+                
+                return {
+                    "success": True,
+                    "dashboard_id": str(result_json.get("dashboard_id")),
+                    "version": result_json.get("version"),
+                    "status": result_json.get("status"),
+                    "published_at": result_json.get("published_at"),
+                    "published_by": str(result_json.get("published_by"))
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to publish dashboard: {str(e)}")
+            return {"success": False, "error": str(e)}
+    
+    async def get_dashboard_versions(
+        self,
+        dashboard_id: str,
+        user_id: str
+    ) -> List[Dict[str, Any]]:
+        """Get version history for a dashboard"""
+        try:
+            # Check if user has view permission
+            has_permission = await self.check_permission(user_id, dashboard_id, "view")
+            if not has_permission:
+                return []
+            
+            async with db_manager.get_session() as session:
+                query = text("""
+                    SELECT 
+                        id,
+                        version,
+                        title,
+                        description,
+                        created_by,
+                        created_at,
+                        version_notes,
+                        change_summary,
+                        jsonb_array_length(tiles_snapshot) as tiles_count
+                    FROM nexus.dashboard_versions
+                    WHERE dashboard_id = :dashboard_id
+                    ORDER BY version DESC
+                """)
+                
+                result = await session.execute(query, {"dashboard_id": dashboard_id})
+                
+                versions = []
+                for row in result:
+                    versions.append({
+                        "id": str(row.id),
+                        "version": row.version,
+                        "title": row.title,
+                        "description": row.description,
+                        "created_by": str(row.created_by),
+                        "created_at": row.created_at.isoformat() if row.created_at else None,
+                        "version_notes": row.version_notes,
+                        "change_summary": row.change_summary,
+                        "tiles_count": row.tiles_count
+                    })
+                
+                return versions
+                
+        except Exception as e:
+            logger.error(f"Failed to get dashboard versions: {str(e)}")
+            return []
+    
+    async def revert_dashboard_version(
+        self,
+        dashboard_id: str,
+        target_version: int,
+        user_id: str
+    ) -> Dict[str, Any]:
+        """Revert dashboard to a previous version"""
+        try:
+            # Check if user has edit permission
+            has_permission = await self.check_permission(user_id, dashboard_id, "edit")
+            if not has_permission:
+                return {"success": False, "error": "Permission denied"}
+            
+            async with db_manager.get_session() as session:
+                query = text("""
+                    SELECT nexus.revert_dashboard_version(
+                        :dashboard_id::uuid,
+                        :target_version,
+                        :user_id::uuid
+                    )
+                """)
+                
+                result = await session.execute(query, {
+                    "dashboard_id": dashboard_id,
+                    "target_version": target_version,
+                    "user_id": user_id
+                })
+                
+                await session.commit()
+                
+                row = result.fetchone()
+                success = row[0] if row else False
+                
+                if success:
+                    return {
+                        "success": True,
+                        "dashboard_id": dashboard_id,
+                        "reverted_to_version": target_version,
+                        "message": f"Dashboard reverted to version {target_version}. Status set to draft."
+                    }
+                else:
+                    return {"success": False, "error": "Revert failed"}
+                
+        except Exception as e:
+            logger.error(f"Failed to revert dashboard version: {str(e)}")
+            return {"success": False, "error": str(e)}
 
 
 # Singleton instance

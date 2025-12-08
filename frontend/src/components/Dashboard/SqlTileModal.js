@@ -13,22 +13,22 @@ import { useTheme } from '../../contexts/ThemeContext';
 const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
   const { isDark } = useTheme();
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [sqlQuery, setSqlQuery] = useState('');
   const [chartType, setChartType] = useState('table');
-  const [database, setDatabase] = useState('');
   const [error, setError] = useState(null);
 
   useEffect(() => {
     if (initialData) {
       setTitle(initialData.title || '');
-      setSqlQuery(initialData.sqlQuery || '');
-      setChartType(initialData.chartType || 'table');
-      setDatabase(initialData.database || '');
+      setDescription(initialData.description || '');
+      setSqlQuery(initialData.sql_query || '');
+      setChartType(initialData.chart_type || 'table');
     } else {
       setTitle('');
+      setDescription('');
       setSqlQuery('');
       setChartType('table');
-      setDatabase('');
     }
     setError(null);
   }, [initialData, open]);
@@ -44,13 +44,11 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
     }
 
     onSave({
-      id: initialData?.id || Date.now().toString(),
       title: title.trim(),
+      description: description.trim() || null,
       sqlQuery: sqlQuery.trim(),
       chartType,
-      database,
-      createdAt: initialData?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      chartConfig: {}
     });
 
     onClose();
@@ -122,56 +120,55 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                Database
-              </label>
-              <select
-                value={database}
-                onChange={(e) => setDatabase(e.target.value)}
-                className={`
-                  w-full px-4 py-2.5 rounded-lg text-sm
-                  transition-all duration-200
-                  ${isDark 
-                    ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20' 
-                    : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
-                  }
-                  border outline-none cursor-pointer
-                `}
-              >
-                <option value="">No Database</option>
-                <option value="postgres">PostgreSQL</option>
-                <option value="mysql">MySQL</option>
-                <option value="trino">Trino</option>
-              </select>
-            </div>
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+              Description (optional)
+            </label>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Brief description of this tile"
+              className={`
+                w-full px-4 py-2.5 rounded-lg text-sm
+                transition-all duration-200
+                ${isDark 
+                  ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20' 
+                  : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+                }
+                border outline-none
+              `}
+            />
+          </div>
 
-            <div>
-              <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                Visualization
-              </label>
-              <select
-                value={chartType}
-                onChange={(e) => setChartType(e.target.value)}
-                className={`
-                  w-full px-4 py-2.5 rounded-lg text-sm
-                  transition-all duration-200
-                  ${isDark 
-                    ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20' 
-                    : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
-                  }
-                  border outline-none cursor-pointer
-                `}
-              >
-                <option value="table">Table</option>
-                <option value="bar">Bar Chart</option>
-                <option value="line">Line Chart</option>
-                <option value="pie">Pie Chart</option>
-                <option value="area">Area Chart</option>
-                <option value="scatter">Scatter Plot</option>
-              </select>
-            </div>
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+              Visualization Type
+            </label>
+            <select
+              value={chartType}
+              onChange={(e) => setChartType(e.target.value)}
+              className={`
+                w-full px-4 py-2.5 rounded-lg text-sm
+                transition-all duration-200
+                ${isDark 
+                  ? 'bg-gray-800 border-gray-700 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20' 
+                  : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+                }
+                border outline-none cursor-pointer
+              `}
+            >
+              <option value="table">Table</option>
+              <option value="bar">Bar Chart</option>
+              <option value="line">Line Chart</option>
+              <option value="pie">Pie Chart</option>
+              <option value="area">Area Chart</option>
+              <option value="scatter">Scatter Plot</option>
+              <option value="heatmap">Heatmap</option>
+              <option value="box">Box Plot</option>
+              <option value="histogram">Histogram</option>
+              <option value="funnel">Funnel Chart</option>
+            </select>
           </div>
 
           <div>

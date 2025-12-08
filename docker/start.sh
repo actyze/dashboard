@@ -22,6 +22,7 @@ fi
 
 # Parse arguments
 NO_BUILD_FLAG=""
+NO_CACHE_FLAG=""
 LOGS_FLAG=""
 PROFILE="local"  # Default profile
 
@@ -29,6 +30,10 @@ for arg in "$@"; do
     case $arg in
         --no-build)
             NO_BUILD_FLAG="true"
+            shift
+            ;;
+        --no-cache)
+            NO_CACHE_FLAG="--no-cache"
             shift
             ;;
         --logs)
@@ -44,8 +49,9 @@ for arg in "$@"; do
             shift
             ;;
         *)
-            echo "Usage: $0 [--no-build] [--logs] [--profile PROFILE]"
+            echo "Usage: $0 [--no-build] [--no-cache] [--logs] [--profile PROFILE]"
             echo "  --no-build:        Skip building images (use existing)"
+            echo "  --no-cache:        Build without using cache"
             echo "  --logs:            Follow logs after starting"
             echo "  --profile PROFILE: Docker compose profile to use"
             echo ""
@@ -62,8 +68,14 @@ done
 # Start services
 echo "📦 Starting services with profile: $PROFILE"
 if [ -z "$NO_BUILD_FLAG" ]; then
-    echo "🔨 Building images locally..."
-    docker-compose --profile $PROFILE up -d --build
+    if [ -n "$NO_CACHE_FLAG" ]; then
+        echo "🔨 Building images without cache..."
+        docker-compose --profile $PROFILE build --no-cache
+        docker-compose --profile $PROFILE up -d
+    else
+        echo "🔨 Building images locally..."
+        docker-compose --profile $PROFILE up -d --build
+    fi
 else
     echo "⚡ Using existing images..."
     docker-compose --profile $PROFILE up -d

@@ -61,9 +61,10 @@ export const DashboardService = {
       };
       
       const response = await apiInstance.post('/api/dashboards', payload);
+      // API returns { success: true, dashboard: {...} }
       return {
-        success: true,
-        dashboard: response.data
+        success: response.data.success,
+        dashboard: response.data.dashboard
       };
     } catch (error) {
       console.error('Failed to create dashboard:', error);

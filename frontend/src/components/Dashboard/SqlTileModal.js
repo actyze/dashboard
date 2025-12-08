@@ -43,14 +43,18 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
       return;
     }
 
-    onSave({
+    const formData = {
       title: title.trim(),
       description: description.trim() || null,
       sqlQuery: sqlQuery.trim(),
       chartType,
       chartConfig: {}
-    });
+    };
 
+    console.log('SqlTileModal - Sending form data:', formData);
+    console.log('SqlTileModal - Current state:', { title, description, sqlQuery, chartType });
+
+    onSave(formData);
     onClose();
   };
 

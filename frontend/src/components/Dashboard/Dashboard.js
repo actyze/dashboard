@@ -220,11 +220,14 @@ const Dashboard = () => {
   };
 
   const handleSaveTile = async (tileFormData) => {
+    console.log('Dashboard - Received tile form data:', tileFormData);
+    console.log('Dashboard - Editing tile:', editingTile);
+    
     let response;
     
     if (editingTile) {
       // Update existing tile
-      response = await DashboardService.updateTile(id, editingTile.id, {
+      const updatePayload = {
         title: tileFormData.title,
         description: tileFormData.description || null,
         sql_query: tileFormData.sqlQuery,
@@ -236,11 +239,20 @@ const Dashboard = () => {
         width: tileFormData.width || editingTile.width,
         height: tileFormData.height || editingTile.height,
         refresh_interval_seconds: tileFormData.refresh_interval_seconds || null
-      });
+      };
+      
+      console.log('Dashboard - Update payload to API:', updatePayload);
+      
+      response = await DashboardService.updateTile(id, editingTile.id, updatePayload);
+      
+      console.log('Dashboard - Update response from API:', response);
 
       if (response.success) {
+        console.log('Dashboard - Updated tile from API:', response.tile);
         setTiles(prev => prev.map(t => t.id === response.tile.id ? response.tile : t));
         executeTileQuery(response.tile);
+      } else {
+        console.error('Dashboard - Update failed:', response.error);
       }
     } else {
       // Create new tile

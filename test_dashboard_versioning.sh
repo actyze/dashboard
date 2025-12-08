@@ -364,10 +364,10 @@ VIEWER_PUBLISH=$(curl -s -X POST "$BASE_URL/api/dashboards/$DRAFT_DASHBOARD_ID/p
     -d '{"version_notes": "Attempt by viewer"}')
 
 VIEWER_ERROR=$(echo "$VIEWER_PUBLISH" | jq -r '.detail // .error // "no error"')
-if [[ "$VIEWER_ERROR" == *"Permission denied"* ]] || [[ "$VIEWER_ERROR" == *"403"* ]]; then
+if [[ "$VIEWER_ERROR" == *"Permission denied"* ]] || [[ "$VIEWER_ERROR" == *"Operation not permitted"* ]] || [[ "$VIEWER_ERROR" == *"not permitted"* ]]; then
     print_result "Viewer cannot publish dashboard" "PASS"
 else
-    print_result "Viewer cannot publish dashboard" "FAIL" "Should have been denied"
+    print_result "Viewer cannot publish dashboard" "FAIL" "Should have been denied. Got: $VIEWER_ERROR"
 fi
 
 # Editor should be able to publish

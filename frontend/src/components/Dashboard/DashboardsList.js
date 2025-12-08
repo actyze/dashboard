@@ -222,9 +222,9 @@ const DashboardsList = () => {
             ) : (
               filteredDashboards.map((dashboard) => (
                 <div 
-                  key={dashboard.dashboard_id}
+                  key={dashboard.id}
                   className={`px-6 py-4 cursor-pointer transition-colors ${isDark ? 'hover:bg-gray-750' : 'hover:bg-gray-50'}`}
-                  onClick={() => navigate(`/dashboard/${dashboard.dashboard_id}`)}
+                  onClick={() => navigate(`/dashboard/${dashboard.id}`)}
                 >
                   <div className="grid grid-cols-12 gap-4 items-center">
                     <div className="col-span-5 flex items-center space-x-3">
@@ -272,9 +272,9 @@ const DashboardsList = () => {
                       </Text>
                     </div>
                     <div className="col-span-1 flex justify-end">
-                      {dashboard.can_delete && (
+                      {dashboard.permissions?.can_delete && (
                         <button 
-                          onClick={(e) => handleDeleteDashboard(e, dashboard.dashboard_id)}
+                          onClick={(e) => handleDeleteDashboard(e, dashboard.id)}
                           className={`p-1 rounded ${isDark ? 'hover:bg-red-900/30 text-red-400' : 'hover:bg-red-100 text-red-600'}`}
                           title="Delete dashboard"
                         >

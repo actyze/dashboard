@@ -1,46 +1,91 @@
 import React, { useState, useEffect } from 'react';
-import { Grid, IconButton, Typography, Menu, MenuItem } from '@mui/material';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Grid, IconButton, Typography, Menu, MenuItem, CircularProgress } from '@mui/material';
 import { Card, Button } from '../ui';
 import { useTheme } from '../../contexts/ThemeContext';
 import SqlTileModal from './SqlTileModal';
 import { QueryResults } from '../QueryExplorer';
 import { Chart } from '../Charts';
-import { QueryExecutionService } from '../../services/QueryExecutionService';
+import { QueryExecutionService, DashboardService } from '../../services';
 
 const Dashboard = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
   const { isDark } = useTheme();
+  const [dashboard, setDashboard] = useState(null);
   const [tiles, setTiles] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTile, setEditingTile] = useState(null);
+  const [loadingDashboard, setLoadingDashboard] = useState(true);
   const [loadingTiles, setLoadingTiles] = useState({});
   const [tileData, setTileData] = useState({});
   const [tileErrors, setTileErrors] = useState({});
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedTileId, setSelectedTileId] = useState(null);
+  const [dashboardError, setDashboardError] = useState(null);
 
-  // Load tiles from localStorage on mount
+  // Load dashboard and tiles on mount or when ID changes
   useEffect(() => {
-    const savedTiles = localStorage.getItem('dashboardTiles');
-    if (savedTiles) {
-      try {
-        const parsedTiles = JSON.parse(savedTiles);
-        setTiles(parsedTiles);
+    if (id && id !== 'new') {
+      loadDashboard();
+    } else if (id === 'new') {
+      // Create a new dashboard
+      createNewDashboard();
+    }
+  }, [id]);
+
+  const createNewDashboard = async () => {
+    setLoadingDashboard(true);
+    const response = await DashboardService.createDashboard({
+      title: 'New Dashboard',
+      description: 'Dashboard created on ' + new Date().toLocaleDateString(),
+      is_public: false,
+      configuration: {}
+    });
+
+    if (response.success) {
+      // Redirect to the new dashboard
+      navigate(`/dashboard/${response.dashboard.id}`, { replace: true });
+    } else {
+      setDashboardError(response.error);
+      setLoadingDashboard(false);
+    }
+  };
+
+  const loadDashboard = async () => {
+    setLoadingDashboard(true);
+    setDashboardError(null);
+
+    try {
+      // Load dashboard details
+      const dashboardResponse = await DashboardService.getDashboard(id);
+      
+      if (!dashboardResponse.success) {
+        setDashboardError(dashboardResponse.error);
+        setLoadingDashboard(false);
+        return;
+      }
+
+      setDashboard(dashboardResponse.dashboard);
+
+      // Load tiles for this dashboard
+      const tilesResponse = await DashboardService.getTiles(id);
+      
+      if (tilesResponse.success) {
+        setTiles(tilesResponse.tiles);
+        
         // Execute queries for all tiles
-        parsedTiles.forEach(tile => {
+        tilesResponse.tiles.forEach(tile => {
           executeTileQuery(tile);
         });
-      } catch (error) {
-        console.error('Error loading tiles:', error);
       }
+    } catch (error) {
+      console.error('Error loading dashboard:', error);
+      setDashboardError(error.message);
+    } finally {
+      setLoadingDashboard(false);
     }
-  }, []);
-
-  // Save tiles to localStorage whenever they change
-  useEffect(() => {
-    if (tiles.length > 0) {
-      localStorage.setItem('dashboardTiles', JSON.stringify(tiles));
-    }
-  }, [tiles]);
+  };
 
   const executeTileQuery = async (tile) => {
     setLoadingTiles(prev => ({ ...prev, [tile.id]: true }));
@@ -48,13 +93,13 @@ const Dashboard = () => {
 
     try {
       // Execute the SQL query
-      const response = await QueryExecutionService.executeQuery(tile.sqlQuery);
+      const response = await QueryExecutionService.executeQuery(tile.sql_query);
       
       if (response.error) {
         throw new Error(response.error);
       }
 
-      // Store the query results - response.data contains the actual data
+      // Store the query results
       const responseData = response.data || {};
       const queryData = {
         data: responseData.data || [],
@@ -62,19 +107,23 @@ const Dashboard = () => {
         rowCount: responseData.rowCount || 0
       };
 
+      // Prepare chart data if needed
+      const chartData = tile.chart_type !== 'table' ? {
+        chart: {
+          type: tile.chart_type,
+          config: tile.chart_config || {},
+          fallback: false,
+          source: 'tile'
+        },
+        data: queryData,
+        cached: false
+      } : null;
+
       setTileData(prev => ({
         ...prev,
         [tile.id]: {
           queryResults: queryData,
-          chartData: tile.chartType !== 'table' ? {
-            chart: {
-              type: tile.chartType,
-              config: autoDetectChartConfig(queryData, tile.chartType),
-              fallback: false
-            },
-            data: queryData,
-            cached: false
-          } : null
+          chartData
         }
       }));
     } catch (error) {
@@ -83,29 +132,6 @@ const Dashboard = () => {
     } finally {
       setLoadingTiles(prev => ({ ...prev, [tile.id]: false }));
     }
-  };
-
-  const autoDetectChartConfig = (queryData, chartType) => {
-    if (!queryData || !queryData.columns || queryData.columns.length === 0) {
-      return null;
-    }
-
-    const columns = queryData.columns;
-    const stringColumn = columns.find(col => col.type === 'string');
-    const numericColumn = columns.find(col => col.type === 'number');
-
-    if (!stringColumn || !numericColumn) {
-      // Use first two columns as fallback
-      return {
-        xField: columns[0]?.name || 'x',
-        yField: columns[1]?.name || 'y'
-      };
-    }
-
-    return {
-      xField: stringColumn.name,
-      yField: numericColumn.name
-    };
   };
 
   const handleCreateTile = () => {
@@ -119,33 +145,99 @@ const Dashboard = () => {
     handleMenuClose();
   };
 
-  const handleDeleteTile = (tileId) => {
-    setTiles(prev => prev.filter(t => t.id !== tileId));
-    setTileData(prev => {
-      const newData = { ...prev };
-      delete newData[tileId];
-      return newData;
-    });
-    setTileErrors(prev => {
-      const newErrors = { ...prev };
-      delete newErrors[tileId];
-      return newErrors;
-    });
+  const handleDeleteTile = async (tileId) => {
+    if (!window.confirm('Are you sure you want to delete this tile?')) {
+      return;
+    }
+
+    const response = await DashboardService.deleteTile(id, tileId);
+    
+    if (response.success) {
+      setTiles(prev => prev.filter(t => t.id !== tileId));
+      setTileData(prev => {
+        const newData = { ...prev };
+        delete newData[tileId];
+        return newData;
+      });
+      setTileErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[tileId];
+        return newErrors;
+      });
+    } else {
+      alert(`Failed to delete tile: ${response.error}`);
+    }
+    
     handleMenuClose();
   };
 
-  const handleSaveTile = (tileData) => {
+  const handleSaveTile = async (tileFormData) => {
+    let response;
+    
     if (editingTile) {
       // Update existing tile
-      setTiles(prev => prev.map(t => t.id === tileData.id ? tileData : t));
+      response = await DashboardService.updateTile(id, editingTile.id, {
+        title: tileFormData.title,
+        description: tileFormData.description || null,
+        sql_query: tileFormData.sqlQuery,
+        nl_query: tileFormData.nlQuery || null,
+        chart_type: tileFormData.chartType,
+        chart_config: tileFormData.chartConfig || {},
+        position_x: tileFormData.position_x || editingTile.position_x,
+        position_y: tileFormData.position_y || editingTile.position_y,
+        width: tileFormData.width || editingTile.width,
+        height: tileFormData.height || editingTile.height,
+        refresh_interval_seconds: tileFormData.refresh_interval_seconds || null
+      });
+
+      if (response.success) {
+        setTiles(prev => prev.map(t => t.id === response.tile.id ? response.tile : t));
+        executeTileQuery(response.tile);
+      }
     } else {
-      // Add new tile
-      setTiles(prev => [...prev, tileData]);
+      // Create new tile
+      const nextPosition = calculateNextTilePosition();
+      
+      response = await DashboardService.createTile(id, {
+        title: tileFormData.title,
+        description: tileFormData.description || null,
+        sql_query: tileFormData.sqlQuery,
+        nl_query: tileFormData.nlQuery || null,
+        chart_type: tileFormData.chartType,
+        chart_config: tileFormData.chartConfig || {},
+        position_x: nextPosition.x,
+        position_y: nextPosition.y,
+        width: 6,
+        height: 4,
+        refresh_interval_seconds: null
+      });
+
+      if (response.success) {
+        setTiles(prev => [...prev, response.tile]);
+        executeTileQuery(response.tile);
+      }
     }
     
-    // Execute the query for the new/updated tile
-    executeTileQuery(tileData);
+    if (!response.success) {
+      alert(`Failed to save tile: ${response.error}`);
+      return;
+    }
+    
     setModalOpen(false);
+  };
+
+  const calculateNextTilePosition = () => {
+    if (tiles.length === 0) {
+      return { x: 0, y: 0 };
+    }
+    
+    // Find the max Y position and add height
+    const maxTile = tiles.reduce((max, tile) => {
+      const tileBottom = (tile.position_y || 0) + (tile.height || 4);
+      return tileBottom > max.bottom ? { bottom: tileBottom, tile } : max;
+    }, { bottom: 0, tile: null });
+
+    return { x: 0, y: maxTile.bottom };
   };
 
   const handleRefreshTile = (tile) => {
@@ -169,7 +261,7 @@ const Dashboard = () => {
     const data = tileData[tile.id];
 
     return (
-      <Grid item xs={12} md={6} key={tile.id}>
+      <Grid item xs={12} md={tile.width || 6} key={tile.id}>
         <Card className={`h-full ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
           <Card.Header className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 py-2 px-3">
             <Card.Title className="text-sm font-medium">{tile.title}</Card.Title>
@@ -196,7 +288,7 @@ const Dashboard = () => {
                   {error}
                 </Typography>
               </div>
-            ) : tile.chartType === 'table' ? (
+            ) : tile.chart_type === 'table' ? (
               <div className="w-full" style={{ maxHeight: '300px', overflow: 'auto' }}>
                 <QueryResults 
                   queryData={data?.queryResults}
@@ -228,6 +320,49 @@ const Dashboard = () => {
 
   const selectedTile = tiles.find(t => t.id === selectedTileId);
 
+  if (loadingDashboard) {
+    return (
+      <div className={`h-full flex items-center justify-center ${isDark ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
+        <div className="text-center">
+          <CircularProgress size={40} />
+          <Typography 
+            variant="body1" 
+            className="mt-4"
+            sx={{ color: isDark ? '#9ca3af' : '#6b7280' }}
+          >
+            Loading dashboard...
+          </Typography>
+        </div>
+      </div>
+    );
+  }
+
+  if (dashboardError) {
+    return (
+      <div className={`h-full flex items-center justify-center ${isDark ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
+        <div className="text-center">
+          <div className="text-red-500 dark:text-red-400 mb-4">
+            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <Typography variant="h6" className="mb-2" sx={{ color: isDark ? '#fff' : 'inherit' }}>
+            Failed to load dashboard
+          </Typography>
+          <Typography variant="body2" sx={{ color: isDark ? '#9ca3af' : '#6b7280' }}>
+            {dashboardError}
+          </Typography>
+          <Button 
+            onClick={() => navigate('/dashboards')}
+            className="mt-4"
+          >
+            Back to Dashboards
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`h-full flex flex-col ${isDark ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
       {/* Header */}
@@ -235,6 +370,18 @@ const Dashboard = () => {
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center space-x-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/dashboards')}
+                leftIcon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                }
+              >
+                Back
+              </Button>
               <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
                 <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 12a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1v-7z" />
@@ -245,13 +392,13 @@ const Dashboard = () => {
                   variant="h5" 
                   className="font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent dark:from-white dark:to-gray-300"
                 >
-                  Dashboard
+                  {dashboard?.title || 'Dashboard'}
                 </Typography>
                 <Typography 
                   className="mt-0.5 text-sm"
                   sx={{ color: isDark ? '#9ca3af' : '#6b7280' }}
                 >
-                  Create and manage your SQL query tiles
+                  {dashboard?.description || 'View and manage your dashboard tiles'}
                 </Typography>
               </div>
             </div>
@@ -269,7 +416,7 @@ const Dashboard = () => {
               className="font-medium text-sm"
               sx={{ color: isDark ? '#d1d5db' : '#374151' }}
             >
-              Your Tiles
+              Tiles ({tiles.length})
             </Typography>
             <Button 
               onClick={handleCreateTile}
@@ -286,7 +433,6 @@ const Dashboard = () => {
           </div>
 
           {tiles.length === 0 ? (
-
             <div className="flex flex-col items-center justify-center min-h-96">
               <div className="text-center">
                 <div className="flex items-center justify-center gap-2 mb-4">
@@ -390,4 +536,3 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
-

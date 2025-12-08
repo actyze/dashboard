@@ -277,6 +277,8 @@ $$ LANGUAGE plpgsql;
 -- =====================================================
 -- Drafts only visible to owner, published visible per RBAC
 
+DROP FUNCTION IF EXISTS nexus.get_user_dashboards(UUID);
+
 CREATE OR REPLACE FUNCTION nexus.get_user_dashboards(p_user_id UUID)
 RETURNS TABLE (
     dashboard_id UUID,

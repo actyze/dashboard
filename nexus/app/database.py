@@ -134,50 +134,79 @@ class ConversationHistory(Base):
 
 
 class QueryHistory(Base):
-    """Query execution history for analytics and caching."""
+    """Query execution history with de-duplication based on query hash."""
     __tablename__ = "query_history"
+    __table_args__ = {'schema': 'nexus'}
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), nullable=False, index=True)
-    session_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    query_hash: Mapped[Optional[str]] = mapped_column(String(64), index=True)  # SHA-256 of SQL + user_id
+    session_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     query_name: Mapped[Optional[str]] = mapped_column(String(255))
     query_type: Mapped[str] = mapped_column(String(20), nullable=False, default='natural_language', index=True)  # 'natural_language' or 'manual'
-    natural_language_query: Mapped[str] = mapped_column(Text, nullable=False)
-    generated_sql: Mapped[Optional[str]] = mapped_column(Text)
+    natural_language_query: Mapped[Optional[str]] = mapped_column(Text)
+    generated_sql: Mapped[str] = mapped_column(Text, nullable=False)
     execution_status: Mapped[str] = mapped_column(String(20), nullable=False)  # 'success', 'error', 'timeout'
     execution_time_ms: Mapped[Optional[int]] = mapped_column(Integer)
     llm_response_time_ms: Mapped[Optional[int]] = mapped_column(Integer)
     row_count: Mapped[Optional[int]] = mapped_column(Integer)
+    execution_count: Mapped[int] = mapped_column(Integer, default=1)  # Track number of executions
     error_message: Mapped[Optional[str]] = mapped_column(Text)
     schema_recommendations: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON)
     chart_recommendation: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON)
     model_confidence: Mapped[Optional[float]] = mapped_column()
+    model_reasoning: Mapped[Optional[str]] = mapped_column(Text)
     retry_attempts: Mapped[int] = mapped_column(Integer, default=0)
     generated_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     executed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    last_executed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)  # For de-duplication
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
 
 
-class SavedQueries(Base):
-    """User-saved queries for reuse."""
-    __tablename__ = "saved_queries"
+class FavoriteQueries(Base):
+    """User's favorite/saved queries for reuse."""
+    __tablename__ = "favorite_queries"
+    __table_args__ = {'schema': 'nexus'}
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), nullable=False, index=True)
     owner_group_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("nexus.groups.id", ondelete="SET NULL"))
-    query_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    query_name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
-    natural_language_query: Mapped[str] = mapped_column(Text, nullable=False)
+    natural_language_query: Mapped[Optional[str]] = mapped_column(Text)
     generated_sql: Mapped[str] = mapped_column(Text, nullable=False)
-    is_favorite: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_favorite: Mapped[bool] = mapped_column(Boolean, default=True)
     chart_recommendation: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON)
+    version: Mapped[int] = mapped_column(Integer, default=1)
     execution_count: Mapped[int] = mapped_column(Integer, default=0)
     last_executed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     created_from_history_id: Mapped[Optional[int]] = mapped_column(ForeignKey("nexus.query_history.id", ondelete="SET NULL"))
     tags: Mapped[Optional[List[str]]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# Keep SavedQueries as an alias for backward compatibility
+SavedQueries = FavoriteQueries
+
+
+class FavoriteQueryVersion(Base):
+    """Version history for favorite queries."""
+    __tablename__ = "favorite_query_versions"
+    __table_args__ = {'schema': 'nexus'}
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    favorite_query_id: Mapped[int] = mapped_column(ForeignKey("nexus.favorite_queries.id", ondelete="CASCADE"), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    query_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    natural_language_query: Mapped[Optional[str]] = mapped_column(Text)
+    generated_sql: Mapped[str] = mapped_column(Text, nullable=False)
+    chart_recommendation: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON)
+    version_notes: Mapped[Optional[str]] = mapped_column(Text)
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("nexus.users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class DatabaseManager:

@@ -1,7 +1,7 @@
 """User management and authentication service."""
 
 from typing import List, Dict, Any, Optional
-from sqlalchemy import select, update, delete, and_
+from sqlalchemy import select, update, delete, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 from datetime import datetime, timedelta
@@ -9,7 +9,9 @@ import uuid
 
 from app.database import (
     db_manager, User, UserPreferences, ConversationHistory, 
-    QueryHistory, SavedQueries, Role, UserRole, Group, UserGroup, GroupRole, RefreshToken
+    QueryHistory, FavoriteQueries, FavoriteQueryVersion, 
+    SavedQueries,  # Alias for backward compatibility
+    Role, UserRole, Group, UserGroup, GroupRole, RefreshToken
 )
 from app.auth.utils import get_password_hash, verify_password, create_access_token
 
@@ -229,58 +231,46 @@ class UserService:
         query_type: str = 'natural_language',
         chart_recommendation: Optional[Dict] = None,
         llm_response_time_ms: Optional[int] = None,
+        model_reasoning: Optional[str] = None,
         generated_at: Optional[datetime] = None,
         executed_at: Optional[datetime] = None
     ):
-        """Save query execution to history with all tracking fields."""
+        """
+        Save query execution to history with de-duplication.
+        
+        Uses upsert_query_history SQL function to:
+        - Find existing query by hash (SQL + user_id)
+        - Update execution count and metadata if found
+        - Create new entry if not found
+        """
         async with db_manager.get_session() as session:
             try:
-                # Set timestamps if not provided
-                now = datetime.utcnow()
-                if generated_at is None:
-                    generated_at = now
-                if executed_at is None:
-                    executed_at = now
-                
-                # For manual queries, generate a title if not provided
-                if query_type == 'manual' and not query_name and generated_sql:
-                    # Simple title generation based on SQL
-                    if 'SELECT' in generated_sql.upper():
-                        query_name = "Manual Query"
-                    else:
-                        query_name = "SQL Query"
-                
-                query_history = QueryHistory(
-                    user_id=uuid.UUID(user_id),
-                    session_id=session_id,
-                    query_name=query_name,
-                    query_type=query_type,
-                    natural_language_query=natural_language_query,
-                    generated_sql=generated_sql,
-                    execution_status=execution_status,
-                    execution_time_ms=execution_time_ms,
-                    row_count=row_count,
-                    error_message=error_message,
-                    schema_recommendations=schema_recommendations or {},
-                    model_confidence=model_confidence,
-                    retry_attempts=retry_attempts,
-                    chart_recommendation=chart_recommendation or {},
-                    llm_response_time_ms=llm_response_time_ms,
-                    generated_at=generated_at,
-                    executed_at=executed_at
+                # Call the SQL function for upsert
+                result = await session.execute(
+                    select(func.nexus.upsert_query_history(
+                        uuid.UUID(user_id),
+                        natural_language_query,
+                        generated_sql,
+                        execution_status,
+                        execution_time_ms,
+                        row_count,
+                        chart_recommendation,
+                        model_reasoning,
+                        schema_recommendations,
+                        llm_response_time_ms
+                    ))
                 )
-                session.add(query_history)
+                query_id = result.scalar_one()
                 await session.commit()
-                await session.refresh(query_history)
                 
-                self.logger.info("Query execution saved to history",
-                    query_id=query_history.id,
+                self.logger.info("Query execution saved to history (de-duplicated)",
+                    query_id=str(query_id),
                     user_id=user_id,
                     query_type=query_type,
                     status=execution_status
                 )
                 
-                return {"success": True, "query_id": query_history.id}
+                return {"success": True, "query_id": str(query_id)}
             except Exception as e:
                 await session.rollback()
                 self.logger.error("Failed to save query execution", error=str(e))
@@ -523,16 +513,47 @@ class UserService:
         natural_language_query: Optional[str] = None,
         generated_sql: Optional[str] = None,
         is_favorite: Optional[bool] = None,
-        tags: Optional[List[str]] = None
+        tags: Optional[List[str]] = None,
+        chart_recommendation: Optional[Dict] = None,
+        version_notes: Optional[str] = None
     ):
-        """Update a saved query."""
+        """
+        Update a favorite query.
+        
+        If SQL changes, automatically creates a version snapshot using the
+        update_favorite_query_sql SQL function.
+        """
         async with db_manager.get_session() as session:
             try:
+                user_uuid = uuid.UUID(user_id)
+                
+                # Check if SQL is being updated
+                if generated_sql is not None:
+                    # Use SQL function for versioning
+                    result = await session.execute(
+                        select(func.nexus.update_favorite_query_sql(
+                            query_id,
+                            user_uuid,
+                            generated_sql,
+                            natural_language_query,
+                            chart_recommendation,
+                            version_notes
+                        ))
+                    )
+                    new_version = result.scalar_one()
+                    await session.commit()
+                    
+                    self.logger.info("Favorite query SQL updated (versioned)",
+                        query_id=query_id,
+                        new_version=new_version
+                    )
+                
+                # Update non-SQL fields separately (doesn't trigger versioning)
                 result = await session.execute(
-                    select(SavedQueries).where(
+                    select(FavoriteQueries).where(
                         and_(
-                            SavedQueries.id == query_id,
-                            SavedQueries.user_id == uuid.UUID(user_id)
+                            FavoriteQueries.id == query_id,
+                            FavoriteQueries.user_id == user_uuid
                         )
                     )
                 )
@@ -541,15 +562,11 @@ class UserService:
                 if not query:
                     return {"success": False, "error": "Query not found or access denied"}
                 
-                # Update fields if provided
+                # Update non-SQL fields
                 if query_name is not None:
                     query.query_name = query_name
                 if description is not None:
                     query.description = description
-                if natural_language_query is not None:
-                    query.natural_language_query = natural_language_query
-                if generated_sql is not None:
-                    query.generated_sql = generated_sql
                 if is_favorite is not None:
                     query.is_favorite = is_favorite
                 if tags is not None:
@@ -558,12 +575,12 @@ class UserService:
                 query.updated_at = datetime.utcnow()
                 await session.commit()
                 
-                self.logger.info("Saved query updated", query_id=query_id)
-                return {"success": True}
+                self.logger.info("Favorite query updated", query_id=query_id)
+                return {"success": True, "version": query.version}
                 
             except Exception as e:
                 await session.rollback()
-                self.logger.error("Failed to update saved query", error=str(e))
+                self.logger.error("Failed to update favorite query", error=str(e))
                 return {"success": False, "error": str(e)}
     
     async def delete_saved_query(self, query_id: int, user_id: str):
@@ -637,9 +654,102 @@ class UserService:
                     history_id=history_id, 
                     saved_query_id=saved_query.id
                 )
-                return {"success": True, "query_id": saved_query.id}
+                return {"success": True, "query_id": str(saved_query.id)}
                 
             except Exception as e:
                 await session.rollback()
                 self.logger.error("Failed to save query from history", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    async def get_favorite_query_versions(
+        self,
+        query_id: int,
+        user_id: str
+    ):
+        """Get all versions of a favorite query."""
+        async with db_manager.get_session() as session:
+            try:
+                user_uuid = uuid.UUID(user_id)
+                
+                # Check if user owns the query
+                result = await session.execute(
+                    select(FavoriteQueries).where(
+                        and_(
+                            FavoriteQueries.id == query_id,
+                            FavoriteQueries.user_id == user_uuid
+                        )
+                    )
+                )
+                query = result.scalar_one_or_none()
+                
+                if not query:
+                    return {"success": False, "error": "Query not found or access denied"}
+                
+                # Get all versions
+                versions_result = await session.execute(
+                    select(FavoriteQueryVersion)
+                    .where(FavoriteQueryVersion.favorite_query_id == query_id)
+                    .order_by(FavoriteQueryVersion.version.desc())
+                )
+                versions = versions_result.scalars().all()
+                
+                return {
+                    "success": True,
+                    "current_version": query.version,
+                    "versions": [
+                        {
+                            "version": v.version,
+                            "query_name": v.query_name,
+                            "description": v.description,
+                            "natural_language_query": v.natural_language_query,
+                            "generated_sql": v.generated_sql,
+                            "chart_recommendation": v.chart_recommendation,
+                            "version_notes": v.version_notes,
+                            "created_by": str(v.created_by) if v.created_by else None,
+                            "created_at": v.created_at.isoformat()
+                        }
+                        for v in versions
+                    ]
+                }
+            except Exception as e:
+                self.logger.error("Failed to get favorite query versions", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    async def revert_favorite_query_version(
+        self,
+        query_id: int,
+        user_id: str,
+        target_version: int
+    ):
+        """Revert a favorite query to a previous version."""
+        async with db_manager.get_session() as session:
+            try:
+                user_uuid = uuid.UUID(user_id)
+                
+                # Use SQL function for revert (creates auto-save snapshot)
+                result = await session.execute(
+                    select(func.nexus.revert_favorite_query_version(
+                        query_id,
+                        target_version,
+                        user_uuid
+                    ))
+                )
+                new_version = result.scalar_one()
+                await session.commit()
+                
+                self.logger.info("Favorite query reverted",
+                    query_id=query_id,
+                    target_version=target_version,
+                    new_version=new_version
+                )
+                
+                return {
+                    "success": True,
+                    "new_version": new_version,
+                    "reverted_to": target_version
+                }
+                
+            except Exception as e:
+                await session.rollback()
+                self.logger.error("Failed to revert favorite query version", error=str(e))
                 return {"success": False, "error": str(e)}

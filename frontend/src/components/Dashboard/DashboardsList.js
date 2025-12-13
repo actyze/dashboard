@@ -185,7 +185,11 @@ const DashboardsList = () => {
               {filteredDashboards.map((dashboard) => (
                 <div 
                   key={dashboard.id}
-                  onClick={() => navigate(`/dashboard/${dashboard.id}`)}
+                  onClick={() => navigate(
+                    dashboard.is_anonymous_public 
+                      ? `/public/dashboard/${dashboard.id}`
+                      : `/dashboard/${dashboard.id}`
+                  )}
                   className={`
                     grid grid-cols-12 gap-4 px-4 py-3 cursor-pointer transition-colors
                     border-b last:border-b-0
@@ -205,8 +209,19 @@ const DashboardsList = () => {
                     <span className={`truncate text-sm ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
                       {dashboard.title}
                     </span>
-                    {/* Public badge */}
-                    {dashboard.is_public && (
+                    {/* Public badges */}
+                    {dashboard.is_anonymous_public && (
+                      <span className={`
+                        flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded
+                        ${isDark 
+                          ? 'bg-blue-900/40 text-blue-400' 
+                          : 'bg-blue-100 text-blue-700'
+                        }
+                      `}>
+                        🌐 Anonymous
+                      </span>
+                    )}
+                    {dashboard.is_public && !dashboard.is_anonymous_public && (
                       <span className={`
                         flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded
                         ${isDark 

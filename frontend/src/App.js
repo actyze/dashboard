@@ -29,6 +29,9 @@ function App() {
           {/* Public Routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<Signup />} />
+          
+          {/* Public Dashboard Access (no auth required) */}
+          <Route path="/public/dashboard/:id" element={<Dashboard isPublic={true} />} />
 
           {/* Protected Routes */}
           <Route element={<PrivateRoutes />}>

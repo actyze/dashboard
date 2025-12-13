@@ -8,7 +8,7 @@ import { QueryResults } from '../QueryExplorer';
 import { Chart } from '../Charts';
 import { QueryExecutionService, DashboardService } from '../../services';
 
-const Dashboard = () => {
+const Dashboard = ({ isPublic = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isDark } = useTheme();
@@ -64,8 +64,10 @@ const Dashboard = () => {
     setDashboardError(null);
 
     try {
-      // Load dashboard details
-      const dashboardResponse = await DashboardService.getDashboard(id);
+      // Load dashboard details (use public API if in public mode)
+      const dashboardResponse = isPublic 
+        ? await DashboardService.getPublicDashboard(id)
+        : await DashboardService.getDashboard(id);
       
       if (!dashboardResponse.success) {
         setDashboardError(dashboardResponse.error);
@@ -75,8 +77,10 @@ const Dashboard = () => {
 
       setDashboard(dashboardResponse.dashboard);
 
-      // Load tiles for this dashboard
-      const tilesResponse = await DashboardService.getTiles(id);
+      // Load tiles for this dashboard (use public API if in public mode)
+      const tilesResponse = isPublic
+        ? await DashboardService.getPublicDashboardTiles(id)
+        : await DashboardService.getTiles(id);
       
       if (tilesResponse.success) {
         setTiles(tilesResponse.tiles);
@@ -351,15 +355,17 @@ const Dashboard = () => {
         <Card className={`h-full ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
           <Card.Header className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 py-2 px-3">
             <Card.Title className="text-sm font-medium">{tile.title}</Card.Title>
-            <IconButton 
-              size="small" 
-              onClick={(e) => handleMenuOpen(e, tile.id)}
-              sx={{ color: isDark ? '#9ca3af' : 'inherit' }}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-              </svg>
-            </IconButton>
+            {!isPublic && (
+              <IconButton 
+                size="small" 
+                onClick={(e) => handleMenuOpen(e, tile.id)}
+                sx={{ color: isDark ? '#9ca3af' : 'inherit' }}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                </svg>
+              </IconButton>
+            )}
           </Card.Header>
           
           <Card.Body className="p-0">
@@ -455,16 +461,18 @@ const Dashboard = () => {
       {/* Header */}
       <div className={`${isDark ? 'bg-gray-900/95 border-gray-800/60' : 'bg-white/95 border-gray-200/60'} border-b px-4 py-2 backdrop-blur-sm`}>
         <div className="flex items-center space-x-3">
-          {/* Back Button */}
-          <button
-            onClick={() => navigate('/dashboards')}
-            className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-300 hover:text-white' : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'}`}
-            title="Back to Dashboards"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
+          {/* Back Button - Only for authenticated users */}
+          {!isPublic && (
+            <button
+              onClick={() => navigate('/dashboards')}
+              className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-300 hover:text-white' : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'}`}
+              title="Back to Dashboards"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
           
           {/* Title */}
           <span className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
@@ -481,18 +489,20 @@ const Dashboard = () => {
       {/* Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 overflow-auto p-4 space-y-4">
-          {/* Action Bar */}
-          <div className="flex items-center justify-end">
-            <button 
-              onClick={handleCreateTile}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              New Tile
-            </button>
-          </div>
+          {/* Action Bar - Only show for authenticated users */}
+          {!isPublic && (
+            <div className="flex items-center justify-end">
+              <button 
+                onClick={handleCreateTile}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                New Tile
+              </button>
+            </div>
+          )}
 
           {tiles.length === 0 ? (
             <div className="flex flex-col items-center justify-center min-h-96">

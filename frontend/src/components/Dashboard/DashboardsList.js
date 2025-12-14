@@ -38,7 +38,9 @@ const DashboardsList = () => {
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     try {
-      const date = parseISO(dateString);
+      // Database returns UTC timestamps without 'Z', so add it to ensure proper parsing
+      const utcDateString = dateString.includes('Z') ? dateString : dateString + 'Z';
+      const date = parseISO(utcDateString);
       if (date.getFullYear() < 2000) return '-';
       return formatDistanceToNowStrict(date, { addSuffix: true });
     } catch {

@@ -395,6 +395,9 @@ class DashboardService:
             if not updates:
                 return True  # Nothing to update
             
+            # Always update the updated_at timestamp
+            updates.append("updated_at = CURRENT_TIMESTAMP")
+            
             async with db_manager.get_session() as session:
                 query = text(f"""
                     UPDATE nexus.dashboards 

@@ -146,7 +146,7 @@ const DashboardsList = () => {
         <div className={`grid grid-cols-12 gap-4 px-4 py-3 text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
           <div className="col-span-5">Title</div>
           <div className="col-span-2">Tiles</div>
-          <div className="col-span-2">Viewed</div>
+          <div className="col-span-2">Version</div>
           <div className="col-span-2">Updated</div>
           <div className="col-span-1"></div>
         </div>
@@ -185,11 +185,7 @@ const DashboardsList = () => {
               {filteredDashboards.map((dashboard) => (
                 <div 
                   key={dashboard.id}
-                  onClick={() => navigate(
-                    dashboard.is_anonymous_public 
-                      ? `/public/dashboard/${dashboard.id}`
-                      : `/dashboard/${dashboard.id}`
-                  )}
+                  onClick={() => navigate(`/dashboard/${dashboard.id}`)}
                   className={`
                     grid grid-cols-12 gap-4 px-4 py-3 cursor-pointer transition-colors
                     border-b last:border-b-0
@@ -241,10 +237,20 @@ const DashboardsList = () => {
                     </span>
                   </div>
                   
-                  {/* Viewed */}
+                  {/* Version */}
                   <div className="col-span-2 flex items-center">
                     <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {formatDate(dashboard.last_accessed_at)}
+                      v{dashboard.version || 1}
+                      {dashboard.status === 'draft' && (
+                        <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded ${isDark ? 'bg-yellow-900/40 text-yellow-400' : 'bg-yellow-100 text-yellow-700'}`}>
+                          Draft
+                        </span>
+                      )}
+                      {dashboard.status === 'published' && (
+                        <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded ${isDark ? 'bg-green-900/40 text-green-400' : 'bg-green-100 text-green-700'}`}>
+                          Published
+                        </span>
+                      )}
                     </span>
                   </div>
                   

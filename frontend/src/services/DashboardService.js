@@ -116,6 +116,23 @@ export const DashboardService = {
     }
   },
 
+  /**
+   * Publish a dashboard (creates a new version)
+   */
+  async publishDashboard(dashboardId, versionNotes = null) {
+    try {
+      const payload = versionNotes ? { version_notes: versionNotes } : {};
+      const response = await apiInstance.post(`/api/dashboards/${dashboardId}/publish`, payload);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to publish dashboard:', error);
+      return { 
+        success: false, 
+        error: error.response?.data?.detail || error.message 
+      };
+    }
+  },
+
   // ==================== Tile CRUD ====================
   
   /**

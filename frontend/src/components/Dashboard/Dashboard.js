@@ -343,6 +343,32 @@ const Dashboard = ({ isPublic = false }) => {
     }
   };
 
+  const handlePublish = async () => {
+    if (!dashboard?.id) return;
+    
+    const confirmed = window.confirm(
+      'Are you sure you want to publish this dashboard? This will create a new version and make it visible to others with access.'
+    );
+    
+    if (!confirmed) return;
+    
+    setLoadingDashboard(true);
+    try {
+      const response = await DashboardService.publishDashboard(dashboard.id);
+      if (response.success) {
+        // Reload dashboard to get updated status
+        await loadDashboard();
+        alert(`Dashboard published successfully! Version ${response.version}`);
+      } else {
+        alert(response.error || 'Failed to publish dashboard');
+      }
+    } catch (error) {
+      alert('Failed to publish dashboard: ' + error.message);
+    } finally {
+      setLoadingDashboard(false);
+    }
+  };
+
   const handleRefreshTile = (tile) => {
     executeTileQuery(tile);
     handleMenuClose();
@@ -502,18 +528,45 @@ const Dashboard = ({ isPublic = false }) => {
             </span>
           )}
           
-          {/* Settings Button - Only for authenticated users */}
+          {/* Action Buttons - Only for authenticated users */}
           {!isPublic && dashboard && (
-            <button
-              onClick={() => setDashboardSettingsOpen(true)}
-              className={`ml-auto p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-300 hover:text-white' : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'}`}
-              title="Dashboard Settings"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
+            <div className="ml-auto flex items-center gap-2">
+              {/* Status Badge */}
+              {dashboard.status && (
+                <span className={`
+                  px-2 py-1 text-xs font-medium rounded
+                  ${dashboard.status === 'published' 
+                    ? isDark ? 'bg-green-900/40 text-green-400' : 'bg-green-100 text-green-700'
+                    : isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'
+                  }
+                `}>
+                  {dashboard.status === 'published' ? '✓ Published' : '📝 Draft'}
+                </span>
+              )}
+              
+              {/* Publish Button - Only show for drafts */}
+              {dashboard.status === 'draft' && (
+                <button
+                  onClick={handlePublish}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${isDark ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`}
+                  title="Publish Dashboard"
+                >
+                  Publish
+                </button>
+              )}
+              
+              {/* Settings Button */}
+              <button
+                onClick={() => setDashboardSettingsOpen(true)}
+                className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-300 hover:text-white' : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'}`}
+                title="Dashboard Settings"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+            </div>
           )}
         </div>
       </div>

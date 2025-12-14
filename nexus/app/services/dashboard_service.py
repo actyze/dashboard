@@ -187,6 +187,10 @@ class DashboardService:
                         "is_favorite": row.is_favorite,
                         "tags": row.tags or [],
                         "tile_count": row.tile_count,
+                        "status": getattr(row, 'status', 'draft'),
+                        "version": getattr(row, 'version', 1),
+                        "published_at": row.published_at.isoformat() if hasattr(row, 'published_at') and row.published_at else None,
+                        "published_by": str(row.published_by) if hasattr(row, 'published_by') and row.published_by else None,
                         "permissions": {
                             "can_view": row.can_view,
                             "can_edit": row.can_edit,

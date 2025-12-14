@@ -207,6 +207,30 @@ const DashboardsList = () => {
                     <span className={`truncate text-sm ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
                       {dashboard.title}
                     </span>
+                    
+                    {/* Status Badge */}
+                    {dashboard.status === 'published' ? (
+                      <span className={`
+                        flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded
+                        ${isDark 
+                          ? 'bg-green-900/40 text-green-400' 
+                          : 'bg-green-100 text-green-700'
+                        }
+                      `}>
+                        ✓ Published
+                      </span>
+                    ) : dashboard.status === 'draft' ? (
+                      <span className={`
+                        flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded
+                        ${isDark 
+                          ? 'bg-gray-700 text-gray-300' 
+                          : 'bg-gray-200 text-gray-700'
+                        }
+                      `}>
+                        📝 Draft
+                      </span>
+                    ) : null}
+                    
                     {/* Public badges */}
                     {dashboard.is_anonymous_public && (
                       <span className={`
@@ -223,8 +247,8 @@ const DashboardsList = () => {
                       <span className={`
                         flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded
                         ${isDark 
-                          ? 'bg-green-900/40 text-green-400' 
-                          : 'bg-green-100 text-green-700'
+                          ? 'bg-blue-900/40 text-blue-400' 
+                          : 'bg-blue-50 text-blue-600'
                         }
                       `}>
                         Public

@@ -324,6 +324,7 @@ const Dashboard = ({ isPublic = false }) => {
     } else {
       // Updating existing dashboard
       setLoadingDashboard(true);
+      
       const response = await DashboardService.updateDashboard(dashboard.id, {
         title: dashboardData.title,
         description: dashboardData.description || '',
@@ -332,7 +333,8 @@ const Dashboard = ({ isPublic = false }) => {
       });
 
       if (response.success) {
-        setDashboard(response.dashboard);
+        // Reload dashboard to get updated data (backend doesn't return it)
+        await loadDashboard();
         setDashboardSettingsOpen(false);
       } else {
         alert(response.error || 'Failed to update dashboard');
@@ -490,8 +492,13 @@ const Dashboard = ({ isPublic = false }) => {
             {dashboard?.title || 'Dashboard'}
           </span>
           {dashboard?.description && (
-            <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-              — {dashboard.description}
+            <span 
+              className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'} max-w-xl truncate`}
+              title={dashboard.description}
+            >
+              — {dashboard.description.length > 100 
+                  ? `${dashboard.description.substring(0, 100)}...` 
+                  : dashboard.description}
             </span>
           )}
           

@@ -345,6 +345,7 @@ class DashboardService:
         layout_config: Optional[Dict[str, Any]] = None,
         tags: Optional[List[str]] = None,
         is_public: Optional[bool] = None,
+        is_anonymous_public: Optional[bool] = None,
         is_favorite: Optional[bool] = None
     ) -> bool:
         """Update dashboard (requires edit permission)"""
@@ -382,6 +383,10 @@ class DashboardService:
             if is_public is not None:
                 updates.append("is_public = :is_public")
                 params["is_public"] = is_public
+            
+            if is_anonymous_public is not None:
+                updates.append("is_anonymous_public = :is_anonymous_public")
+                params["is_anonymous_public"] = is_anonymous_public
             
             if is_favorite is not None:
                 updates.append("is_favorite = :is_favorite")

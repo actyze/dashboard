@@ -453,6 +453,7 @@ class UpdateDashboardRequest(BaseModel):
     layout_config: Optional[Dict[str, Any]] = None
     tags: Optional[List[str]] = None
     is_public: Optional[bool] = None
+    is_anonymous_public: Optional[bool] = None
     is_favorite: Optional[bool] = None
 
 class CreateTileRequest(BaseModel):
@@ -585,6 +586,7 @@ async def update_dashboard(
             layout_config=request.layout_config,
             tags=request.tags,
             is_public=request.is_public,
+            is_anonymous_public=request.is_anonymous_public,
             is_favorite=request.is_favorite
         )
         

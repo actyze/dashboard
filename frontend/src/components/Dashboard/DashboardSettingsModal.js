@@ -17,14 +17,11 @@ const DashboardSettingsModal = ({ open, onClose, onSave, initialData }) => {
     if (!open) return;
     
     if (initialData) {
-      // Handle both direct dashboard object and wrapped response {success: true, dashboard: {...}}
-      const dashboardData = initialData.dashboard || initialData;
-      
       setFormData({
-        title: dashboardData.title || '',
-        description: dashboardData.description || '',
-        is_public: dashboardData.is_public === true,
-        is_anonymous_public: dashboardData.is_anonymous_public === true,
+        title: initialData.title || '',
+        description: initialData.description || '',
+        is_public: initialData.is_public === true,
+        is_anonymous_public: initialData.is_anonymous_public === true,
       });
     } else {
       setFormData({

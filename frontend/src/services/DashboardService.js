@@ -33,10 +33,8 @@ export const DashboardService = {
   async getDashboard(dashboardId) {
     try {
       const response = await apiInstance.get(`/api/dashboards/${dashboardId}`);
-      return {
-        success: true,
-        dashboard: response.data
-      };
+      // Backend already returns {success: true, dashboard: {...}}
+      return response.data;
     } catch (error) {
       console.error('Failed to fetch dashboard:', error);
       return { 
@@ -85,15 +83,14 @@ export const DashboardService = {
         description: updates.description,
         configuration: updates.configuration,
         is_public: updates.is_public,
+        is_anonymous_public: updates.is_anonymous_public,
         is_favorite: updates.is_favorite,
         tags: updates.tags
       };
       
       const response = await apiInstance.put(`/api/dashboards/${dashboardId}`, payload);
-      return {
-        success: true,
-        dashboard: response.data
-      };
+      // Backend returns {success: true} only, not the updated dashboard
+      return response.data;
     } catch (error) {
       console.error('Failed to update dashboard:', error);
       return { 
@@ -306,10 +303,8 @@ export const DashboardService = {
   async getPublicDashboard(dashboardId) {
     try {
       const response = await apiInstance.get(`/api/public/dashboards/${dashboardId}`);
-      return {
-        success: true,
-        dashboard: response.data
-      };
+      // Backend already returns {success: true, dashboard: {...}}
+      return response.data;
     } catch (error) {
       console.error('Failed to fetch public dashboard:', error);
       return { 

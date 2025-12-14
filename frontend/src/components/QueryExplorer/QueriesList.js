@@ -86,7 +86,9 @@ const QueriesList = () => {
 
   const formatDate = (dateString) => {
     if (!dateString) return '-';
-    const date = new Date(dateString);
+    // Database returns UTC timestamps without 'Z', so add it to ensure proper parsing
+    const utcDateString = dateString.includes('Z') ? dateString : dateString + 'Z';
+    const date = new Date(utcDateString);
     
     if (isNaN(date.getTime()) || date.getFullYear() < 2000) {
       return '-';

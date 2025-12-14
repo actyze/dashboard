@@ -4,6 +4,7 @@ import { Grid, IconButton, Typography, Menu, MenuItem, CircularProgress } from '
 import { Card, Button } from '../ui';
 import { useTheme } from '../../contexts/ThemeContext';
 import SqlTileModal from './SqlTileModal';
+import DashboardSettingsModal from './DashboardSettingsModal';
 import { QueryResults } from '../QueryExplorer';
 import { Chart } from '../Charts';
 import { QueryExecutionService, DashboardService } from '../../services';
@@ -15,6 +16,7 @@ const Dashboard = ({ isPublic = false }) => {
   const [dashboard, setDashboard] = useState(null);
   const [tiles, setTiles] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [dashboardSettingsOpen, setDashboardSettingsOpen] = useState(false);
   const [editingTile, setEditingTile] = useState(null);
   const [loadingDashboard, setLoadingDashboard] = useState(true);
   const [loadingTiles, setLoadingTiles] = useState({});
@@ -32,28 +34,34 @@ const Dashboard = ({ isPublic = false }) => {
     if (id && id !== 'new') {
       loadDashboard();
     } else if (id === 'new') {
-      // Create a new dashboard (with guard against StrictMode double-call)
+      // Show dashboard settings modal for new dashboard
       if (!isCreatingRef.current) {
         isCreatingRef.current = true;
-        createNewDashboard();
+        setLoadingDashboard(false);
+        setDashboardSettingsOpen(true);
       }
     }
-  }, [id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, isPublic]);
 
-  const createNewDashboard = async () => {
+  const createNewDashboard = async (dashboardData) => {
     setLoadingDashboard(true);
     const response = await DashboardService.createDashboard({
-      title: 'New Dashboard',
-      description: 'Dashboard created on ' + new Date().toLocaleDateString(),
-      is_public: false,
+      title: dashboardData.title,
+      description: dashboardData.description || '',
+      is_public: dashboardData.is_public || false,
+      is_anonymous_public: dashboardData.is_anonymous_public || false,
       configuration: {}
     });
 
     if (response.success && response.dashboard?.id) {
+      // Reset ref before navigation
+      isCreatingRef.current = false;
+      setDashboardSettingsOpen(false);
       // Redirect to the new dashboard
       navigate(`/dashboard/${response.dashboard.id}`, { replace: true });
     } else {
-      setDashboardError(response.error || 'Failed to create dashboard');
+      alert(response.error || 'Failed to create dashboard');
       setLoadingDashboard(false);
       isCreatingRef.current = false; // Reset so user can retry
     }
@@ -99,16 +107,12 @@ const Dashboard = ({ isPublic = false }) => {
   };
 
   const executeTileQuery = async (tile) => {
-    console.log('Executing tile query:', tile.id, tile.title);
     setLoadingTiles(prev => ({ ...prev, [tile.id]: true }));
     setTileErrors(prev => ({ ...prev, [tile.id]: null }));
 
     try {
       // Execute the SQL query
-      console.log('SQL Query:', tile.sql_query);
       const response = await QueryExecutionService.executeQuery(tile.sql_query);
-      
-      console.log('Query response:', response);
       
       if (response.error) {
         throw new Error(response.error);
@@ -122,14 +126,11 @@ const Dashboard = ({ isPublic = false }) => {
         rowCount: responseData.rowCount || 0
       };
 
-      console.log('Query data:', queryData);
-
       // Prepare chart config - auto-detect if empty
       let chartConfig = tile.chart_config || {};
       
       // If chart_config is empty or missing fields, auto-detect from columns
       if (tile.chart_type !== 'table' && (!chartConfig.xField || !chartConfig.yField)) {
-        console.log('Auto-detecting chart config from columns:', queryData.columns);
         
         // Find first string column for x-axis
         const stringColumn = queryData.columns.find(col => 
@@ -150,7 +151,6 @@ const Dashboard = ({ isPublic = false }) => {
             x_column: stringColumn.name,  // Backend format
             y_column: numericColumn.name   // Backend format
           };
-          console.log('Auto-detected chart config:', chartConfig);
         } else if (queryData.columns.length >= 2) {
           // Fallback to first two columns
           chartConfig = {
@@ -175,8 +175,6 @@ const Dashboard = ({ isPublic = false }) => {
         data: queryData,
         cached: false
       } : null;
-
-      console.log('Setting tile data with chartData:', chartData);
 
       setTileData(prev => ({
         ...prev,
@@ -231,9 +229,6 @@ const Dashboard = ({ isPublic = false }) => {
   };
 
   const handleSaveTile = async (tileFormData) => {
-    console.log('Dashboard - Received tile form data:', tileFormData);
-    console.log('Dashboard - Editing tile:', editingTile);
-    
     let response;
     
     if (editingTile) {
@@ -252,15 +247,9 @@ const Dashboard = ({ isPublic = false }) => {
         refresh_interval_seconds: tileFormData.refresh_interval_seconds || null
       };
       
-      console.log('Dashboard - Update payload to API:', updatePayload);
-      
       response = await DashboardService.updateTile(id, editingTile.id, updatePayload);
-      
-      console.log('Dashboard - Update response from API:', response);
 
       if (response.success) {
-        console.log('Dashboard - Updated tile from API:', response.tile);
-        
         // Clear old tile data first to force re-render
         setTileData(prev => {
           const newData = { ...prev };
@@ -279,8 +268,6 @@ const Dashboard = ({ isPublic = false }) => {
         
         // Re-execute query with updated tile
         executeTileQuery(response.tile);
-      } else {
-        console.error('Dashboard - Update failed:', response.error);
       }
     } else {
       // Create new tile
@@ -328,6 +315,30 @@ const Dashboard = ({ isPublic = false }) => {
     }, { bottom: 0, tile: null });
 
     return { x: 0, y: maxTile.bottom };
+  };
+
+  const handleSaveDashboardSettings = async (dashboardData) => {
+    if (!dashboard) {
+      // Creating new dashboard
+      await createNewDashboard(dashboardData);
+    } else {
+      // Updating existing dashboard
+      setLoadingDashboard(true);
+      const response = await DashboardService.updateDashboard(dashboard.id, {
+        title: dashboardData.title,
+        description: dashboardData.description || '',
+        is_public: dashboardData.is_public || false,
+        is_anonymous_public: dashboardData.is_anonymous_public || false,
+      });
+
+      if (response.success) {
+        setDashboard(response.dashboard);
+        setDashboardSettingsOpen(false);
+      } else {
+        alert(response.error || 'Failed to update dashboard');
+      }
+      setLoadingDashboard(false);
+    }
   };
 
   const handleRefreshTile = (tile) => {
@@ -483,6 +494,20 @@ const Dashboard = ({ isPublic = false }) => {
               — {dashboard.description}
             </span>
           )}
+          
+          {/* Settings Button - Only for authenticated users */}
+          {!isPublic && dashboard && (
+            <button
+              onClick={() => setDashboardSettingsOpen(true)}
+              className={`ml-auto p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-300 hover:text-white' : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'}`}
+              title="Dashboard Settings"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
@@ -554,9 +579,30 @@ const Dashboard = ({ isPublic = false }) => {
 
       <SqlTileModal 
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => {
+          setModalOpen(false);
+          // If we're on the /new route and closing without creating, go back
+          if (id === 'new' && !dashboard) {
+            isCreatingRef.current = false; // Reset ref to allow creating again
+            navigate('/dashboards');
+          }
+        }}
         onSave={handleSaveTile}
         initialData={editingTile}
+      />
+
+      <DashboardSettingsModal 
+        open={dashboardSettingsOpen}
+        onClose={() => {
+          setDashboardSettingsOpen(false);
+          // If we're on the /new route and closing without creating, go back
+          if (id === 'new' && !dashboard) {
+            isCreatingRef.current = false; // Reset ref to allow creating again
+            navigate('/dashboards');
+          }
+        }}
+        onSave={handleSaveDashboardSettings}
+        initialData={dashboard}
       />
 
       <Menu

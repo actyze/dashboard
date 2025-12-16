@@ -507,6 +507,68 @@ class DashboardService:
             logger.error(f"Failed to get tiles for dashboard {dashboard_id}: {str(e)}")
             raise
     
+    async def get_tile_by_id(
+        self,
+        tile_id: str,
+        dashboard_id: str,
+        user_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get a single tile by ID (requires view permission on dashboard).
+        Useful for refreshing just one tile after an update.
+        """
+        try:
+            # Check permission
+            has_permission = await self.check_permission(user_id, dashboard_id, "view")
+            if not has_permission:
+                return None
+            
+            async with db_manager.get_session() as session:
+                query = text("""
+                    SELECT 
+                        dt.*,
+                        u.username as created_by_username
+                    FROM nexus.dashboard_tiles dt
+                    LEFT JOIN nexus.users u ON dt.created_by = u.id
+                    WHERE dt.id = :tile_id AND dt.dashboard_id = :dashboard_id
+                """)
+                
+                result = await session.execute(query, {
+                    "tile_id": tile_id,
+                    "dashboard_id": dashboard_id
+                })
+                
+                row = result.fetchone()
+                if not row:
+                    return None
+                
+                return {
+                    "id": str(row.id),
+                    "dashboard_id": str(row.dashboard_id),
+                    "title": row.title,
+                    "description": row.description,
+                    "sql_query": row.sql_query,
+                    "natural_language_query": row.natural_language_query,
+                    "chart_type": row.chart_type,
+                    "chart_config": row.chart_config,
+                    "position": {
+                        "x": row.position_x,
+                        "y": row.position_y,
+                        "width": row.width,
+                        "height": row.height
+                    },
+                    "refresh_interval_seconds": row.refresh_interval_seconds,
+                    "last_refreshed_at": row.last_refreshed_at.isoformat() if row.last_refreshed_at else None,
+                    "created_by": str(row.created_by) if row.created_by else None,
+                    "created_by_username": row.created_by_username,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                    "updated_at": row.updated_at.isoformat() if row.updated_at else None
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to get tile {tile_id}: {str(e)}")
+            raise
+    
     async def create_tile(
         self,
         dashboard_id: str,
@@ -562,18 +624,17 @@ class DashboardService:
                 })
                 
                 row = result.fetchone()
+                tile_id = str(row.id)
                 await session.commit()
                 
-                logger.info(f"Created tile {row.id} in dashboard {dashboard_id}")
-                
-                return {
-                    "id": str(row.id),
-                    "dashboard_id": dashboard_id,
-                    "title": title,
-                    "chart_type": chart_type,
-                    "created_at": row.created_at.isoformat(),
-                    "updated_at": row.updated_at.isoformat()
-                }
+                logger.info(f"Created tile {tile_id} in dashboard {dashboard_id}")
+            
+            # Fetch and return the full tile object (consistent with update_tile)
+            tile = await self.get_tile_by_id(tile_id, dashboard_id, user_id)
+            if not tile:
+                raise Exception("Failed to retrieve created tile")
+            
+            return tile
                 
         except Exception as e:
             logger.error(f"Failed to create tile: {str(e)}")

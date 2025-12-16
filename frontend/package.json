@@ -16,6 +16,7 @@
     "plotly.js-dist-min": "^2.26.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-grid-layout": "^2.1.0",
     "react-plotly.js": "^2.6.0",
     "react-router": "^7.9.6",
     "react-scripts": "5.0.1"

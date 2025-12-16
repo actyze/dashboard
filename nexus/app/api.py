@@ -520,9 +520,20 @@ async def list_dashboards(
 @dashboard_router.get("/{dashboard_id}")
 async def get_dashboard(
     dashboard_id: str,
+    include_tiles: bool = False,
     current_user: dict = Depends(require_viewer)
 ):
-    """Get dashboard by ID (with permission check)."""
+    """
+    Get dashboard by ID (with permission check).
+    
+    Args:
+        dashboard_id: Dashboard UUID
+        include_tiles: If True, includes all tiles in response (default: False)
+        current_user: Authenticated user
+    
+    Returns:
+        Dashboard metadata only (if include_tiles=False) or dashboard + tiles (if include_tiles=True)
+    """
     try:
         user_id = current_user.get("id")
         dashboard = await dashboard_service.get_dashboard_by_id(dashboard_id, user_id)
@@ -533,10 +544,18 @@ async def get_dashboard(
                 detail="Dashboard not found or access denied"
             )
         
-        return {
+        response = {
             "success": True,
             "dashboard": dashboard
         }
+        
+        # Optionally include tiles in the same response
+        if include_tiles:
+            tiles = await dashboard_service.get_dashboard_tiles(dashboard_id, user_id)
+            response["tiles"] = tiles
+            response["total_tiles"] = len(tiles)
+        
+        return response
     except HTTPException:
         raise
     except Exception as e:
@@ -574,7 +593,7 @@ async def update_dashboard(
     request: UpdateDashboardRequest,
     current_user: dict = Depends(require_viewer)
 ):
-    """Update dashboard (requires edit permission)."""
+    """Update dashboard (requires edit permission). Returns updated dashboard."""
     try:
         user_id = current_user.get("id")
         success = await dashboard_service.update_dashboard(
@@ -596,7 +615,13 @@ async def update_dashboard(
                 detail="Permission denied or dashboard not found"
             )
         
-        return {"success": True}
+        # Fetch and return the updated dashboard
+        dashboard = await dashboard_service.get_dashboard_by_id(dashboard_id, user_id)
+        
+        return {
+            "success": True,
+            "dashboard": dashboard
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -646,6 +671,35 @@ async def get_dashboard_tiles(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@dashboard_router.get("/{dashboard_id}/tiles/{tile_id}")
+async def get_tile(
+    dashboard_id: str,
+    tile_id: str,
+    current_user: dict = Depends(require_viewer)
+):
+    """
+    Get a single tile by ID (requires view permission on dashboard).
+    Useful for refreshing just one tile after an update.
+    """
+    try:
+        user_id = current_user.get("id")
+        tile = await dashboard_service.get_tile_by_id(tile_id, dashboard_id, user_id)
+        
+        if not tile:
+            raise HTTPException(
+                status_code=404,
+                detail="Tile not found or access denied"
+            )
+        
+        return {
+            "success": True,
+            "tile": tile
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @dashboard_router.post("/{dashboard_id}/tiles")
 async def create_tile(
     dashboard_id: str,
@@ -687,7 +741,7 @@ async def update_tile(
     request: UpdateTileRequest,
     current_user: dict = Depends(require_viewer)
 ):
-    """Update tile (requires edit permission on dashboard)."""
+    """Update tile (requires edit permission on dashboard). Returns updated tile."""
     try:
         user_id = current_user.get("id")
         
@@ -706,7 +760,19 @@ async def update_tile(
                 detail="Permission denied or tile not found"
             )
         
-        return {"success": True}
+        # Fetch and return the updated tile
+        tile = await dashboard_service.get_tile_by_id(tile_id, dashboard_id, user_id)
+        
+        if not tile:
+            raise HTTPException(
+                status_code=404,
+                detail="Tile not found after update"
+            )
+        
+        return {
+            "success": True,
+            "tile": tile
+        }
     except HTTPException:
         raise
     except Exception as e:

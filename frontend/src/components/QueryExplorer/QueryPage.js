@@ -9,6 +9,7 @@ import { Chart } from '../Charts';
 import { ReasoningBanner } from '../Common';
 import { Text } from '../ui';
 import { useProcessNaturalLanguage, useExecuteSql } from '../../hooks';
+import { QueryManagementService } from '../../services';
 
 const QueryPage = () => {
   const { id } = useParams();
@@ -48,10 +49,26 @@ const QueryPage = () => {
   }, [location.state, location.pathname, navigate]);
 
   useEffect(() => {
-    if (id && id !== 'new') {
-      const defaultQuery = "SELECT customer_name, order_total, order_date\nFROM orders\nWHERE order_date >= '2024-01-01'\nORDER BY order_total DESC\nLIMIT 10;";
-      setSelectedQuery({ id, title: `Query ${id}`, query: defaultQuery });
-    }
+    const loadQuery = async () => {
+      if (id && id !== 'new') {
+        try {
+          const response = await QueryManagementService.getSavedQueryById(id);
+          if (response.success && response.query) {
+            setSelectedQuery(response.query);
+            if (response.query.generated_sql) {
+              setSqlQuery(response.query.generated_sql);
+            }
+          } else {
+            // Fallback if query not found
+            setSelectedQuery({ id, query_name: `Query ${id}` });
+          }
+        } catch (error) {
+          console.error('Error loading query:', error);
+          setSelectedQuery({ id, query_name: `Query ${id}` });
+        }
+      }
+    };
+    loadQuery();
   }, [id]);
   
   // Focus input when entering edit mode
@@ -63,16 +80,37 @@ const QueryPage = () => {
   }, [isEditingTitle]);
   
   const handleTitleClick = () => {
-    const currentTitle = selectedQuery?.title || 'Untitled Query';
+    const currentTitle = selectedQuery?.query_name || 'Untitled Query';
     setEditedTitle(currentTitle);
     setIsEditingTitle(true);
   };
   
-  const handleTitleSave = () => {
-    if (editedTitle.trim()) {
-      setSelectedQuery(prev => ({ ...prev, title: editedTitle.trim() }));
+  const handleTitleSave = async () => {
+    const newTitle = editedTitle.trim();
+    if (!newTitle) {
+      setIsEditingTitle(false);
+      return;
     }
+    
+    // Update local state immediately
+    setSelectedQuery(prev => ({ ...prev, query_name: newTitle }));
     setIsEditingTitle(false);
+    
+    // If this is an existing query (not new), update via API
+    if (id && id !== 'new') {
+      try {
+        const response = await QueryManagementService.updateSavedQuery(id, {
+          query_name: newTitle
+        });
+        
+        if (!response.success) {
+          console.error('Failed to update query title:', response.error);
+          // Optionally revert or show error to user
+        }
+      } catch (error) {
+        console.error('Error updating query title:', error);
+      }
+    }
   };
   
   const handleTitleKeyDown = (e) => {
@@ -193,7 +231,7 @@ const QueryPage = () => {
                     `}
                     title="Click to edit title"
                   >
-                    {selectedQuery?.title || 'Untitled Query'}
+                    {selectedQuery?.query_name || 'Untitled Query'}
                   </button>
                 )}
               </div>

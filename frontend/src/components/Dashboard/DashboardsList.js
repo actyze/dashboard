@@ -9,7 +9,6 @@ const DashboardsList = () => {
   const navigate = useNavigate();
   const [dashboards, setDashboards] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('all'); // 'all' or 'recent'
 
   useEffect(() => {
     loadDashboards();
@@ -69,22 +68,11 @@ const DashboardsList = () => {
     }
   };
 
-  const filteredDashboards = dashboards
-    .filter(dashboard => {
-      if (activeTab === 'recent') {
-        if (!dashboard.last_accessed_at) return false;
-        const lastAccessed = parseISO(dashboard.last_accessed_at);
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        return lastAccessed > sevenDaysAgo;
-      }
-      return true;
-    })
-    .sort((a, b) => {
-      if (!a.updated_at) return 1;
-      if (!b.updated_at) return -1;
-      return new Date(b.updated_at) - new Date(a.updated_at);
-    });
+  const sortedDashboards = [...dashboards].sort((a, b) => {
+    if (!a.updated_at) return 1;
+    if (!b.updated_at) return -1;
+    return new Date(b.updated_at) - new Date(a.updated_at);
+  });
 
   return (
     <div className={`h-full flex flex-col ${isDark ? 'bg-[#1a1f2e]' : 'bg-gray-50'}`}>
@@ -104,50 +92,11 @@ const DashboardsList = () => {
         </button>
             </div>
 
-      {/* Tabs Section */}
-      <div className="px-8">
-        <div className={`border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-          <nav className="flex space-x-6">
-            <button 
-              onClick={() => setActiveTab('all')}
-              className={`
-                pb-3 text-sm font-medium transition-colors relative
-                ${activeTab === 'all' 
-                  ? isDark ? 'text-blue-400' : 'text-blue-600'
-                  : isDark ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
-                }
-              `}
-            >
-              All dashboards
-              {activeTab === 'all' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500" />
-              )}
-            </button>
-            <button 
-              onClick={() => setActiveTab('recent')}
-              className={`
-                pb-3 text-sm font-medium transition-colors relative
-                ${activeTab === 'recent' 
-                  ? isDark ? 'text-blue-400' : 'text-blue-600'
-                  : isDark ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
-                }
-              `}
-            >
-              Recent
-              {activeTab === 'recent' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500" />
-              )}
-            </button>
-          </nav>
-        </div>
-      </div>
-
       {/* Table */}
-      <div className="flex-1 px-8 pt-4 overflow-hidden flex flex-col pb-4">
+      <div className="flex-1 px-8 pt-2 overflow-hidden flex flex-col pb-4">
         {/* Table Header */}
         <div className={`grid grid-cols-12 gap-4 px-4 py-3 text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-          <div className="col-span-7">Title</div>
-          <div className="col-span-2">Version</div>
+          <div className="col-span-9">Title</div>
           <div className="col-span-2">Updated</div>
           <div className="col-span-1"></div>
         </div>
@@ -163,7 +112,7 @@ const DashboardsList = () => {
                 </p>
               </div>
             </div>
-          ) : filteredDashboards.length === 0 ? (
+          ) : sortedDashboards.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center py-16">
               <svg className={`w-10 h-10 mb-3 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z" />
@@ -183,7 +132,7 @@ const DashboardsList = () => {
             </div>
           ) : (
             <div>
-              {filteredDashboards.map((dashboard) => (
+              {sortedDashboards.map((dashboard) => (
                 <div 
                   key={dashboard.id}
                   onClick={() => navigate(`/dashboard/${dashboard.id}`)}
@@ -196,8 +145,8 @@ const DashboardsList = () => {
                     }
                   `}
                 >
-                  {/* Title with badges */}
-                  <div className="col-span-7 flex items-center space-x-2 min-w-0">
+                  {/* Title */}
+                  <div className="col-span-9 flex items-center space-x-2 min-w-0">
                     {/* Dashboard icon */}
                     <svg className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z" />
@@ -205,60 +154,6 @@ const DashboardsList = () => {
                     {/* Title */}
                     <span className={`truncate text-sm ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
                       {dashboard.title}
-                    </span>
-                    
-                    {/* Status Badge */}
-                    {dashboard.status === 'published' ? (
-                      <span className={`
-                        flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded
-                        ${isDark 
-                          ? 'bg-green-900/40 text-green-400' 
-                          : 'bg-green-100 text-green-700'
-                        }
-                      `}>
-                        ✓ Published
-                      </span>
-                    ) : dashboard.status === 'draft' ? (
-                      <span className={`
-                        flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded
-                        ${isDark 
-                          ? 'bg-gray-700 text-gray-300' 
-                          : 'bg-gray-200 text-gray-700'
-                        }
-                      `}>
-                        📝 Draft
-                      </span>
-                    ) : null}
-                    
-                    {/* Public badges */}
-                    {dashboard.is_anonymous_public && (
-                      <span className={`
-                        flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded
-                        ${isDark 
-                          ? 'bg-blue-900/40 text-blue-400' 
-                          : 'bg-blue-100 text-blue-700'
-                        }
-                      `}>
-                        🌐 Anonymous
-                      </span>
-                    )}
-                    {dashboard.is_public && !dashboard.is_anonymous_public && (
-                      <span className={`
-                        flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded
-                        ${isDark 
-                          ? 'bg-blue-900/40 text-blue-400' 
-                          : 'bg-blue-50 text-blue-600'
-                        }
-                      `}>
-                        Public
-                      </span>
-                    )}
-                  </div>
-                  
-                  {/* Version */}
-                  <div className="col-span-2 flex items-center">
-                    <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                      v{dashboard.version || 1}
                     </span>
                   </div>
                   

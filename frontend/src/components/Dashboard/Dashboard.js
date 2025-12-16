@@ -259,8 +259,16 @@ const Dashboard = ({ isPublic = false }) => {
       
       response = await DashboardService.updateTile(id, editingTile.id, updatePayload);
 
-      if (response.success && response.tile) {
-        const updatedTile = response.tile;
+      if (response.success) {
+        // Merge response with our payload to ensure we have all fields
+        // (API might return partial data)
+        const updatedTile = {
+          ...editingTile,
+          ...response.tile,
+          sql_query: updatePayload.sql_query,
+          chart_type: updatePayload.chart_type,
+          chart_config: updatePayload.chart_config
+        };
         
         // Clear old tile data first to force re-render
         setTileData(prev => {
@@ -403,7 +411,7 @@ const Dashboard = ({ isPublic = false }) => {
 
     return (
       <Grid item xs={12} md={tile.width || 6} key={tile.id}>
-        <Card className={`h-full ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
+        <Card padding="xs" className={`h-full ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
           <Card.Header className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 py-2 px-3">
             <Card.Title className="text-sm font-medium">{tile.title}</Card.Title>
             {!isPublic && (
@@ -449,6 +457,7 @@ const Dashboard = ({ isPublic = false }) => {
                 }}
               >
                 <Chart 
+                  key={`${tile.id}-${tile.chart_type}`}
                   chartData={data?.chartData}
                   loading={loading}
                   error={error}

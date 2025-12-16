@@ -452,13 +452,17 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
         size: 12,
         color: isDark ? '#e5e7eb' : '#374151'
       },
-      showlegend: !['pie', 'treemap', 'sunburst', 'funnel', 'sankey'].includes(chartType),
+      // Hide legend for single-series charts - x/y axis labels are sufficient
+      // Legend would only be useful for multi-series grouped charts
+      showlegend: false,
       legend: {
         orientation: 'h',
-        y: -0.15,
+        y: 1.02,
         x: 0.5,
         xanchor: 'center',
-        bgcolor: 'transparent'
+        yanchor: 'bottom',
+        bgcolor: 'transparent',
+        font: { size: 10 }
       }
     };
 
@@ -473,20 +477,34 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
     const axisCharts = ['bar', 'column', 'line', 'scatter', 'area', 'histogram', 'box', 'violin', 'waterfall', 'contour', 'heatmap', 'candlestick'];
     
     if (axisCharts.includes(chartType)) {
+      // Check if x-axis has many labels that might overlap
+      const dataLength = queryData?.data?.length || 0;
+      const needsRotation = dataLength > 6;
+      
       baseLayout.xaxis = {
-        title: { text: xField, font: { size: 13, color: isDark ? '#d1d5db' : '#6b7280' } },
+        title: { text: xField, font: { size: 12, color: isDark ? '#d1d5db' : '#6b7280' } },
         gridcolor: isDark ? 'rgba(75, 85, 99, 0.3)' : 'rgba(229, 231, 235, 0.8)',
         tickcolor: isDark ? '#4b5563' : '#d1d5db',
         linecolor: isDark ? '#4b5563' : '#d1d5db',
-        zeroline: false
+        zeroline: false,
+        tickangle: needsRotation ? -45 : 0,
+        tickfont: { size: 10 },
+        automargin: true
       };
       baseLayout.yaxis = {
-        title: { text: yField, font: { size: 13, color: isDark ? '#d1d5db' : '#6b7280' } },
+        title: { text: yField, font: { size: 12, color: isDark ? '#d1d5db' : '#6b7280' } },
         gridcolor: isDark ? 'rgba(75, 85, 99, 0.3)' : 'rgba(229, 231, 235, 0.8)',
         tickcolor: isDark ? '#4b5563' : '#d1d5db',
         linecolor: isDark ? '#4b5563' : '#d1d5db',
-        zeroline: false
+        zeroline: false,
+        tickfont: { size: 10 },
+        automargin: true
       };
+      
+      // Increase bottom margin for rotated labels
+      if (needsRotation) {
+        baseLayout.margin.b = 80;
+      }
     }
 
     // Special layout adjustments per chart type

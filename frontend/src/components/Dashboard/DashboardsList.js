@@ -9,7 +9,10 @@ const DashboardsList = () => {
   const navigate = useNavigate();
   const [dashboards, setDashboards] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('all'); // 'all' or 'recent'
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [searchTitle, setSearchTitle] = useState('');
+  const [filterUpdatedBy, setFilterUpdatedBy] = useState('');
+  const [filterUpdatedDate, setFilterUpdatedDate] = useState('all');
 
   useEffect(() => {
     loadDashboards();
@@ -38,7 +41,6 @@ const DashboardsList = () => {
   const formatDate = (dateString) => {
     if (!dateString) return '-';
     try {
-      // Database returns UTC timestamps without 'Z', so add it to ensure proper parsing
       const utcDateString = dateString.includes('Z') ? dateString : dateString + 'Z';
       const date = parseISO(utcDateString);
       if (date.getFullYear() < 2000) return '-';
@@ -69,15 +71,56 @@ const DashboardsList = () => {
     }
   };
 
+  const toggleFavorite = async (e, dashboardId, currentState) => {
+    e.stopPropagation();
+    
+    try {
+      const response = await DashboardService.updateDashboard(dashboardId, {
+        is_favorite: !currentState
+      });
+      
+      if (response.success) {
+        loadDashboards();
+      } else {
+        alert(`Failed to update favorite: ${response.error}`);
+      }
+    } catch (err) {
+      alert('An error occurred while updating favorite');
+      console.error(err);
+    }
+  };
+
+  const getUniqueUpdaters = () => {
+    const updaters = new Set();
+    dashboards.forEach(d => {
+      if (d.updated_by_username) updaters.add(d.updated_by_username);
+    });
+    return Array.from(updaters).sort();
+  };
+
   const filteredDashboards = dashboards
     .filter(dashboard => {
-      if (activeTab === 'recent') {
-        if (!dashboard.last_accessed_at) return false;
-        const lastAccessed = parseISO(dashboard.last_accessed_at);
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        return lastAccessed > sevenDaysAgo;
+      if (showFavoritesOnly && !dashboard.is_favorite) return false;
+      if (searchTitle && !dashboard.title.toLowerCase().includes(searchTitle.toLowerCase())) return false;
+      if (filterUpdatedBy && dashboard.updated_by_username !== filterUpdatedBy) return false;
+      
+      if (filterUpdatedDate && filterUpdatedDate !== 'all') {
+        if (!dashboard.updated_at) return false;
+        const updatedDate = new Date(dashboard.updated_at + 'Z');
+        const now = new Date();
+        
+        if (filterUpdatedDate === 'today') {
+          const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          if (updatedDate < dayStart) return false;
+        } else if (filterUpdatedDate === 'week') {
+          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          if (updatedDate < weekAgo) return false;
+        } else if (filterUpdatedDate === 'month') {
+          const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          if (updatedDate < monthAgo) return false;
+        }
       }
+      
       return true;
     })
     .sort((a, b) => {
@@ -86,233 +129,190 @@ const DashboardsList = () => {
       return new Date(b.updated_at) - new Date(a.updated_at);
     });
 
-  return (
-    <div className={`h-full flex flex-col ${isDark ? 'bg-[#1a1f2e]' : 'bg-gray-50'}`}>
-      {/* Header */}
-      <div className={`px-8 pt-8 pb-6 flex items-center justify-between`}>
-        <h1 className={`text-2xl font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            Dashboards
-        </h1>
-        <button
-          onClick={() => navigate('/dashboard/new')}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          New
-        </button>
-            </div>
+  if (loading) {
+    return (
+      <div className={`flex items-center justify-center h-screen ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
+        <div className="text-center">
+          <div className={`text-lg ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+            Loading dashboards...
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-      {/* Tabs Section */}
-      <div className="px-8">
-        <div className={`border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-          <nav className="flex space-x-6">
-            <button 
-              onClick={() => setActiveTab('all')}
-              className={`
-                pb-3 text-sm font-medium transition-colors relative
-                ${activeTab === 'all' 
-                  ? isDark ? 'text-blue-400' : 'text-blue-600'
-                  : isDark ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
-                }
-              `}
+  return (
+    <div className={`h-screen flex flex-col ${isDark ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <div className={`px-6 py-4 border-b ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+        <div className="flex items-center justify-between">
+          <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            Dashboards
+          </h1>
+          <button
+            onClick={() => navigate('/dashboard/new')}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+          >
+            <span>+</span>
+            <span>New</span>
+          </button>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div>
+            <input
+              type="text"
+              placeholder="Search title..."
+              value={searchTitle}
+              onChange={(e) => setSearchTitle(e.target.value)}
+              className={`w-full px-3 py-2 rounded-md border text-sm ${isDark ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+            />
+          </div>
+
+          <div>
+            <select
+              value={filterUpdatedBy}
+              onChange={(e) => setFilterUpdatedBy(e.target.value)}
+              className={`w-full px-3 py-2 rounded-md border text-sm ${isDark ? 'bg-gray-700 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
             >
-              All dashboards
-              {activeTab === 'all' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500" />
-              )}
-            </button>
-            <button 
-              onClick={() => setActiveTab('recent')}
-              className={`
-                pb-3 text-sm font-medium transition-colors relative
-                ${activeTab === 'recent' 
-                  ? isDark ? 'text-blue-400' : 'text-blue-600'
-                  : isDark ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
-                }
-              `}
+              <option value="">All Users</option>
+              {getUniqueUpdaters().map(username => (
+                <option key={username} value={username}>{username}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <select
+              value={filterUpdatedDate}
+              onChange={(e) => setFilterUpdatedDate(e.target.value)}
+              className={`w-full px-3 py-2 rounded-md border text-sm ${isDark ? 'bg-gray-700 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
             >
-              Recent
-              {activeTab === 'recent' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500" />
-              )}
-            </button>
-          </nav>
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="week">Last 7 Days</option>
+              <option value="month">Last 30 Days</option>
+            </select>
+          </div>
+
+          <div className="flex items-center">
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showFavoritesOnly}
+                onChange={(e) => setShowFavoritesOnly(e.target.checked)}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                ⭐ Favorites Only
+              </span>
+            </label>
+          </div>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="flex-1 px-8 pt-4 overflow-hidden flex flex-col pb-4">
-        {/* Table Header */}
-        <div className={`grid grid-cols-12 gap-4 px-4 py-3 text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-          <div className="col-span-5">Title</div>
-          <div className="col-span-2">Tiles</div>
-          <div className="col-span-2">Version</div>
-          <div className="col-span-2">Updated</div>
-          <div className="col-span-1"></div>
-        </div>
-
-        {/* Table Body */}
-        <div className={`flex-1 overflow-auto rounded-lg ${isDark ? 'bg-[#232a3b]' : 'bg-white'} border ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-                <p className={`mt-3 text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Loading dashboards...
-                </p>
+      <div className="flex-1 overflow-auto p-6">
+        {filteredDashboards.length === 0 ? (
+          <div className={`text-center py-12 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+            {dashboards.length === 0 ? (
+              <div>
+                <p className="text-lg mb-2">No dashboards yet</p>
+                <p className="text-sm">Click "New" to create your first dashboard</p>
               </div>
+            ) : (
+              <p className="text-lg">No dashboards match your filters</p>
+            )}
+          </div>
+        ) : (
+          <div className={`rounded-lg overflow-hidden border ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+            <div className={`grid grid-cols-12 gap-4 px-4 py-3 text-xs font-medium uppercase tracking-wider border-b ${isDark ? 'bg-gray-700 text-gray-400 border-gray-600' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+              <div className="col-span-4">TITLE</div>
+              <div className="col-span-1">TILES</div>
+              <div className="col-span-1">VERSION</div>
+              <div className="col-span-2">UPDATED BY</div>
+              <div className="col-span-2">UPDATED</div>
+              <div className="col-span-2"></div>
             </div>
-          ) : filteredDashboards.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center py-16">
-              <svg className={`w-10 h-10 mb-3 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z" />
-              </svg>
-              <p className={`text-sm font-medium mb-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                No dashboards yet
-              </p>
-              <p className={`text-xs mb-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                Get started by creating one
-              </p>
-              <button
-                onClick={() => navigate('/dashboard/new')}
-                className="text-blue-500 hover:text-blue-400 text-sm font-medium"
+
+            {filteredDashboards.map((dashboard, index) => (
+              <div
+                key={dashboard.id}
+                onClick={() => navigate(`/dashboard/${dashboard.id}`)}
+                className={`grid grid-cols-12 gap-4 px-4 py-4 cursor-pointer transition-colors ${index < filteredDashboards.length - 1 ? `border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}` : ''} ${isDark ? 'hover:bg-gray-700' : 'hover:bg-gray-50'}`}
               >
-                Create Dashboard
-              </button>
-            </div>
-          ) : (
-            <div>
-              {filteredDashboards.map((dashboard) => (
-                <div 
-                  key={dashboard.id}
-                  onClick={() => navigate(`/dashboard/${dashboard.id}`)}
-                  className={`
-                    grid grid-cols-12 gap-4 px-4 py-3 cursor-pointer transition-colors
-                    border-b last:border-b-0
-                    ${isDark 
-                      ? 'border-gray-700 hover:bg-[#2a3142]' 
-                      : 'border-gray-100 hover:bg-gray-50'
-                    }
-                  `}
-                >
-                  {/* Title with badges */}
-                  <div className="col-span-5 flex items-center space-x-2 min-w-0">
-                    {/* Dashboard icon */}
-                    <svg className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z" />
-                    </svg>
-                    {/* Title */}
-                    <span className={`truncate text-sm ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
-                      {dashboard.title}
-                    </span>
-                    
-                    {/* Status Badge */}
-                    {dashboard.status === 'published' ? (
-                      <span className={`
-                        flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded
-                        ${isDark 
-                          ? 'bg-green-900/40 text-green-400' 
-                          : 'bg-green-100 text-green-700'
-                        }
-                      `}>
-                        ✓ Published
-                      </span>
-                    ) : dashboard.status === 'draft' ? (
-                      <span className={`
-                        flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded
-                        ${isDark 
-                          ? 'bg-gray-700 text-gray-300' 
-                          : 'bg-gray-200 text-gray-700'
-                        }
-                      `}>
-                        📝 Draft
-                      </span>
-                    ) : null}
-                    
-                    {/* Public badges */}
-                    {dashboard.is_anonymous_public && (
-                      <span className={`
-                        flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded
-                        ${isDark 
-                          ? 'bg-blue-900/40 text-blue-400' 
-                          : 'bg-blue-100 text-blue-700'
-                        }
-                      `}>
-                        🌐 Anonymous
-                      </span>
-                    )}
-                    {dashboard.is_public && !dashboard.is_anonymous_public && (
-                      <span className={`
-                        flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded
-                        ${isDark 
-                          ? 'bg-blue-900/40 text-blue-400' 
-                          : 'bg-blue-50 text-blue-600'
-                        }
-                      `}>
-                        Public
-                      </span>
-                    )}
-                  </div>
+                <div className="col-span-4 flex items-center space-x-2 min-w-0">
+                  <button
+                    onClick={(e) => toggleFavorite(e, dashboard.id, dashboard.is_favorite)}
+                    className={`flex-shrink-0 text-lg transition-colors ${dashboard.is_favorite ? 'text-yellow-500 hover:text-yellow-600' : isDark ? 'text-gray-600 hover:text-gray-400' : 'text-gray-300 hover:text-gray-400'}`}
+                    title={dashboard.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    {dashboard.is_favorite ? '★' : '☆'}
+                  </button>
+
+                  <svg className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z" />
+                  </svg>
+
+                  <span className={`truncate text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
+                    {dashboard.title}
+                  </span>
                   
-                  {/* Tiles */}
-                  <div className="col-span-2 flex items-center">
-                    <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {dashboard.tile_count || 0} tiles
+                  {dashboard.status === 'published' ? (
+                    <span className={`flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded ${isDark ? 'bg-green-900/40 text-green-400' : 'bg-green-100 text-green-700'}`}>
+                      ✓
                     </span>
-                  </div>
-                  
-                  {/* Version */}
-                  <div className="col-span-2 flex items-center">
-                    <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                      v{dashboard.version || 1}
-                      {dashboard.status === 'draft' && (
-                        <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded ${isDark ? 'bg-yellow-900/40 text-yellow-400' : 'bg-yellow-100 text-yellow-700'}`}>
-                          Draft
-                        </span>
-                      )}
-                      {dashboard.status === 'published' && (
-                        <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded ${isDark ? 'bg-green-900/40 text-green-400' : 'bg-green-100 text-green-700'}`}>
-                          Published
-                        </span>
-                      )}
+                  ) : dashboard.status === 'draft' ? (
+                    <span className={`flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded ${isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'}`}>
+                      📝
                     </span>
-                  </div>
+                  ) : null}
                   
-                  {/* Updated */}
-                  <div className="col-span-2 flex items-center">
-                    <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {formatDate(dashboard.updated_at)}
+                  {dashboard.is_anonymous_public && (
+                    <span className={`flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded ${isDark ? 'bg-blue-900/40 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
+                      🌐
                     </span>
-                  </div>
-                  
-                  {/* Delete */}
-                  <div className="col-span-1 flex items-center justify-end">
-                    <button
-                      onClick={(e) => handleDelete(e, dashboard.id)}
-                      className={`
-                        p-1.5 rounded transition-colors
-                        ${isDark 
-                          ? 'hover:bg-red-900/30 text-gray-500 hover:text-red-400' 
-                          : 'hover:bg-red-50 text-gray-400 hover:text-red-600'
-                        }
-                      `}
-                      title="Delete dashboard"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </div>
+                  )}
+                  {dashboard.is_public && !dashboard.is_anonymous_public && (
+                    <span className={`flex-shrink-0 px-1.5 py-0.5 text-xs font-medium rounded ${isDark ? 'bg-blue-900/40 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                      Public
+                    </span>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+
+                <div className={`col-span-1 flex items-center text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  {dashboard.tile_count || 0} tiles
+                </div>
+
+                <div className={`col-span-1 flex items-center text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  v{dashboard.version || 1}
+                </div>
+
+                <div className={`col-span-2 flex items-center text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  {dashboard.updated_by_username || '-'}
+                </div>
+
+                <div className={`col-span-2 flex items-center text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  {formatDate(dashboard.updated_at)}
+                </div>
+
+                <div className="col-span-2 flex items-center justify-end space-x-2">
+                  <button
+                    onClick={(e) => handleDelete(e, dashboard.id)}
+                    className={`p-1.5 rounded transition-colors ${isDark ? 'text-gray-400 hover:text-red-400 hover:bg-gray-700' : 'text-gray-400 hover:text-red-600 hover:bg-gray-100'}`}
+                    title="Delete dashboard"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 export default DashboardsList;
+

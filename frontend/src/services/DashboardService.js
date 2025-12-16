@@ -29,11 +29,17 @@ export const DashboardService = {
 
   /**
    * Get a specific dashboard by ID
+   * @param {string} dashboardId - The dashboard UUID
+   * @param {Object} options - Optional parameters
+   * @param {boolean} options.includeTiles - If true, includes all tiles in response (default: false)
+   * @returns {Promise<Object>} Dashboard data (and tiles if includeTiles=true)
    */
-  async getDashboard(dashboardId) {
+  async getDashboard(dashboardId, options = {}) {
     try {
-      const response = await apiInstance.get(`/api/dashboards/${dashboardId}`);
-      // Backend already returns {success: true, dashboard: {...}}
+      const { includeTiles = false } = options;
+      const params = includeTiles ? '?include_tiles=true' : '';
+      const response = await apiInstance.get(`/api/dashboards/${dashboardId}${params}`);
+      // Backend returns {success: true, dashboard: {...}, tiles: [...], total_tiles: N}
       return response.data;
     } catch (error) {
       console.error('Failed to fetch dashboard:', error);
@@ -75,6 +81,7 @@ export const DashboardService = {
 
   /**
    * Update an existing dashboard
+   * @returns {Promise<Object>} {success: true, dashboard: {...}} - Returns updated dashboard
    */
   async updateDashboard(dashboardId, updates) {
     try {
@@ -89,7 +96,7 @@ export const DashboardService = {
       };
       
       const response = await apiInstance.put(`/api/dashboards/${dashboardId}`, payload);
-      // Backend returns {success: true} only, not the updated dashboard
+      // Backend returns {success: true, dashboard: {...}}
       return response.data;
     } catch (error) {
       console.error('Failed to update dashboard:', error);
@@ -155,6 +162,28 @@ export const DashboardService = {
   },
 
   /**
+   * Get a single tile by ID (useful for refreshing after update)
+   * @param {string} dashboardId - The dashboard UUID
+   * @param {string} tileId - The tile UUID
+   * @returns {Promise<Object>} Tile data
+   */
+  async getTile(dashboardId, tileId) {
+    try {
+      const response = await apiInstance.get(`/api/dashboards/${dashboardId}/tiles/${tileId}`);
+      return {
+        success: true,
+        tile: response.data.tile
+      };
+    } catch (error) {
+      console.error('Failed to fetch tile:', error);
+      return { 
+        success: false, 
+        error: error.response?.data?.detail || error.message 
+      };
+    }
+  },
+
+  /**
    * Create a new tile in a dashboard
    */
   async createTile(dashboardId, tileData) {
@@ -189,6 +218,7 @@ export const DashboardService = {
 
   /**
    * Update a tile
+   * @returns {Promise<Object>} {success: true, tile: {...}} - Returns updated tile
    */
   async updateTile(dashboardId, tileId, updates) {
     try {
@@ -210,10 +240,8 @@ export const DashboardService = {
         `/api/dashboards/${dashboardId}/tiles/${tileId}`, 
         payload
       );
-      return {
-        success: true,
-        tile: response.data
-      };
+      // Backend returns {success: true, tile: {...}}
+      return response.data;
     } catch (error) {
       console.error('Failed to update tile:', error);
       return { 

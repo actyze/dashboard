@@ -72,32 +72,42 @@ const Dashboard = ({ isPublic = false }) => {
     setDashboardError(null);
 
     try {
-      // Load dashboard details (use public API if in public mode)
-      const dashboardResponse = isPublic 
-        ? await DashboardService.getPublicDashboard(id)
-        : await DashboardService.getDashboard(id);
+      // Load dashboard + tiles in ONE call (optimized)
+      let response;
+      if (isPublic) {
+        // Public dashboards still need separate calls (no auth, different endpoints)
+        const dashboardResponse = await DashboardService.getPublicDashboard(id);
+        if (!dashboardResponse.success) {
+          setDashboardError(dashboardResponse.error);
+          setLoadingDashboard(false);
+          return;
+        }
+        const tilesResponse = await DashboardService.getPublicDashboardTiles(id);
+        response = {
+          success: dashboardResponse.success,
+          dashboard: dashboardResponse.dashboard,
+          tiles: tilesResponse.success ? tilesResponse.tiles : []
+        };
+      } else {
+        // Authenticated: load dashboard + tiles in ONE call
+        response = await DashboardService.getDashboard(id, { includeTiles: true });
+      }
       
-      if (!dashboardResponse.success) {
-        setDashboardError(dashboardResponse.error);
+      if (!response.success) {
+        setDashboardError(response.error);
         setLoadingDashboard(false);
         return;
       }
 
-      setDashboard(dashboardResponse.dashboard);
-
-      // Load tiles for this dashboard (use public API if in public mode)
-      const tilesResponse = isPublic
-        ? await DashboardService.getPublicDashboardTiles(id)
-        : await DashboardService.getTiles(id);
+      setDashboard(response.dashboard);
       
-      if (tilesResponse.success) {
-        setTiles(tilesResponse.tiles);
-        
-        // Execute queries for all tiles
-        tilesResponse.tiles.forEach(tile => {
-          executeTileQuery(tile);
-        });
-      }
+      const tilesArray = response.tiles || [];
+      setTiles(tilesArray);
+      
+      // Execute queries for all tiles
+      tilesArray.forEach(tile => {
+        executeTileQuery(tile);
+      });
     } catch (error) {
       console.error('Error loading dashboard:', error);
       setDashboardError(error.message);
@@ -249,25 +259,27 @@ const Dashboard = ({ isPublic = false }) => {
       
       response = await DashboardService.updateTile(id, editingTile.id, updatePayload);
 
-      if (response.success) {
+      if (response.success && response.tile) {
+        const updatedTile = response.tile;
+        
         // Clear old tile data first to force re-render
         setTileData(prev => {
           const newData = { ...prev };
-          delete newData[response.tile.id];
+          delete newData[updatedTile.id];
           return newData;
         });
         
         setTileErrors(prev => {
           const newErrors = { ...prev };
-          delete newErrors[response.tile.id];
+          delete newErrors[updatedTile.id];
           return newErrors;
         });
         
         // Update tile in list
-        setTiles(prev => prev.map(t => t.id === response.tile.id ? response.tile : t));
+        setTiles(prev => prev.map(t => t.id === updatedTile.id ? updatedTile : t));
         
         // Re-execute query with updated tile
-        executeTileQuery(response.tile);
+        executeTileQuery(updatedTile);
       }
     } else {
       // Create new tile
@@ -332,9 +344,9 @@ const Dashboard = ({ isPublic = false }) => {
         is_anonymous_public: dashboardData.is_anonymous_public || false,
       });
 
-      if (response.success) {
-        // Reload dashboard to get updated data (backend doesn't return it)
-        await loadDashboard();
+      if (response.success && response.dashboard) {
+        // Use the updated dashboard from response (no need to reload)
+        setDashboard(response.dashboard);
         setDashboardSettingsOpen(false);
       } else {
         alert(response.error || 'Failed to update dashboard');

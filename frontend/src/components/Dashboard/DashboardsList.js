@@ -146,8 +146,7 @@ const DashboardsList = () => {
       <div className="flex-1 px-8 pt-4 overflow-hidden flex flex-col pb-4">
         {/* Table Header */}
         <div className={`grid grid-cols-12 gap-4 px-4 py-3 text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-          <div className="col-span-5">Title</div>
-          <div className="col-span-2">Tiles</div>
+          <div className="col-span-7">Title</div>
           <div className="col-span-2">Version</div>
           <div className="col-span-2">Updated</div>
           <div className="col-span-1"></div>
@@ -198,7 +197,7 @@ const DashboardsList = () => {
                   `}
                 >
                   {/* Title with badges */}
-                  <div className="col-span-5 flex items-center space-x-2 min-w-0">
+                  <div className="col-span-7 flex items-center space-x-2 min-w-0">
                     {/* Dashboard icon */}
                     <svg className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z" />
@@ -256,27 +255,10 @@ const DashboardsList = () => {
                     )}
                   </div>
                   
-                  {/* Tiles */}
-                  <div className="col-span-2 flex items-center">
-                    <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {dashboard.tile_count || 0} tiles
-                    </span>
-                  </div>
-                  
                   {/* Version */}
                   <div className="col-span-2 flex items-center">
                     <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                       v{dashboard.version || 1}
-                      {dashboard.status === 'draft' && (
-                        <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded ${isDark ? 'bg-yellow-900/40 text-yellow-400' : 'bg-yellow-100 text-yellow-700'}`}>
-                          Draft
-                        </span>
-                      )}
-                      {dashboard.status === 'published' && (
-                        <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded ${isDark ? 'bg-green-900/40 text-green-400' : 'bg-green-100 text-green-700'}`}>
-                          Published
-                        </span>
-                      )}
                     </span>
                   </div>
                   

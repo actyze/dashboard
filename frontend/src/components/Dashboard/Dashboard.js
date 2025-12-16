@@ -4,10 +4,11 @@ import { Grid, IconButton, Typography, Menu, MenuItem, CircularProgress } from '
 import { Card, Button } from '../ui';
 import { useTheme } from '../../contexts/ThemeContext';
 import SqlTileModal from './SqlTileModal';
-import DashboardSettingsModal from './DashboardSettingsModal';
+import ShareModal from './ShareModal';
 import { QueryResults } from '../QueryExplorer';
 import { Chart } from '../Charts';
-import { QueryExecutionService, DashboardService } from '../../services';
+import { RestService, DashboardService } from '../../services';
+import { transformQueryResults } from '../../utils/dataTransformers';
 
 const Dashboard = ({ isPublic = false }) => {
   const { id } = useParams();
@@ -16,7 +17,7 @@ const Dashboard = ({ isPublic = false }) => {
   const [dashboard, setDashboard] = useState(null);
   const [tiles, setTiles] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
-  const [dashboardSettingsOpen, setDashboardSettingsOpen] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [editingTile, setEditingTile] = useState(null);
   const [loadingDashboard, setLoadingDashboard] = useState(true);
   const [loadingTiles, setLoadingTiles] = useState({});
@@ -26,6 +27,11 @@ const Dashboard = ({ isPublic = false }) => {
   const [selectedTileId, setSelectedTileId] = useState(null);
   const [dashboardError, setDashboardError] = useState(null);
   
+  // Editable title state
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+  const titleInputRef = useRef(null);
+  
   // Ref to prevent duplicate dashboard creation (React StrictMode runs effects twice)
   const isCreatingRef = useRef(false);
 
@@ -34,30 +40,28 @@ const Dashboard = ({ isPublic = false }) => {
     if (id && id !== 'new') {
       loadDashboard();
     } else if (id === 'new') {
-      // Show dashboard settings modal for new dashboard
+      // Auto-create dashboard with default title
       if (!isCreatingRef.current) {
         isCreatingRef.current = true;
-        setLoadingDashboard(false);
-        setDashboardSettingsOpen(true);
+        createNewDashboard();
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isPublic]);
 
-  const createNewDashboard = async (dashboardData) => {
+  const createNewDashboard = async () => {
     setLoadingDashboard(true);
     const response = await DashboardService.createDashboard({
-      title: dashboardData.title,
-      description: dashboardData.description || '',
-      is_public: dashboardData.is_public || false,
-      is_anonymous_public: dashboardData.is_anonymous_public || false,
+      title: 'Untitled Dashboard',
+      description: '',
+      is_public: false,
+      is_anonymous_public: false,
       configuration: {}
     });
 
     if (response.success && response.dashboard?.id) {
       // Reset ref before navigation
       isCreatingRef.current = false;
-      setDashboardSettingsOpen(false);
       // Redirect to the new dashboard
       navigate(`/dashboard/${response.dashboard.id}`, { replace: true });
     } else {
@@ -77,8 +81,8 @@ const Dashboard = ({ isPublic = false }) => {
       if (isPublic) {
         // Public dashboards still need separate calls (no auth, different endpoints)
         const dashboardResponse = await DashboardService.getPublicDashboard(id);
-        if (!dashboardResponse.success) {
-          setDashboardError(dashboardResponse.error);
+      if (!dashboardResponse.success) {
+        setDashboardError(dashboardResponse.error);
           setLoadingDashboard(false);
           return;
         }
@@ -103,11 +107,11 @@ const Dashboard = ({ isPublic = false }) => {
       
       const tilesArray = response.tiles || [];
       setTiles(tilesArray);
-      
-      // Execute queries for all tiles
+        
+        // Execute queries for all tiles
       tilesArray.forEach(tile => {
-        executeTileQuery(tile);
-      });
+          executeTileQuery(tile);
+        });
     } catch (error) {
       console.error('Error loading dashboard:', error);
       setDashboardError(error.message);
@@ -121,20 +125,20 @@ const Dashboard = ({ isPublic = false }) => {
     setTileErrors(prev => ({ ...prev, [tile.id]: null }));
 
     try {
-      // Execute the SQL query
-      const response = await QueryExecutionService.executeQuery(tile.sql_query);
+      // Execute the SQL query using the real API
+      const response = await RestService.executeSql(tile.sql_query, 500, 30);
       
-      if (response.error) {
-        throw new Error(response.error);
+      if (!response.success) {
+        throw new Error(response.error || 'Query execution failed');
       }
 
-      // Store the query results
-      const responseData = response.data || {};
-      const queryData = {
-        data: responseData.data || [],
-        columns: responseData.columns || [],
-        rowCount: responseData.rowCount || 0
-      };
+      // Transform query results using the standard transformer
+      // This converts rows from arrays to objects with column names as keys
+      const queryData = transformQueryResults(response.query_results);
+      
+      if (!queryData) {
+        throw new Error('No data returned from query');
+      }
 
       // Prepare chart config - auto-detect if empty
       let chartConfig = tile.chart_config || {};
@@ -142,24 +146,35 @@ const Dashboard = ({ isPublic = false }) => {
       // If chart_config is empty or missing fields, auto-detect from columns
       if (tile.chart_type !== 'table' && (!chartConfig.xField || !chartConfig.yField)) {
         
+        // Try to detect column types from actual data values
+        const detectColumnType = (colName) => {
+          if (!queryData.data || queryData.data.length === 0) return 'string';
+          const sampleValue = queryData.data[0][colName];
+          if (typeof sampleValue === 'number') return 'number';
+          if (!isNaN(parseFloat(sampleValue)) && isFinite(sampleValue)) return 'number';
+          return 'string';
+        };
+        
         // Find first string column for x-axis
-        const stringColumn = queryData.columns.find(col => 
-          col.type === 'string' || col.type === 'varchar' || col.type === 'date'
-        );
+        const stringColumn = queryData.columns.find(col => {
+          const colType = col.type || detectColumnType(col.name);
+          return colType === 'string' || colType === 'varchar' || colType === 'date';
+        });
         
         // Find first numeric column for y-axis
-        const numericColumn = queryData.columns.find(col => 
-          col.type === 'number' || col.type === 'integer' || col.type === 'bigint' || 
-          col.type === 'decimal' || col.type === 'double'
-        );
+        const numericColumn = queryData.columns.find(col => {
+          const colType = col.type || detectColumnType(col.name);
+          return colType === 'number' || colType === 'integer' || colType === 'bigint' || 
+                 colType === 'decimal' || colType === 'double';
+        });
         
         if (stringColumn && numericColumn) {
           chartConfig = {
             ...chartConfig,
             xField: stringColumn.name,
             yField: numericColumn.name,
-            x_column: stringColumn.name,  // Backend format
-            y_column: numericColumn.name   // Backend format
+            x_column: stringColumn.name,
+            y_column: numericColumn.name
           };
         } else if (queryData.columns.length >= 2) {
           // Fallback to first two columns
@@ -170,7 +185,16 @@ const Dashboard = ({ isPublic = false }) => {
             x_column: queryData.columns[0]?.name || 'x',
             y_column: queryData.columns[1]?.name || 'y'
           };
-          console.log('Fallback chart config:', chartConfig);
+        } else if (queryData.columns.length === 1) {
+          // Single column - use column name for both (will show as single value)
+          const colName = queryData.columns[0]?.name || 'value';
+          chartConfig = {
+            ...chartConfig,
+            xField: colName,
+            yField: colName,
+            x_column: colName,
+            y_column: colName
+          };
         }
       }
 
@@ -308,8 +332,16 @@ const Dashboard = ({ isPublic = false }) => {
       });
 
       if (response.success) {
-        setTiles(prev => [...prev, response.tile]);
-        executeTileQuery(response.tile);
+        // Merge response with our payload to ensure sql_query is included
+        // (API might not return sql_query in the response)
+        const newTile = {
+          ...response.tile,
+          sql_query: tileFormData.sqlQuery,
+          chart_type: tileFormData.chartType,
+          chart_config: tileFormData.chartConfig || {}
+        };
+        setTiles(prev => [...prev, newTile]);
+        executeTileQuery(newTile);
       }
     }
     
@@ -337,30 +369,69 @@ const Dashboard = ({ isPublic = false }) => {
     return { x: 0, y: maxTile.bottom };
   };
 
-  const handleSaveDashboardSettings = async (dashboardData) => {
-    if (!dashboard) {
-      // Creating new dashboard
-      await createNewDashboard(dashboardData);
-    } else {
-      // Updating existing dashboard
-      setLoadingDashboard(true);
-      
+  // Focus title input when entering edit mode
+  useEffect(() => {
+    if (isEditingTitle && titleInputRef.current) {
+      titleInputRef.current.focus();
+      titleInputRef.current.select();
+    }
+  }, [isEditingTitle]);
+
+  const handleTitleClick = () => {
+    if (isPublic) return; // Don't allow editing in public view
+    const currentTitle = dashboard?.title || 'Untitled Dashboard';
+    setEditedTitle(currentTitle);
+    setIsEditingTitle(true);
+  };
+
+  const handleTitleSave = async () => {
+    if (editedTitle.trim() && editedTitle.trim() !== dashboard?.title) {
+      // Save to backend
       const response = await DashboardService.updateDashboard(dashboard.id, {
-        title: dashboardData.title,
-        description: dashboardData.description || '',
-        is_public: dashboardData.is_public || false,
-        is_anonymous_public: dashboardData.is_anonymous_public || false,
+        title: editedTitle.trim(),
+        description: dashboard?.description || '',
+        is_public: dashboard?.is_public || false,
+        is_anonymous_public: dashboard?.is_anonymous_public || false,
       });
 
-      if (response.success && response.dashboard) {
-        // Use the updated dashboard from response (no need to reload)
-        setDashboard(response.dashboard);
-        setDashboardSettingsOpen(false);
-      } else {
-        alert(response.error || 'Failed to update dashboard');
+      if (response.success) {
+        setDashboard(prev => ({ ...prev, title: editedTitle.trim() }));
       }
-      setLoadingDashboard(false);
     }
+    setIsEditingTitle(false);
+  };
+
+  const handleTitleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleTitleSave();
+    } else if (e.key === 'Escape') {
+      setIsEditingTitle(false);
+    }
+  };
+
+  const handleSaveShareSettings = async (shareData) => {
+    if (!dashboard) return;
+    
+    setLoadingDashboard(true);
+    
+    const response = await DashboardService.updateDashboard(dashboard.id, {
+      title: dashboard.title,
+      description: dashboard.description || '',
+      is_public: shareData.is_public || false,
+      is_anonymous_public: shareData.is_anonymous_public || false,
+    });
+
+    if (response.success) {
+      setDashboard(prev => ({
+        ...prev,
+        is_public: shareData.is_public,
+        is_anonymous_public: shareData.is_anonymous_public
+      }));
+      setShareModalOpen(false);
+    } else {
+      alert(response.error || 'Failed to update sharing settings');
+    }
+    setLoadingDashboard(false);
   };
 
   const handlePublish = async () => {
@@ -410,7 +481,7 @@ const Dashboard = ({ isPublic = false }) => {
     const data = tileData[tile.id];
 
     return (
-      <Grid item xs={12} md={tile.width || 6} key={tile.id}>
+      <Grid item xs={12} md={6} key={tile.id}>
         <Card padding="xs" className={`h-full ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
           <Card.Header className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 py-2 px-3">
             <Card.Title className="text-sm font-medium">{tile.title}</Card.Title>
@@ -520,7 +591,7 @@ const Dashboard = ({ isPublic = false }) => {
     <div className={`h-full flex flex-col ${isDark ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
       {/* Header */}
       <div className={`${isDark ? 'bg-gray-900/95 border-gray-800/60' : 'bg-white/95 border-gray-200/60'} border-b px-4 py-2 backdrop-blur-sm`}>
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 w-full">
           {/* Back Button - Only for authenticated users */}
           {!isPublic && (
             <button
@@ -534,39 +605,49 @@ const Dashboard = ({ isPublic = false }) => {
             </button>
           )}
           
-          {/* Title */}
-          <span className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            {dashboard?.title || 'Dashboard'}
-          </span>
-          {dashboard?.description && (
-            <span 
-              className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'} max-w-xl truncate`}
-              title={dashboard.description}
-            >
-              — {dashboard.description.length > 100 
-                  ? `${dashboard.description.substring(0, 100)}...` 
-                  : dashboard.description}
-            </span>
-          )}
+          {/* Editable Title */}
+          <div className="flex-1 flex items-center">
+            {isEditingTitle ? (
+              <input
+                ref={titleInputRef}
+                type="text"
+                value={editedTitle}
+                onChange={(e) => setEditedTitle(e.target.value)}
+                onBlur={handleTitleSave}
+                onKeyDown={handleTitleKeyDown}
+                className={`
+                  text-lg font-bold w-64 px-1 py-0.5 
+                  bg-transparent border-0 border-b-2 border-blue-500 
+                  outline-none transition-all
+                  ${isDark ? 'text-white' : 'text-gray-900'}
+                `}
+                placeholder="Enter dashboard name..."
+              />
+            ) : (
+              <button
+                onClick={handleTitleClick}
+                disabled={isPublic}
+                className={`
+                  text-lg font-bold px-1 py-0.5 transition-all text-left border-b-2 border-transparent
+                  ${isPublic 
+                    ? 'cursor-default' 
+                    : isDark 
+                      ? 'text-white hover:border-gray-600' 
+                      : 'text-gray-900 hover:border-gray-300'
+                  }
+                `}
+                title={isPublic ? undefined : "Click to edit title"}
+              >
+                {dashboard?.title || 'Untitled Dashboard'}
+              </button>
+            )}
+          </div>
           
           {/* Action Buttons - Only for authenticated users */}
           {!isPublic && dashboard && (
-            <div className="ml-auto flex items-center gap-2">
-              {/* Status Badge */}
-              {dashboard.status && (
-                <span className={`
-                  px-2 py-1 text-xs font-medium rounded
-                  ${dashboard.status === 'published' 
-                    ? isDark ? 'bg-green-900/40 text-green-400' : 'bg-green-100 text-green-700'
-                    : isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'
-                  }
-                `}>
-                  {dashboard.status === 'published' ? '✓ Published' : '📝 Draft'}
-                </span>
-              )}
-              
-              {/* Publish Button - Only show for drafts */}
-              {dashboard.status === 'draft' && (
+            <div className="flex items-center gap-3">
+              {/* Publish Button - Only show for drafts with at least one tile */}
+              {dashboard.status === 'draft' && tiles.length > 0 && (
                 <button
                   onClick={handlePublish}
                   className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${isDark ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`}
@@ -576,15 +657,27 @@ const Dashboard = ({ isPublic = false }) => {
                 </button>
               )}
               
-              {/* Settings Button */}
+              {/* Status indicator text - only show for published or drafts with tiles */}
+              {(dashboard.status === 'published' || tiles.length > 0) && (
+                <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                  {dashboard.status === 'published' ? 'Published' : 'Draft'}
+                </span>
+              )}
+              
+              {/* Share Button - Clean icon style */}
               <button
-                onClick={() => setDashboardSettingsOpen(true)}
-                className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-300 hover:text-white' : 'hover:bg-gray-100 text-gray-600 hover:text-gray-900'}`}
-                title="Dashboard Settings"
+                onClick={() => setShareModalOpen(true)}
+                className={`
+                  p-2 rounded-lg transition-colors
+                  ${isDark 
+                    ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-200' 
+                    : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'
+                  }
+                `}
+                title="Share Dashboard"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                 </svg>
               </button>
             </div>
@@ -597,7 +690,7 @@ const Dashboard = ({ isPublic = false }) => {
         <div className="flex-1 overflow-auto p-4 space-y-4">
           {/* Action Bar - Only show for authenticated users */}
           {!isPublic && (
-            <div className="flex items-center justify-end">
+            <div className="flex items-center justify-end mb-4">
               <button 
                 onClick={handleCreateTile}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
@@ -672,18 +765,11 @@ const Dashboard = ({ isPublic = false }) => {
         initialData={editingTile}
       />
 
-      <DashboardSettingsModal 
-        open={dashboardSettingsOpen}
-        onClose={() => {
-          setDashboardSettingsOpen(false);
-          // If we're on the /new route and closing without creating, go back
-          if (id === 'new' && !dashboard) {
-            isCreatingRef.current = false; // Reset ref to allow creating again
-            navigate('/dashboards');
-          }
-        }}
-        onSave={handleSaveDashboardSettings}
-        initialData={dashboard}
+      <ShareModal 
+        open={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        onSave={handleSaveShareSettings}
+        dashboard={dashboard}
       />
 
       <Menu

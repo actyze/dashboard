@@ -191,8 +191,6 @@ class DashboardService:
                         "version": getattr(row, 'version', 1),
                         "published_at": row.published_at.isoformat() if hasattr(row, 'published_at') and row.published_at else None,
                         "published_by": str(row.published_by) if hasattr(row, 'published_by') and row.published_by else None,
-                        "updated_by": str(row.updated_by) if hasattr(row, 'updated_by') and row.updated_by else None,
-                        "updated_by_username": getattr(row, 'updated_by_username', None),
                         "permissions": {
                             "can_view": row.can_view,
                             "can_edit": row.can_edit,
@@ -401,10 +399,8 @@ class DashboardService:
             if not updates:
                 return True  # Nothing to update
             
-            # Always update the updated_at timestamp and updated_by user
+            # Always update the updated_at timestamp
             updates.append("updated_at = CURRENT_TIMESTAMP")
-            updates.append("updated_by = :user_id")
-            params["user_id"] = user_id
             
             async with db_manager.get_session() as session:
                 query = text(f"""

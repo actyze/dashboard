@@ -343,25 +343,6 @@ const Dashboard = ({ isPublic = false }) => {
     }
   };
 
-  const handleToggleFavorite = async () => {
-    if (!dashboard?.id) return;
-    
-    try {
-      const response = await DashboardService.updateDashboard(dashboard.id, {
-        is_favorite: !dashboard.is_favorite
-      });
-      
-      if (response.success) {
-        // Reload dashboard to get updated state
-        await loadDashboard();
-      } else {
-        alert(response.error || 'Failed to update favorite');
-      }
-    } catch (error) {
-      alert('Failed to update favorite: ' + error.message);
-    }
-  };
-
   const handlePublish = async () => {
     if (!dashboard?.id) return;
     
@@ -550,21 +531,6 @@ const Dashboard = ({ isPublic = false }) => {
           {/* Action Buttons - Only for authenticated users */}
           {!isPublic && dashboard && (
             <div className="ml-auto flex items-center gap-2">
-              {/* Favorite Star */}
-              <button
-                onClick={handleToggleFavorite}
-                className={`
-                  text-2xl transition-colors
-                  ${dashboard.is_favorite 
-                    ? 'text-yellow-500 hover:text-yellow-600' 
-                    : isDark ? 'text-gray-600 hover:text-gray-400' : 'text-gray-300 hover:text-gray-400'
-                  }
-                `}
-                title={dashboard.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
-              >
-                {dashboard.is_favorite ? '★' : '☆'}
-              </button>
-              
               {/* Status Badge */}
               {dashboard.status && (
                 <span className={`
@@ -574,7 +540,7 @@ const Dashboard = ({ isPublic = false }) => {
                     : isDark ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'
                   }
                 `}>
-                  {dashboard.status === 'published' ? '✓' : '📝'}
+                  {dashboard.status === 'published' ? '✓ Published' : '📝 Draft'}
                 </span>
               )}
               

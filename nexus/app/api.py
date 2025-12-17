@@ -256,10 +256,10 @@ async def save_manual_query(
     return result
 
 # =============================================================================
-# Saved Queries Endpoints (Tab 2: Saved Queries)
+# Favorite Queries Endpoints (Tab 2: Favorite Queries)
 # =============================================================================
 
-class CreateSavedQueryRequest(BaseModel):
+class CreateFavoriteQueryRequest(BaseModel):
     query_name: str
     natural_language_query: str
     generated_sql: str
@@ -268,7 +268,7 @@ class CreateSavedQueryRequest(BaseModel):
     chart_recommendation: Optional[Dict[str, Any]] = None
     created_from_history_id: Optional[int] = None
 
-class UpdateSavedQueryRequest(BaseModel):
+class UpdateFavoriteQueryRequest(BaseModel):
     query_name: Optional[str] = None
     description: Optional[str] = None
     natural_language_query: Optional[str] = None
@@ -280,16 +280,16 @@ class SaveFromHistoryRequest(BaseModel):
     query_name: str
     description: Optional[str] = None
 
-@router.get("/saved-queries")
-async def get_saved_queries(
+@router.get("/favorite-queries")
+async def get_favorite_queries(
     limit: int = 50,
     offset: int = 0,
     favorites_only: bool = False,
     current_user: dict = Depends(require_viewer)
 ):
-    """Get saved queries for the current user (Saved Queries tab)."""
+    """Get favorite queries for the current user (Favorite Queries tab)."""
     user_id = current_user.get("id")
-    result = await user_service.get_saved_queries(
+    result = await user_service.get_favorite_queries(
         user_id=user_id,
         limit=limit,
         offset=offset,
@@ -299,14 +299,14 @@ async def get_saved_queries(
         raise HTTPException(status_code=500, detail=result.get("error"))
     return result
 
-@router.get("/saved-queries/{query_id}")
-async def get_saved_query(
+@router.get("/favorite-queries/{query_id}")
+async def get_favorite_query(
     query_id: int,
     current_user: dict = Depends(require_viewer)
 ):
-    """Get a specific saved query."""
+    """Get a specific favorite query."""
     user_id = current_user.get("id")
-    result = await user_service.get_saved_query(
+    result = await user_service.get_favorite_query(
         query_id=query_id,
         user_id=user_id
     )
@@ -316,14 +316,14 @@ async def get_saved_query(
         raise HTTPException(status_code=500, detail=result.get("error"))
     return result
 
-@router.post("/saved-queries")
-async def create_saved_query(
-    request: CreateSavedQueryRequest,
+@router.post("/favorite-queries")
+async def create_favorite_query(
+    request: CreateFavoriteQueryRequest,
     current_user: dict = Depends(require_viewer)
 ):
-    """Create a new saved query."""
+    """Create a new favorite query."""
     user_id = current_user.get("id")
-    result = await user_service.create_saved_query(
+    result = await user_service.create_favorite_query(
         user_id=user_id,
         query_name=request.query_name,
         natural_language_query=request.natural_language_query,
@@ -337,15 +337,15 @@ async def create_saved_query(
         raise HTTPException(status_code=500, detail=result.get("error"))
     return result
 
-@router.put("/saved-queries/{query_id}")
-async def update_saved_query(
+@router.put("/favorite-queries/{query_id}")
+async def update_favorite_query(
     query_id: int,
-    request: UpdateSavedQueryRequest,
+    request: UpdateFavoriteQueryRequest,
     current_user: dict = Depends(require_viewer)
 ):
-    """Update a saved query."""
+    """Update a favorite query."""
     user_id = current_user.get("id")
-    result = await user_service.update_saved_query(
+    result = await user_service.update_favorite_query(
         query_id=query_id,
         user_id=user_id,
         query_name=request.query_name,
@@ -361,14 +361,14 @@ async def update_saved_query(
         raise HTTPException(status_code=500, detail=result.get("error"))
     return result
 
-@router.delete("/saved-queries/{query_id}")
-async def delete_saved_query(
+@router.delete("/favorite-queries/{query_id}")
+async def delete_favorite_query(
     query_id: int,
     current_user: dict = Depends(require_viewer)
 ):
-    """Delete a saved query."""
+    """Delete a favorite query."""
     user_id = current_user.get("id")
-    result = await user_service.delete_saved_query(
+    result = await user_service.delete_favorite_query(
         query_id=query_id,
         user_id=user_id
     )
@@ -378,15 +378,15 @@ async def delete_saved_query(
         raise HTTPException(status_code=500, detail=result.get("error"))
     return result
 
-@router.post("/saved-queries/from-history/{history_id}")
-async def save_query_from_history(
+@router.post("/favorite-queries/from-history/{history_id}")
+async def save_favorite_query_from_history(
     history_id: int,
     request: SaveFromHistoryRequest,
     current_user: dict = Depends(require_viewer)
 ):
-    """Save a query from history to saved queries."""
+    """Save a query from history to favorite queries."""
     user_id = current_user.get("id")
-    result = await user_service.save_query_from_history(
+    result = await user_service.save_favorite_query_from_history(
         user_id=user_id,
         history_id=history_id,
         query_name=request.query_name,

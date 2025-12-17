@@ -117,7 +117,7 @@ class QueryManagementService {
   // ============================================
   
   /**
-   * Get saved queries with optional filters
+   * Get favorite queries with optional filters
    * @param {Object} options - Filter options
    * @param {number} options.limit - Number of records to return (default 50)
    * @param {number} options.offset - Offset for pagination (default 0)
@@ -132,7 +132,7 @@ class QueryManagementService {
         params.append('favorites_only', 'true');
       }
       
-      const response = await apiInstance.get(`/api/saved-queries?${params.toString()}`);
+      const response = await apiInstance.get(`/api/favorite-queries?${params.toString()}`);
       
       return {
         success: true,
@@ -140,38 +140,38 @@ class QueryManagementService {
         total: response.data.total || 0
       };
     } catch (error) {
-      console.error('Failed to fetch saved queries:', error);
+      console.error('Failed to fetch favorite queries:', error);
       return {
         success: false,
-        error: error.response?.data?.detail || error.message || 'Failed to fetch saved queries',
+        error: error.response?.data?.detail || error.message || 'Failed to fetch favorite queries',
         queries: []
       };
     }
   }
   
   /**
-   * Get a single saved query by ID
-   * @param {number} queryId - Saved query ID
+   * Get a single favorite query by ID
+   * @param {number} queryId - Favorite query ID
    */
   static async getSavedQueryById(queryId) {
     try {
-      const response = await apiInstance.get(`/api/saved-queries/${queryId}`);
+      const response = await apiInstance.get(`/api/favorite-queries/${queryId}`);
       
       return {
         success: true,
         query: response.data.query
       };
     } catch (error) {
-      console.error('Failed to fetch saved query:', error);
+      console.error('Failed to fetch favorite query:', error);
       return {
         success: false,
-        error: error.response?.data?.detail || error.message || 'Failed to fetch saved query'
+        error: error.response?.data?.detail || error.message || 'Failed to fetch favorite query'
       };
     }
   }
   
   /**
-   * Create a new saved query
+   * Create a new favorite query
    * @param {Object} queryData - Query data
    * @param {string} queryData.query_name - Query name
    * @param {string} queryData.description - Query description (optional)
@@ -181,72 +181,72 @@ class QueryManagementService {
    */
   static async createSavedQuery(queryData) {
     try {
-      const response = await apiInstance.post('/api/saved-queries', queryData);
+      const response = await apiInstance.post('/api/favorite-queries', queryData);
       
       return {
         success: true,
         query_id: response.data.query_id
       };
     } catch (error) {
-      console.error('Failed to create saved query:', error);
+      console.error('Failed to create favorite query:', error);
       return {
         success: false,
-        error: error.response?.data?.detail || error.message || 'Failed to create saved query'
+        error: error.response?.data?.detail || error.message || 'Failed to create favorite query'
       };
     }
   }
   
   /**
-   * Update an existing saved query
-   * @param {number} queryId - Saved query ID
+   * Update an existing favorite query
+   * @param {number} queryId - Favorite query ID
    * @param {Object} updates - Fields to update
    */
   static async updateSavedQuery(queryId, updates) {
     try {
-      const response = await apiInstance.put(`/api/saved-queries/${queryId}`, updates);
+      const response = await apiInstance.put(`/api/favorite-queries/${queryId}`, updates);
       
       return {
         success: true,
         data: response.data
       };
     } catch (error) {
-      console.error('Failed to update saved query:', error);
+      console.error('Failed to update favorite query:', error);
       return {
         success: false,
-        error: error.response?.data?.detail || error.message || 'Failed to update saved query'
+        error: error.response?.data?.detail || error.message || 'Failed to update favorite query'
       };
     }
   }
   
   /**
-   * Delete a saved query
-   * @param {number} queryId - Saved query ID
+   * Delete a favorite query
+   * @param {number} queryId - Favorite query ID
    */
   static async deleteSavedQuery(queryId) {
     try {
-      await apiInstance.delete(`/api/saved-queries/${queryId}`);
+      await apiInstance.delete(`/api/favorite-queries/${queryId}`);
       
       return {
         success: true
       };
     } catch (error) {
-      console.error('Failed to delete saved query:', error);
+      console.error('Failed to delete favorite query:', error);
       return {
         success: false,
-        error: error.response?.data?.detail || error.message || 'Failed to delete saved query'
+        error: error.response?.data?.detail || error.message || 'Failed to delete favorite query'
       };
     }
   }
   
   /**
-   * Save a query from history to saved queries
+   * Save a query from history to favorite queries
    * @param {number} historyId - Query history ID
-   * @param {string} queryName - Name for the saved query
+   * @param {string} queryName - Name for the favorite query
    * @param {string} description - Description (optional)
    */
   static async saveQueryFromHistory(historyId, queryName, description = '') {
     try {
-      const response = await apiInstance.post(`/api/saved-queries/from-history/${historyId}`, {
+      const response = await apiInstance.post(`/api/favorite-queries/from-history/${historyId}`, {
         query_name: queryName,
         description
       });
@@ -265,13 +265,13 @@ class QueryManagementService {
   }
   
   /**
-   * Toggle favorite status for a saved query
-   * @param {number} queryId - Saved query ID
+   * Toggle favorite status for a favorite query
+   * @param {number} queryId - Favorite query ID
    * @param {boolean} isFavorite - New favorite status
    */
   static async toggleFavorite(queryId, isFavorite) {
     try {
-      const response = await apiInstance.put(`/api/saved-queries/${queryId}`, {
+      const response = await apiInstance.put(`/api/favorite-queries/${queryId}`, {
         is_favorite: isFavorite
       });
       

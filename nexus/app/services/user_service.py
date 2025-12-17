@@ -10,7 +10,6 @@ import uuid
 from app.database import (
     db_manager, User, UserPreferences, ConversationHistory, 
     QueryHistory, FavoriteQueries, FavoriteQueryVersion, 
-    SavedQueries,  # Alias for backward compatibility
     Role, UserRole, Group, UserGroup, GroupRole, RefreshToken
 )
 from app.auth.utils import get_password_hash, verify_password, create_access_token
@@ -384,7 +383,7 @@ class UserService:
     # Saved Queries CRUD Operations
     # =============================================================================
     
-    async def create_saved_query(
+    async def create_favorite_query(
         self,
         user_id: str,
         query_name: str,
@@ -395,10 +394,10 @@ class UserService:
         chart_recommendation: Optional[Dict] = None,
         created_from_history_id: Optional[int] = None
     ):
-        """Create a new saved query."""
+        """Create a new favorite query."""
         async with db_manager.get_session() as session:
             try:
-                saved_query = SavedQueries(
+                favorite_query = FavoriteQueries(
                     user_id=uuid.UUID(user_id),
                     query_name=query_name,
                     description=description,
@@ -408,36 +407,36 @@ class UserService:
                     chart_recommendation=chart_recommendation or {},
                     created_from_history_id=created_from_history_id
                 )
-                session.add(saved_query)
+                session.add(favorite_query)
                 await session.commit()
-                await session.refresh(saved_query)
+                await session.refresh(favorite_query)
                 
-                self.logger.info("Saved query created", query_id=saved_query.id, user_id=user_id)
-                return {"success": True, "query_id": saved_query.id}
+                self.logger.info("Favorite query created", query_id=favorite_query.id, user_id=user_id)
+                return {"success": True, "query_id": favorite_query.id}
                 
             except Exception as e:
                 await session.rollback()
-                self.logger.error("Failed to create saved query", error=str(e))
+                self.logger.error("Failed to create favorite query", error=str(e))
                 return {"success": False, "error": str(e)}
     
-    async def get_saved_queries(
+    async def get_favorite_queries(
         self,
         user_id: str,
         limit: int = 50,
         offset: int = 0,
         favorites_only: bool = False
     ):
-        """Get saved queries for a user."""
+        """Get favorite queries for a user."""
         async with db_manager.get_session() as session:
             try:
-                query = select(SavedQueries).where(
-                    SavedQueries.user_id == uuid.UUID(user_id)
+                query = select(FavoriteQueries).where(
+                    FavoriteQueries.user_id == uuid.UUID(user_id)
                 )
                 
                 if favorites_only:
-                    query = query.where(SavedQueries.is_favorite == True)
+                    query = query.where(FavoriteQueries.is_favorite == True)
                 
-                query = query.order_by(SavedQueries.updated_at.desc()).limit(limit).offset(offset)
+                query = query.order_by(FavoriteQueries.updated_at.desc()).limit(limit).offset(offset)
                 
                 result = await session.execute(query)
                 queries = result.scalars().all()
@@ -463,18 +462,18 @@ class UserService:
                     ]
                 }
             except Exception as e:
-                self.logger.error("Failed to get saved queries", error=str(e))
+                self.logger.error("Failed to get favorite queries", error=str(e))
                 return {"success": False, "error": str(e)}
     
-    async def get_saved_query(self, query_id: int, user_id: str):
-        """Get a specific saved query."""
+    async def get_favorite_query(self, query_id: int, user_id: str):
+        """Get a specific favorite query."""
         async with db_manager.get_session() as session:
             try:
                 result = await session.execute(
-                    select(SavedQueries).where(
+                    select(FavoriteQueries).where(
                         and_(
-                            SavedQueries.id == query_id,
-                            SavedQueries.user_id == uuid.UUID(user_id)
+                            FavoriteQueries.id == query_id,
+                            FavoriteQueries.user_id == uuid.UUID(user_id)
                         )
                     )
                 )
@@ -501,10 +500,10 @@ class UserService:
                     }
                 }
             except Exception as e:
-                self.logger.error("Failed to get saved query", error=str(e))
+                self.logger.error("Failed to get favorite query", error=str(e))
                 return {"success": False, "error": str(e)}
     
-    async def update_saved_query(
+    async def update_favorite_query(
         self,
         query_id: int,
         user_id: str,
@@ -583,15 +582,15 @@ class UserService:
                 self.logger.error("Failed to update favorite query", error=str(e))
                 return {"success": False, "error": str(e)}
     
-    async def delete_saved_query(self, query_id: int, user_id: str):
-        """Delete a saved query."""
+    async def delete_favorite_query(self, query_id: int, user_id: str):
+        """Delete a favorite query."""
         async with db_manager.get_session() as session:
             try:
                 result = await session.execute(
-                    select(SavedQueries).where(
+                    select(FavoriteQueries).where(
                         and_(
-                            SavedQueries.id == query_id,
-                            SavedQueries.user_id == uuid.UUID(user_id)
+                            FavoriteQueries.id == query_id,
+                            FavoriteQueries.user_id == uuid.UUID(user_id)
                         )
                     )
                 )
@@ -603,22 +602,22 @@ class UserService:
                 await session.delete(query)
                 await session.commit()
                 
-                self.logger.info("Saved query deleted", query_id=query_id)
+                self.logger.info("Favorite query deleted", query_id=query_id)
                 return {"success": True}
                 
             except Exception as e:
                 await session.rollback()
-                self.logger.error("Failed to delete saved query", error=str(e))
+                self.logger.error("Failed to delete favorite query", error=str(e))
                 return {"success": False, "error": str(e)}
     
-    async def save_query_from_history(
+    async def save_favorite_query_from_history(
         self,
         user_id: str,
         history_id: int,
         query_name: str,
         description: Optional[str] = None
     ):
-        """Save a query from history to saved queries."""
+        """Save a query from history to favorite queries."""
         async with db_manager.get_session() as session:
             try:
                 # Get history record
@@ -635,8 +634,8 @@ class UserService:
                 if not history:
                     return {"success": False, "error": "Query history not found or access denied"}
                 
-                # Create saved query
-                saved_query = SavedQueries(
+                # Create favorite query
+                favorite_query = FavoriteQueries(
                     user_id=uuid.UUID(user_id),
                     query_name=query_name,
                     description=description,
@@ -646,15 +645,15 @@ class UserService:
                     created_from_history_id=history_id,
                     tags=[]
                 )
-                session.add(saved_query)
+                session.add(favorite_query)
                 await session.commit()
-                await session.refresh(saved_query)
+                await session.refresh(favorite_query)
                 
-                self.logger.info("Query saved from history", 
+                self.logger.info("Query saved from history as favorite", 
                     history_id=history_id, 
-                    saved_query_id=saved_query.id
+                    favorite_query_id=favorite_query.id
                 )
-                return {"success": True, "query_id": str(saved_query.id)}
+                return {"success": True, "query_id": str(favorite_query.id)}
                 
             except Exception as e:
                 await session.rollback()

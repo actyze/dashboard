@@ -6,7 +6,6 @@ import AIQueryInput from './AIQueryInput';
 import SqlQuery from './SqlQuery';
 import QueryResults from './QueryResults';
 import { Chart } from '../Charts';
-import { ReasoningBanner } from '../Common';
 import { Text } from '../ui';
 import { useProcessNaturalLanguage, useExecuteSql } from '../../hooks';
 import { QueryManagementService } from '../../services';
@@ -16,62 +15,23 @@ const QueryPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { isDark } = useTheme();
-  const [selectedQuery, setSelectedQuery] = useState(null);
+  
+  const queryFromState = location.state?.query;
+  
+  const [queryName, setQueryName] = useState(queryFromState?.query_name || queryFromState?.created_at || 'Untitled Query');
   const [databasePanelCollapsed, setDatabasePanelCollapsed] = useState(true);
   const [aiPanelCollapsed, setAiPanelCollapsed] = useState(false);
   const [selectedTable, setSelectedTable] = useState(null);
-  const [activeView, setActiveView] = useState('results'); // 'results' or 'chart'
-  const [sqlQuery, setSqlQuery] = useState(
-    selectedQuery?.query || 
-    "SELECT customer_name, order_total, order_date\nFROM orders\nWHERE order_date >= DATE '2024-01-01'\nORDER BY order_total DESC\nLIMIT 10"
-  );
+  const [activeView, setActiveView] = useState('results');
+  const [sqlQuery, setSqlQuery] = useState(queryFromState?.generated_sql || "-- Write your query here");
   const [queryError, setQueryError] = useState(null);
   const [queryResults, setQueryResults] = useState(null);
   const [chartData, setChartData] = useState(null);
-  const [queryReasoning, setQueryReasoning] = useState(null);
   
-  // Editable title state
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
   const titleInputRef = useRef(null);
 
-  // Load query from navigation state (when coming from QueriesList)
-  useEffect(() => {
-    if (location.state?.sql) {
-      setSqlQuery(location.state.sql);
-      if (location.state.nlQuery) {
-        // If there's a natural language query, we might want to show it too
-        setQueryReasoning(location.state.nlQuery);
-      }
-      // Clear the location state so it doesn't repopulate on refresh
-      navigate(location.pathname, { replace: true, state: {} });
-    }
-  }, [location.state, location.pathname, navigate]);
-
-  useEffect(() => {
-    const loadQuery = async () => {
-      if (id && id !== 'new') {
-        try {
-          const response = await QueryManagementService.getSavedQueryById(id);
-          if (response.success && response.query) {
-            setSelectedQuery(response.query);
-            if (response.query.generated_sql) {
-              setSqlQuery(response.query.generated_sql);
-            }
-          } else {
-            // Fallback if query not found
-            setSelectedQuery({ id, query_name: `Query ${id}` });
-          }
-        } catch (error) {
-          console.error('Error loading query:', error);
-          setSelectedQuery({ id, query_name: `Query ${id}` });
-        }
-      }
-    };
-    loadQuery();
-  }, [id]);
-  
-  // Focus input when entering edit mode
   useEffect(() => {
     if (isEditingTitle && titleInputRef.current) {
       titleInputRef.current.focus();
@@ -80,8 +40,7 @@ const QueryPage = () => {
   }, [isEditingTitle]);
   
   const handleTitleClick = () => {
-    const currentTitle = selectedQuery?.query_name || 'Untitled Query';
-    setEditedTitle(currentTitle);
+    setEditedTitle(queryName);
     setIsEditingTitle(true);
   };
   
@@ -92,21 +51,12 @@ const QueryPage = () => {
       return;
     }
     
-    // Update local state immediately
-    setSelectedQuery(prev => ({ ...prev, query_name: newTitle }));
+    setQueryName(newTitle);
     setIsEditingTitle(false);
     
-    // If this is an existing query (not new), update via API
     if (id && id !== 'new') {
       try {
-        const response = await QueryManagementService.updateSavedQuery(id, {
-          query_name: newTitle
-        });
-        
-        if (!response.success) {
-          console.error('Failed to update query title:', response.error);
-          // Optionally revert or show error to user
-        }
+        await QueryManagementService.renameQuery(id, newTitle);
       } catch (error) {
         console.error('Error updating query title:', error);
       }
@@ -122,11 +72,9 @@ const QueryPage = () => {
   };
 
   const { mutate: processNaturalLanguage, isPending: aiQueryLoading } = useProcessNaturalLanguage({
-    // PROGRESSIVE CALLBACK: SQL generated - show immediately!
-    onSqlGenerated: (sql, chartRecommendation, reasoning) => {
+    onSqlGenerated: (sql) => {
       const commentPrefix = `-- Generated from natural language query\n`;
       setSqlQuery(commentPrefix + sql);
-      setQueryReasoning(reasoning);
       setQueryError(null);
     },
     // PROGRESSIVE CALLBACK: Results ready - show immediately!
@@ -170,7 +118,6 @@ const QueryPage = () => {
 
   const handleExecuteQuery = () => {
     setQueryError(null);
-    setQueryReasoning(null); // Clear reasoning for manual queries
     executeSql({ sql: sqlQuery });
   };
 
@@ -231,7 +178,7 @@ const QueryPage = () => {
                     `}
                     title="Click to edit title"
                   >
-                    {selectedQuery?.query_name || 'Untitled Query'}
+                    {queryName}
                   </button>
                 )}
               </div>
@@ -339,14 +286,6 @@ const QueryPage = () => {
                   </div>
                 </div>
               
-              {/* Query Reasoning Banner */}
-              {queryReasoning && (
-                <ReasoningBanner 
-                  reasoning={queryReasoning}
-                  className="mb-2"
-                />
-              )}
-                
               <SqlQuery 
                 sqlQuery={sqlQuery}
                 setSqlQuery={setSqlQuery}

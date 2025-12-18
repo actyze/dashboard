@@ -74,7 +74,8 @@ const Sidebar = ({ isCollapsed, onToggle }) => {
 
   const MenuItem = ({ item }) => {
     const isActive = location.pathname === item.path || 
-                     location.pathname.startsWith(item.path.replace(/s$/, '/'));
+                     location.pathname.startsWith(item.path.replace(/s$/, '/')) ||
+                     (item.path === '/dashboards' && location.pathname === '/');
     
     return (
       <button

@@ -77,7 +77,7 @@ const DashboardsList = () => {
   return (
     <div className={`h-full flex flex-col ${isDark ? 'bg-[#1a1f2e]' : 'bg-gray-50'}`}>
       {/* Header */}
-      <div className={`px-8 pt-8 pb-6 flex items-center justify-between`}>
+      <div className={`px-8 pt-4 pb-2 flex items-center justify-between`}>
         <h1 className={`text-2xl font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
             Dashboards
         </h1>

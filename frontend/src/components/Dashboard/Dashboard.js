@@ -7,7 +7,7 @@ import SqlTileModal from './SqlTileModal';
 import ShareModal from './ShareModal';
 import { QueryResults } from '../QueryExplorer';
 import { Chart } from '../Charts';
-import { RestService, DashboardService } from '../../services';
+import { RestService, DashboardService, QueryManagementService } from '../../services';
 import { transformQueryResults } from '../../utils/dataTransformers';
 
 const Dashboard = ({ isPublic = false }) => {
@@ -26,6 +26,7 @@ const Dashboard = ({ isPublic = false }) => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedTileId, setSelectedTileId] = useState(null);
   const [dashboardError, setDashboardError] = useState(null);
+  const [recentQueries, setRecentQueries] = useState([]);
   
   // Editable title state
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -48,6 +49,17 @@ const Dashboard = ({ isPublic = false }) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, isPublic]);
+
+  // Load recent queries once for import feature
+  useEffect(() => {
+    if (!isPublic && recentQueries.length === 0) {
+      QueryManagementService.getQueryHistory({ limit: 20 }).then(response => {
+        if (response.success) {
+          setRecentQueries(response.queries || []);
+        }
+      });
+    }
+  }, [isPublic, recentQueries.length]);
 
   const createNewDashboard = async () => {
     setLoadingDashboard(true);
@@ -763,6 +775,7 @@ const Dashboard = ({ isPublic = false }) => {
         }}
         onSave={handleSaveTile}
         initialData={editingTile}
+        recentQueries={recentQueries}
       />
 
       <ShareModal 

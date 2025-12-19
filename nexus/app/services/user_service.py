@@ -244,6 +244,14 @@ class UserService:
         """
         async with db_manager.get_session() as session:
             try:
+                # Cast dicts to JSONB type (SQLAlchemy will handle JSON serialization)
+                from sqlalchemy import cast
+                from sqlalchemy.dialects.postgresql import JSONB
+                
+                # Cast directly to JSONB - SQLAlchemy will serialize the dict
+                chart_rec_casted = cast(chart_recommendation, JSONB) if chart_recommendation else None
+                schema_rec_casted = cast(schema_recommendations, JSONB) if schema_recommendations else None
+                
                 # Call the SQL function for upsert
                 result = await session.execute(
                     select(func.nexus.upsert_query_history(
@@ -253,9 +261,9 @@ class UserService:
                         execution_status,
                         execution_time_ms,
                         row_count,
-                        chart_recommendation,
+                        chart_rec_casted,
                         model_reasoning,
-                        schema_recommendations,
+                        schema_rec_casted,
                         llm_response_time_ms
                     ))
                 )
@@ -339,7 +347,10 @@ class UserService:
                             "execution_time_ms": q.execution_time_ms,
                             "llm_response_time_ms": q.llm_response_time_ms,
                             "row_count": q.row_count,
+                            "execution_count": q.execution_count,
                             "chart_recommendation": q.chart_recommendation,
+                            "model_reasoning": q.model_reasoning,
+                            "schema_recommendations": q.schema_recommendations,
                             "generated_at": q.generated_at.isoformat() if q.generated_at else None,
                             "executed_at": q.executed_at.isoformat() if q.executed_at else None,
                             "created_at": q.created_at.isoformat()

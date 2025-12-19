@@ -146,6 +146,7 @@ async def execute_sql(
                 retry_attempts=0,
                 query_type=query_type,
                 chart_recommendation=request.chart_recommendation,
+                model_reasoning=request.model_reasoning,
                 llm_response_time_ms=request.llm_response_time_ms,
                 generated_at=generated_at,
                 executed_at=executed_at

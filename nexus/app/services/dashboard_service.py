@@ -162,7 +162,10 @@ class DashboardService:
                     SELECT * FROM nexus.get_user_dashboards(:user_id)
                     WHERE (:include_public = TRUE OR is_public = TRUE OR owner_user_id = :user_id)
                     AND (:favorites_only = FALSE OR is_favorite = TRUE)
-                    ORDER BY updated_at DESC
+                    ORDER BY 
+                        last_accessed_at DESC NULLS LAST,
+                        is_favorite DESC,
+                        updated_at DESC
                 """)
                 
                 result = await session.execute(

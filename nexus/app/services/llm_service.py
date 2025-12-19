@@ -164,10 +164,17 @@ Focus on proper Trino SQL syntax and table/column names.
             import re
             import json
             
+            # Strip thinking tags before JSON extraction
+            clean_content = content
+            clean_content = re.sub(r'<think>.*?</think>', '', clean_content, flags=re.DOTALL | re.IGNORECASE)
+            clean_content = re.sub(r'<thinking>.*?</thinking>', '', clean_content, flags=re.DOTALL | re.IGNORECASE)
+            clean_content = re.sub(r'<reasoning>.*?</reasoning>', '', clean_content, flags=re.DOTALL | re.IGNORECASE)
+            clean_content = clean_content.strip()
+            
             chart_config = {}
             
-            # Look for JSON block
-            json_match = re.search(r"```json\s*(.*?)\s*```", content, re.DOTALL)
+            # Look for JSON block in cleaned content
+            json_match = re.search(r"```json\s*(.*?)\s*```", clean_content, re.DOTALL)
             if json_match:
                 try:
                     chart_config = json.loads(json_match.group(1))
@@ -178,10 +185,10 @@ Focus on proper Trino SQL syntax and table/column names.
                 # Try parsing raw JSON if no code block
                 try:
                     # Remove non-json text around the first { and last }
-                    start = content.find("{")
-                    end = content.rfind("}") + 1
+                    start = clean_content.find("{")
+                    end = clean_content.rfind("}") + 1
                     if start != -1 and end != -1:
-                        chart_config = json.loads(content[start:end])
+                        chart_config = json.loads(clean_content[start:end])
                 except:
                     pass
             
@@ -302,12 +309,24 @@ Generated SQL (Main Data):
         # Add schema context FIRST (before rules) to make it prominent
         if schema_recommendations and schema_recommendations.get("recommendations"):
             prompt_parts.append("\n=== AVAILABLE TABLES (USE ONLY THESE) ===")
+            
+            # Build table list with columns
+            tables_info = []
             for rec in schema_recommendations["recommendations"][:7]:  # Top 7 recommendations
                 table_info = f"- {rec.get('full_name', 'unknown')}"
                 if rec.get('columns'):
                     columns_str = ", ".join(rec['columns'][:10])  # Show first 10 columns
                     table_info += f"\n  Columns: {columns_str}"
+                tables_info.append(table_info)
                 prompt_parts.append(table_info)
+            
+            # Infer and add relationships hint
+            relationships = self._infer_table_relationships(schema_recommendations["recommendations"][:7])
+            if relationships:
+                prompt_parts.append("\n=== INFERRED TABLE RELATIONSHIPS ===")
+                for rel in relationships:
+                    prompt_parts.append(f"- {rel}")
+            
             prompt_parts.append("===========================================\n")
         
         prompt_parts.extend([
@@ -450,9 +469,114 @@ Generated SQL (Main Data):
     
     def _extract_sql_from_response(self, response_text: str) -> str:
         """Extract SQL query from LLM response."""
+        import re
         
-        # Remove markdown code blocks
+        # Original text for fallback
         text = response_text.strip()
+        
+        # STRATEGY 1: Try to extract SQL from inside thinking tags FIRST (before stripping)
+        # This handles LLMs that put SQL inside <think> tags
+        thinking_patterns = [
+            r'<think>(.*?)</think>',
+            r'<thinking>(.*?)</thinking>',
+            r'<reasoning>(.*?)</reasoning>'
+        ]
+        
+        for pattern in thinking_patterns:
+            match = re.search(pattern, text, flags=re.DOTALL | re.IGNORECASE)
+            if match:
+                thinking_content = match.group(1)
+                # Try to extract SQL from thinking content
+                sql_from_thinking = self._try_extract_sql(thinking_content)
+                if sql_from_thinking:
+                    self.logger.debug("SQL found inside thinking tags", sql_length=len(sql_from_thinking))
+                    return sql_from_thinking
+        
+        # STRATEGY 2: Strip thinking tags and extract from remaining text
+        # This handles LLMs that put SQL outside thinking tags
+        text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'<thinking>.*?</thinking>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'<reasoning>.*?</reasoning>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        text = text.strip()
+        
+        # Try to extract SQL from stripped text
+        return self._try_extract_sql(text)
+    
+    def _infer_table_relationships(self, tables: List[Dict[str, Any]]) -> List[str]:
+        """
+        Infer foreign key relationships between tables based on column names.
+        LLM-agnostic approach: Use naming conventions to suggest likely JOINs.
+        """
+        relationships = []
+        
+        # Build a map of table -> columns
+        table_columns = {}
+        for table in tables:
+            full_name = table.get('full_name', '')
+            table_name = table.get('table', '')
+            columns = []
+            for col in table.get('columns', []):
+                # Column format is "name|type"
+                col_name = col.split('|')[0] if '|' in col else col
+                columns.append(col_name.lower())
+            table_columns[full_name] = {
+                'table_name': table_name,
+                'columns': columns,
+                'schema': table.get('schema', '')
+            }
+        
+        # Pattern matching for common foreign key relationships
+        for table1_full, table1_data in table_columns.items():
+            for table2_full, table2_data in table_columns.items():
+                if table1_full == table2_full:
+                    continue
+                
+                # Strategy 1: Look for table_name_id pattern
+                # e.g., "customer_id" in orders table -> customers table
+                for col in table1_data['columns']:
+                    # Match patterns like: customer_id, product_id, order_id
+                    if col.endswith('_id'):
+                        base_name = col[:-3]  # Remove '_id'
+                        # Check if there's a table matching this base name
+                        table2_name_lower = table2_data['table_name'].lower()
+                        
+                        # Handle both singular and plural
+                        if (base_name == table2_name_lower or 
+                            base_name + 's' == table2_name_lower or
+                            base_name == table2_name_lower.rstrip('s')):
+                            
+                            # Check if table2 has a matching primary key
+                            if col in table2_data['columns'] or base_name + '_id' in table2_data['columns']:
+                                relationships.append(
+                                    f"{table1_full} → {table2_full} via {col}"
+                                )
+        
+        # Strategy 2: Look for junction tables (many-to-many)
+        # e.g., order_items connects orders and products
+        for table_full, table_data in table_columns.items():
+            table_name = table_data['table_name'].lower()
+            # Check if this might be a junction table
+            if '_' in table_name:
+                parts = table_name.split('_')
+                if len(parts) == 2:
+                    # Check if both parts match other tables
+                    part1_matches = [t for t, d in table_columns.items() if parts[0] in d['table_name'].lower()]
+                    part2_matches = [t for t, d in table_columns.items() if parts[1].rstrip('s') in d['table_name'].lower()]
+                    
+                    if part1_matches and part2_matches:
+                        for t1 in part1_matches[:1]:  # Only first match
+                            for t2 in part2_matches[:1]:
+                                if t1 != table_full and t2 != table_full:
+                                    relationships.append(
+                                        f"{table_full} bridges {t1} ↔ {t2}"
+                                    )
+        
+        return relationships[:5]  # Limit to top 5 most relevant relationships
+    
+    def _try_extract_sql(self, text: str) -> str:
+        """Helper method to try extracting SQL from text using multiple strategies."""
+        if not text:
+            return ""
         
         # Look for SQL code blocks
         if "```sql" in text.lower():
@@ -499,14 +623,53 @@ Generated SQL (Main Data):
         
         if sql_lines:
             return "\n".join(sql_lines)
+        
+        # No SQL found
+        return ""
     
     def _extract_chart_recommendation(self, response_text: str) -> Optional[Dict[str, Any]]:
         """Extract chart recommendation JSON from LLM response."""
         import re
+        import json
+        
+        try:
+            # STRATEGY 1: Try extracting from inside thinking tags first
+            thinking_patterns = [
+                r'<think>(.*?)</think>',
+                r'<thinking>(.*?)</thinking>',
+                r'<reasoning>(.*?)</reasoning>'
+            ]
+            
+            for pattern in thinking_patterns:
+                match = re.search(pattern, response_text, flags=re.DOTALL | re.IGNORECASE)
+                if match:
+                    thinking_content = match.group(1)
+                    chart_rec = self._try_extract_chart_json(thinking_content)
+                    if chart_rec:
+                        self.logger.debug("Chart recommendation found inside thinking tags")
+                        return chart_rec
+            
+            # STRATEGY 2: Strip thinking tags and extract from remaining text
+            text = response_text
+            text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE)
+            text = re.sub(r'<thinking>.*?</thinking>', '', text, flags=re.DOTALL | re.IGNORECASE)
+            text = re.sub(r'<reasoning>.*?</reasoning>', '', text, flags=re.DOTALL | re.IGNORECASE)
+            text = text.strip()
+            
+            return self._try_extract_chart_json(text)
+            
+        except Exception as e:
+            self.logger.warning("Failed to parse chart recommendation", error=str(e))
+            return None
+    
+    def _try_extract_chart_json(self, text: str) -> Optional[Dict[str, Any]]:
+        """Helper method to extract chart JSON from text."""
+        import re
+        import json
         
         try:
             # Look for JSON code block
-            json_match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL | re.IGNORECASE)
+            json_match = re.search(r'```json\s*(.*?)\s*```', text, re.DOTALL | re.IGNORECASE)
             if json_match:
                 json_str = json_match.group(1).strip()
                 chart_rec = json.loads(json_str)
@@ -523,7 +686,7 @@ Generated SQL (Main Data):
             
             # Fallback: Look for JSON object anywhere in text
             json_pattern = r'\{[^{}]*"(?:x_column|y_column|chart_type)"[^{}]*\}'
-            json_match = re.search(json_pattern, response_text, re.IGNORECASE)
+            json_match = re.search(json_pattern, text, re.IGNORECASE)
             if json_match:
                 try:
                     chart_rec = json.loads(json_match.group(0))
@@ -538,11 +701,10 @@ Generated SQL (Main Data):
                 except:
                     pass
             
-            self.logger.debug("No chart recommendation found in LLM response")
             return None
             
         except Exception as e:
-            self.logger.warning("Failed to parse chart recommendation", error=str(e))
+            self.logger.debug("Could not extract chart JSON from text segment")
             return None
     
     def _extract_reasoning(self, response_text: str, chart_rec: Optional[Dict[str, Any]] = None) -> str:

@@ -35,15 +35,15 @@ const DashboardsList = () => {
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) return '-';
+    if (!dateString) return 'Never';
     try {
       // Database returns UTC timestamps without 'Z', so add it to ensure proper parsing
       const utcDateString = dateString.includes('Z') ? dateString : dateString + 'Z';
       const date = parseISO(utcDateString);
-      if (date.getFullYear() < 2000) return '-';
+      if (date.getFullYear() < 2000) return 'Never';
       return formatDistanceToNowStrict(date, { addSuffix: true });
     } catch {
-      return '-';
+      return 'Never';
     }
   };
 
@@ -96,7 +96,8 @@ const DashboardsList = () => {
       <div className="flex-1 px-8 pt-2 overflow-hidden flex flex-col pb-4">
         {/* Table Header */}
         <div className={`grid grid-cols-12 gap-4 px-4 py-3 text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-          <div className="col-span-9">Title</div>
+          <div className="col-span-7">Title</div>
+          <div className="col-span-2">Viewed At</div>
           <div className="col-span-2">Updated</div>
           <div className="col-span-1"></div>
         </div>
@@ -146,7 +147,7 @@ const DashboardsList = () => {
                   `}
                 >
                   {/* Title */}
-                  <div className="col-span-9 flex items-center space-x-2 min-w-0">
+                  <div className="col-span-7 flex items-center space-x-2 min-w-0">
                     {/* Dashboard icon */}
                     <svg className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z" />
@@ -154,6 +155,13 @@ const DashboardsList = () => {
                     {/* Title */}
                     <span className={`truncate text-sm ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
                       {dashboard.title}
+                    </span>
+                  </div>
+                  
+                  {/* Viewed At */}
+                  <div className="col-span-2 flex items-center">
+                    <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {formatDate(dashboard.last_accessed_at)}
                     </span>
                   </div>
                   

@@ -211,10 +211,17 @@ const Dashboard = ({ isPublic = false }) => {
       }
 
       // Prepare chart data if needed
+      // For dashboard tiles, charts are always in "manual" mode (pre-configured via tile settings)
+      // We set source: 'tile' and ensure xField/yField are always present to avoid the config placeholder
       const chartData = tile.chart_type !== 'table' ? {
         chart: {
           type: tile.chart_type,
-          config: chartConfig,
+          config: {
+            ...chartConfig,
+            // Ensure xField and yField are always set to prevent manual config UI
+            xField: chartConfig.xField || chartConfig.x_column,
+            yField: chartConfig.yField || chartConfig.y_column,
+          },
           fallback: false,
           source: 'tile'
         },
@@ -495,7 +502,7 @@ const Dashboard = ({ isPublic = false }) => {
     return (
       <Grid item xs={12} md={6} key={tile.id}>
         <Card padding="xs" className={`h-full ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
-          <Card.Header className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 py-2 px-3">
+          <Card.Header divider={false} className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 py-2 px-3">
             <Card.Title className="text-sm font-medium">{tile.title}</Card.Title>
             {!isPublic && (
               <IconButton 
@@ -669,13 +676,6 @@ const Dashboard = ({ isPublic = false }) => {
                 </button>
               )}
               
-              {/* Status indicator text - only show for published or drafts with tiles */}
-              {(dashboard.status === 'published' || tiles.length > 0) && (
-                <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                  {dashboard.status === 'published' ? 'Published' : 'Draft'}
-                </span>
-              )}
-              
               {/* Share Button - Clean icon style */}
               <button
                 onClick={() => setShareModalOpen(true)}
@@ -742,17 +742,19 @@ const Dashboard = ({ isPublic = false }) => {
                 <p className={`text-xs mb-4 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
                   Create SQL queries and visualize your data
                 </p>
-                <div className="flex justify-center">
-                  <button 
-                    onClick={handleCreateTile}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    New Tile
-                  </button>
-                </div>
+                {!isPublic && (
+                  <div className="flex justify-center">
+                    <button 
+                      onClick={handleCreateTile}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      New Tile
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ) : (

@@ -41,7 +41,7 @@ const AIQueryInput = ({ onSubmit, loading = false }) => {
   useEffect(() => {
     if (textAreaRef.current) {
       textAreaRef.current.style.height = 'auto';
-      textAreaRef.current.style.height = `${Math.min(textAreaRef.current.scrollHeight, 120)}px`;
+      textAreaRef.current.style.height = `${Math.min(textAreaRef.current.scrollHeight, 200)}px`;
     }
   }, [query]);
 
@@ -92,9 +92,9 @@ const AIQueryInput = ({ onSubmit, loading = false }) => {
                 className={`
                   flex-1 resize-none border-none outline-none text-sm leading-relaxed
                   ${isDark ? 'bg-transparent text-white placeholder-gray-500' : 'bg-transparent text-gray-900 placeholder-gray-400'}
-                  min-h-[48px] max-h-[120px]
+                  min-h-[80px] max-h-[200px]
                 `}
-                rows={2}
+                rows={3}
               />
               
               {/* Send Button */}

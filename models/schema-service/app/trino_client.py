@@ -96,6 +96,7 @@ class TrinoSchemaService:
                 'tpch'
             )
             AND c.table_schem <> 'information_schema'
+            AND c.table_schem <> 'nexus'
             AND t.table_type IN ('TABLE', 'VIEW', 'MATERIALIZED VIEW')
             ORDER BY
                 catalog,

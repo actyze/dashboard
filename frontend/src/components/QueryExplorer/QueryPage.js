@@ -350,40 +350,6 @@ const QueryPage = () => {
                 onSubmit={handleAIQuery}
                 loading={queryLoading}
               />
-              
-              {/* Recent Queries */}
-              <div className="mt-4">
-                <Text variant="subtitle2" className="font-medium mb-2 text-xs text-gray-600 dark:text-gray-400">
-                  Recent Queries
-                </Text>
-                <div className="space-y-1.5">
-                  {[
-                    "Show me sales data from the last quarter",
-                    "Create a chart of customer demographics",
-                    "Find all orders over $1000 this month",
-                    "Compare revenue by region",
-                  ].map((query, index) => (
-                    <button
-                      key={index}
-                      onClick={() => !queryLoading && handleAIQuery(query)}
-                      disabled={queryLoading}
-                      className={`
-                        w-full text-left p-2 rounded-lg border transition-all duration-200
-                        ${queryLoading 
-                          ? 'opacity-50 cursor-not-allowed'
-                          : isDark
-                            ? 'bg-gray-800/60 border-gray-700/60 hover:bg-gray-700/70 text-gray-200 hover:border-gray-600/70' 
-                            : 'bg-white/80 border-gray-200/60 hover:bg-white text-gray-700 hover:border-gray-300/80'
-                        }
-                        text-xs
-                      `}
-                      type="button"
-                    >
-                      {query}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
         </div>

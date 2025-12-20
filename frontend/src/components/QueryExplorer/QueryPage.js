@@ -32,6 +32,21 @@ const QueryPage = () => {
   const [editedTitle, setEditedTitle] = useState('');
   const titleInputRef = useRef(null);
 
+  // Conversation history (frontend-only)
+  const [conversationHistory, setConversationHistory] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('conversationHistory');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  // Save conversation history to sessionStorage
+  useEffect(() => {
+    sessionStorage.setItem('conversationHistory', JSON.stringify(conversationHistory));
+  }, [conversationHistory]);
+
   useEffect(() => {
     if (isEditingTitle && titleInputRef.current) {
       titleInputRef.current.focus();
@@ -113,7 +128,23 @@ const QueryPage = () => {
 
   const handleAIQuery = (naturalLanguageQuery) => {
     setQueryError(null);
-    processNaturalLanguage({ nlQuery: naturalLanguageQuery });
+    
+    // Add user query to conversation history
+    const userMessage = { role: 'user', content: naturalLanguageQuery };
+    const updatedHistory = [...conversationHistory, userMessage];
+    setConversationHistory(updatedHistory);
+    
+    // Pass conversation history to LLM (extract just the content strings)
+    const historyStrings = updatedHistory.map(msg => msg.content);
+    processNaturalLanguage({ 
+      nlQuery: naturalLanguageQuery,
+      conversationHistory: historyStrings
+    });
+  };
+
+  const handleClearContext = () => {
+    setConversationHistory([]);
+    sessionStorage.removeItem('conversationHistory');
   };
 
   const handleExecuteQuery = () => {
@@ -350,6 +381,83 @@ const QueryPage = () => {
                 onSubmit={handleAIQuery}
                 loading={queryLoading}
               />
+              
+              {/* Recent Queries */}
+              <div className="mt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <Text variant="subtitle2" className="font-medium text-xs text-gray-600 dark:text-gray-400">
+                    Recent Queries
+                  </Text>
+                  {conversationHistory.length > 0 && (
+                    <button
+                      onClick={handleClearContext}
+                      className={`text-xs px-2 py-1 rounded transition-colors ${
+                        isDark 
+                          ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' 
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                      }`}
+                      title="Clear conversation history"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  {conversationHistory.length > 0 ? (
+                    conversationHistory
+                      .filter(msg => msg.role === 'user')
+                      .reverse()
+                      .map((msg, index) => (
+                        <button
+                          key={index}
+                          onClick={() => !queryLoading && handleAIQuery(msg.content)}
+                          disabled={queryLoading}
+                          className={`
+                            w-full text-left p-2 rounded-lg border transition-all duration-200
+                            ${queryLoading 
+                              ? 'opacity-50 cursor-not-allowed'
+                              : isDark
+                                ? 'bg-gray-800/60 border-gray-700/60 hover:bg-gray-700/70 text-gray-200 hover:border-gray-600/70' 
+                                : 'bg-white/80 border-gray-200/60 hover:bg-white text-gray-700 hover:border-gray-300/80'
+                            }
+                            text-xs
+                          `}
+                          type="button"
+                        >
+                          {msg.content}
+                        </button>
+                      ))
+                  ) : (
+                    <>
+                      {[
+                        "Show me sales data from the last quarter",
+                        "Create a chart of customer demographics",
+                        "Find all orders over $1000 this month",
+                        "Compare revenue by region",
+                      ].map((query, index) => (
+                        <button
+                          key={index}
+                          onClick={() => !queryLoading && handleAIQuery(query)}
+                          disabled={queryLoading}
+                          className={`
+                            w-full text-left p-2 rounded-lg border transition-all duration-200
+                            ${queryLoading 
+                              ? 'opacity-50 cursor-not-allowed'
+                              : isDark
+                                ? 'bg-gray-800/60 border-gray-700/60 hover:bg-gray-700/70 text-gray-200 hover:border-gray-600/70' 
+                                : 'bg-white/80 border-gray-200/60 hover:bg-white text-gray-700 hover:border-gray-300/80'
+                            }
+                            text-xs
+                          `}
+                          type="button"
+                        >
+                          {query}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>

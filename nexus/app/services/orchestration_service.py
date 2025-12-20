@@ -53,7 +53,7 @@ class OrchestrationService:
         
         try:
             # Step 1: Get schema recommendations
-            self.logger.info("=== STEP 1: FAISS SCHEMA SERVICE ===")
+            self.logger.info("=== STEP 1: SCHEMA RECOMMENDATIONS ===")
             
             cached_schema = await self.cache_service.get_schema_recommendations(
                 nl_query, conversation_history

@@ -54,8 +54,8 @@ class SchemaService(BaseService):
         
         request_data = {
             "natural_language_query": natural_language_query,
-            "conversation_history": conversation_history or [],
-            "max_recommendations": max_recommendations,
+            "prior_context": conversation_history or [],  # Fixed: schema service expects prior_context
+            "top_k": max_recommendations,
             "confidence_threshold": confidence_threshold
         }
         

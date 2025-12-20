@@ -14,6 +14,7 @@ const QueriesList = () => {
   const [queries, setQueries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [favoritedIds, setFavoritedIds] = useState(new Set());
 
   useEffect(() => {
     loadQueries();
@@ -79,10 +80,7 @@ const QueriesList = () => {
         alert(`Failed to delete: ${response.error}`);
       }
     } catch (err) {
-<<<<<<< Updated upstream
-      alert('An error occurred while deleting the query');
-=======
-      showToast('An error occurred while deleting', 'error');
+      alert('An error occurred while deleting');
       console.error(err);
     }
   };
@@ -101,13 +99,11 @@ const QueriesList = () => {
       
       if (response.success) {
         setFavoritedIds(prev => new Set([...prev, query.id]));
-        showToast('Query saved to favorites', 'success');
       } else {
-        showToast(response.error || 'Failed to add to favorites', 'error');
+        alert(response.error || 'Failed to add to favorites');
       }
     } catch (err) {
-      showToast('An error occurred', 'error');
->>>>>>> Stashed changes
+      alert('An error occurred');
       console.error(err);
     }
   };

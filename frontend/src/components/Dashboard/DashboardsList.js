@@ -143,21 +143,6 @@ const DashboardsList = () => {
   return (
     <div className={`h-full flex flex-col ${isDark ? 'bg-[#1a1f2e]' : 'bg-gray-50'}`}>
       {/* Header */}
-<<<<<<< Updated upstream
-      <div className={`px-8 pt-8 pb-6 flex items-center justify-between`}>
-        <h1 className={`text-2xl font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            Dashboards
-        </h1>
-        <button
-          onClick={() => navigate('/dashboard/new')}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          New
-        </button>
-=======
       <div className={`px-8 pt-4 pb-2`}>
         <div className="flex items-center justify-between mb-4">
           <h1 className={`text-2xl font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
@@ -211,7 +196,6 @@ const DashboardsList = () => {
                   </svg>
                 </button>
               )}
->>>>>>> Stashed changes
             </div>
 
             {/* Status Filter Select */}

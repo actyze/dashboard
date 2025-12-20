@@ -14,8 +14,6 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
   const [xAxisColumn, setXAxisColumn] = useState('');
   const [yAxisColumn, setYAxisColumn] = useState('');
   const [error, setError] = useState(null);
-<<<<<<< Updated upstream
-=======
   const [showSidebar, setShowSidebar] = useState(false);
   
   // Query preview state
@@ -26,7 +24,6 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
   
   // Editing mode - when editing, always show config (no empty state)
   const isEditing = !!initialData;
->>>>>>> Stashed changes
 
   useEffect(() => {
     if (initialData) {
@@ -58,10 +55,6 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
       setHasPreviewedQuery(false);
     }
     setError(null);
-<<<<<<< Updated upstream
-  }, [initialData, open]);
-
-=======
     setShowSidebar(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData, open]);
@@ -151,7 +144,6 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
     setSqlQuery(query.generated_sql || '');
   };
 
->>>>>>> Stashed changes
   const handleSave = () => {
     if (!title.trim()) {
       setError('Title is required');

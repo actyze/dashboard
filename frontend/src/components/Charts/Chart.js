@@ -427,6 +427,88 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
           decreasing: { line: { color: CHART_COLORS[3] } }
         }];
 
+      case 'indicator':
+      case 'metric':
+        // Single-value KPI display
+        // Expect either: single row/single column OR labeled value pair
+        let value = 0;
+        let delta = null;
+        let reference = null;
+        
+        if (data.length === 1) {
+          if (columns.length === 1) {
+            // Simple single value: SELECT COUNT(*) FROM ...
+            value = parseFloat(data[0][columns[0].name]) || 0;
+          } else if (columns.length === 2) {
+            // Label + value OR value + delta
+            const col1 = columns[0].name;
+            const col2 = columns[1].name;
+            
+            // Try to detect which column is the value (numeric)
+            const val1 = parseFloat(data[0][col1]);
+            const val2 = parseFloat(data[0][col2]);
+            
+            if (!isNaN(val1) && isNaN(val2)) {
+              value = val1; // First col is value
+            } else if (!isNaN(val2) && isNaN(val1)) {
+              value = val2; // Second col is value
+            } else if (!isNaN(val1) && !isNaN(val2)) {
+              // Both numeric - use yField as value, xField as reference/delta
+              value = val2;
+              reference = val1;
+              delta = val2 - val1;
+            } else {
+              value = val2; // Default to second column
+            }
+          } else {
+            // Multiple columns - use yField
+            value = parseFloat(data[0][yField]) || 0;
+          }
+        } else if (data.length > 1) {
+          // Multiple rows - aggregate the yField
+          value = data.reduce((sum, row) => sum + (parseFloat(row[yField]) || 0), 0);
+        }
+        
+        // Build indicator trace
+        const indicatorTrace = {
+          type: 'indicator',
+          mode: delta !== null ? 'number+delta' : 'number',
+          value: value,
+          number: {
+            font: { size: embedded ? 48 : 72, color: isDark ? '#e5e7eb' : '#1f2937' },
+            prefix: config.prefix || '',
+            suffix: config.suffix || '',
+            valueformat: config.format || '.0f'
+          },
+          domain: { x: [0, 1], y: [0, 1] }
+        };
+        
+        if (delta !== null) {
+          indicatorTrace.delta = {
+            reference: reference,
+            relative: false,
+            position: 'bottom',
+            valueformat: config.format || '.0f',
+            increasing: { color: '#10b981' },
+            decreasing: { color: '#ef4444' },
+            font: { size: embedded ? 16 : 24 }
+          };
+        }
+        
+        // Add gauge if configured
+        if (config.showGauge) {
+          indicatorTrace.mode += '+gauge';
+          indicatorTrace.gauge = {
+            axis: { range: [null, config.gaugeMax || value * 1.5] },
+            bar: { color: isDark ? '#3b82f6' : '#2563eb' },
+            bgcolor: isDark ? '#374151' : '#e5e7eb',
+            borderwidth: 0,
+            steps: config.gaugeSteps || []
+          };
+        }
+        
+        return [indicatorTrace];
+
       case 'table':
         // Return empty - table view handled separately
         return [];
@@ -480,6 +562,17 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
       };
     }
 
+    // Indicator charts have special minimal layout
+    if (chartType === 'indicator' || chartType === 'metric') {
+      return {
+        ...baseLayout,
+        margin: { l: 20, r: 20, t: 20, b: 20 },
+        showlegend: false,
+        xaxis: { visible: false },
+        yaxis: { visible: false }
+      };
+    }
+    
     // Charts that need axes
     const axisCharts = ['bar', 'column', 'line', 'scatter', 'area', 'histogram', 'box', 'violin', 'waterfall', 'contour', 'heatmap', 'candlestick'];
     

@@ -4,6 +4,7 @@ import { SqlEditor } from '../Common';
 import { RestService } from '../../services';
 import { transformQueryResults } from '../../utils/dataTransformers';
 import { ChartTypeSelector } from '../Charts';
+import { extractColumnsFromSQL, isValidSQLQuery } from '../../utils/sqlParser';
 
 const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
   const { isDark } = useTheme();
@@ -29,19 +30,29 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
     if (initialData) {
       setTitle(initialData.title || '');
       setDescription(initialData.description || '');
-      setSqlQuery(initialData.sql_query || '');
+      const sqlText = initialData.sql_query || '';
+      setSqlQuery(sqlText);
       setChartType(initialData.chart_type || 'bar');
       // Load axis config from chart_config
       const config = initialData.chart_config || {};
-      setXAxisColumn(config.xField || config.x_column || '');
-      setYAxisColumn(config.yField || config.y_column || '');
+      const xCol = config.xField || config.x_column || '';
+      const yCol = config.yField || config.y_column || '';
+      setXAxisColumn(xCol);
+      setYAxisColumn(yCol);
       setQueryPreviewError(null);
       
-      // For editing, fetch columns in background (no loading state shown)
-      setQueryColumns([]);
-      setHasPreviewedQuery(false);
-      if (initialData.sql_query && initialData.chart_type !== 'table') {
-        runPreviewForEdit(initialData.sql_query, config);
+      // Parse columns from SQL query directly (no execution needed!)
+      if (sqlText && isValidSQLQuery(sqlText)) {
+        const parsedColumns = extractColumnsFromSQL(sqlText);
+        setQueryColumns(parsedColumns.map(col => ({ name: col.name, type: null })));
+        setHasPreviewedQuery(true);
+      } else {
+        // Fallback to saved config if SQL parsing fails
+        const savedColumns = [];
+        if (xCol) savedColumns.push({ name: xCol, type: null });
+        if (yCol && yCol !== xCol) savedColumns.push({ name: yCol, type: null });
+        setQueryColumns(savedColumns);
+        setHasPreviewedQuery(true);
       }
     } else {
       setTitle('');
@@ -58,6 +69,31 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
     setShowSidebar(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData, open]);
+
+  // Auto-parse columns from SQL whenever the query changes
+  useEffect(() => {
+    if (!sqlQuery || chartType === 'table' || chartType === 'indicator' || chartType === 'metric') {
+      return; // Skip for table/indicator charts
+    }
+
+    if (isValidSQLQuery(sqlQuery)) {
+      const parsedColumns = extractColumnsFromSQL(sqlQuery);
+      if (parsedColumns.length > 0) {
+        setQueryColumns(parsedColumns.map(col => ({ name: col.name, type: null })));
+        setHasPreviewedQuery(true);
+        setQueryPreviewError(null);
+        
+        // Auto-select columns if not already set
+        if (!xAxisColumn && parsedColumns.length >= 1) {
+          setXAxisColumn(parsedColumns[0].name);
+        }
+        if (!yAxisColumn && parsedColumns.length >= 2) {
+          setYAxisColumn(parsedColumns[1].name);
+        }
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sqlQuery, chartType]);
 
   // Helper to run preview when editing
   const runPreviewForEdit = async (sql, existingConfig) => {
@@ -153,8 +189,9 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
       setError('SQL query is required');
       return;
     }
-    // Require x/y axis for chart types (not table)
-    if (chartType !== 'table') {
+    // Require x/y axis for chart types (not table, indicator, or metric)
+    const needsAxes = chartType !== 'table' && chartType !== 'indicator' && chartType !== 'metric';
+    if (needsAxes) {
       if (!hasPreviewedQuery && queryColumns.length === 0) {
         setError('Please run the query first to configure chart axes');
         return;
@@ -343,8 +380,29 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
               </div>
             </div>
 
-            {/* Axis Configuration - Only show for chart types (not table) */}
-            {chartType !== 'table' && (
+            {/* Info banner for Indicator/Metric charts */}
+            {(chartType === 'indicator' || chartType === 'metric') && (
+              <div className={`
+                p-3 rounded-lg border text-xs
+                ${isDark ? 'bg-blue-900/20 border-blue-800 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700'}
+              `}>
+                <div className="flex items-start gap-2">
+                  <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  <div>
+                    <p className="font-medium mb-0.5">Single-Value Metric</p>
+                    <p className="opacity-90">
+                      Your query should return a single number (e.g., <code className="px-1 py-0.5 rounded bg-black/10 dark:bg-white/10">SELECT COUNT(*) FROM table</code>). 
+                      The value will be displayed prominently. No axis configuration needed.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Axis Configuration - Only show for chart types (not table or indicator) */}
+            {chartType !== 'table' && chartType !== 'indicator' && chartType !== 'metric' && (
               <div className={`
                 p-4 rounded-lg border
                 ${isDark ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'}
@@ -369,56 +427,13 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
                   </div>
                 )}
 
-                {/* Empty state - Only show for NEW tiles (not editing) when no query has been run */}
-                {!isEditing && !hasPreviewedQuery && queryColumns.length === 0 && (
+                {/* Info message - columns are auto-detected from SQL */}
+                {queryColumns.length === 0 && sqlQuery.trim() && (
                   <div className={`
-                    text-center py-4 rounded-lg border-2 border-dashed
-                    ${isDark ? 'border-gray-700 text-gray-500' : 'border-gray-200 text-gray-400'}
+                    text-center py-3 rounded-lg text-xs
+                    ${isDark ? 'bg-gray-800/50 text-gray-500' : 'bg-gray-50 text-gray-400'}
                   `}>
-                    <svg className="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    {!sqlQuery.trim() ? (
-                      <>
-                        <p className="text-xs font-medium mb-1">Enter a SQL query first</p>
-                        <p className="text-xs opacity-75">Write your query above to configure the chart</p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-xs font-medium mb-1">Ready to load columns</p>
-                        <button
-                          type="button"
-                          onClick={handlePreviewQuery}
-                          disabled={queryPreviewLoading}
-                          className={`
-                            mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                            ${queryPreviewLoading
-                              ? isDark 
-                                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                              : 'bg-blue-600 text-white hover:bg-blue-700'
-                            }
-                          `}
-                        >
-                          {queryPreviewLoading ? (
-                            <>
-                              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-                              </svg>
-                              Running...
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M8 5v14l11-7z"/>
-                              </svg>
-                              Run Query
-                            </>
-                          )}
-                        </button>
-                      </>
-                    )}
+                    <p>Enter a valid SQL query above. Column names will be auto-detected.</p>
                   </div>
                 )}
 
@@ -444,6 +459,10 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
                         `}
                       >
                         <option value="">Select column...</option>
+                        {/* Show currently selected value even if columns haven't loaded yet */}
+                        {xAxisColumn && !queryColumns.find(col => col.name === xAxisColumn) && (
+                          <option value={xAxisColumn}>{xAxisColumn}</option>
+                        )}
                         {queryColumns.map((col) => (
                           <option key={col.name} value={col.name}>
                             {col.name} {col.type ? `(${col.type})` : ''}
@@ -474,6 +493,10 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
                         `}
                       >
                         <option value="">Select column...</option>
+                        {/* Show currently selected value even if columns haven't loaded yet */}
+                        {yAxisColumn && !queryColumns.find(col => col.name === yAxisColumn) && (
+                          <option value={yAxisColumn}>{yAxisColumn}</option>
+                        )}
                         {queryColumns.map((col) => (
                           <option key={col.name} value={col.name}>
                             {col.name} {col.type ? `(${col.type})` : ''}

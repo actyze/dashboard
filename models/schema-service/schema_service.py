@@ -15,10 +15,16 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 
 # Import modular components
-from app.models import SchemaRecommendationRequest, SchemaRecommendationResponse
+from app.models import (
+    SchemaRecommendationRequest, 
+    SchemaRecommendationResponse,
+    IntentDetectionRequest,
+    IntentDetectionResponse
+)
 from app.trino_client import TrinoSchemaService
 from app.embedder import FAISSSchemaEmbedder
 from app.domain_labeler import DomainLabeler
+from app.intent_detector import IntentDetector
 from app.explorer import (
     get_databases_list,
     get_database_schemas_list,
@@ -47,11 +53,18 @@ class SchemaService:
         )
         self.embedder = FAISSSchemaEmbedder()
         self.labeler = DomainLabeler()  # Initialize domain labeler
+        self.intent_detector = None  # Will be initialized after embedder loads MPNet
         self.scheduler = AsyncIOScheduler()
 
     async def initialize(self):
         logger.info("Initializing: first schema load + FAISS build")
         await self.refresh_schemas()
+        
+        # Initialize intent detector with shared MPNet model
+        logger.info("Initializing IntentDetector with shared MPNet model...")
+        self.intent_detector = IntentDetector(model=self.embedder.model)
+        logger.info("IntentDetector initialized successfully")
+        
         self.scheduler.add_job(self.refresh_schemas, "interval", hours=self.refresh_hours, id="schema_refresh")
         self.scheduler.start()
         logger.info(f"Scheduled schema refresh every {self.refresh_hours} hour(s)")
@@ -256,6 +269,32 @@ async def manual_refresh(user: dict = Depends(verify_service_token)):
         return {"status": "success", "last_updated": schema_service.embedder.last_updated.isoformat()}
     except Exception as e:
         logger.exception("Manual refresh failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/intent/detect", response_model=IntentDetectionResponse)
+async def detect_intent(req: IntentDetectionRequest, user: dict = Depends(verify_service_token)):
+    """
+    Detect user intent using MPNet embeddings and cosine similarity.
+    
+    No heuristics. No hosted LLMs. Pure ML-based classification.
+    
+    Intent Labels:
+    - NEW_QUERY: Execute a new query (triggers schema narrowing)
+    - REFINE_RESULT: Modify current result (reuse schema)
+    - REJECT_RESULT: User unhappy with result (reuse schema)
+    - EXPLAIN_RESULT: User wants explanation (reuse schema)
+    - FOLLOW_UP_SAME_DOMAIN: Related analysis (reuse schema)
+    - AMBIGUOUS: Confidence < 0.70
+    """
+    try:
+        if not schema_service.intent_detector:
+            raise HTTPException(status_code=503, detail="IntentDetector not initialized")
+        
+        result = schema_service.intent_detector.detect_intent(req.text)
+        return result
+    except Exception as e:
+        logger.exception("Intent detection failed")
         raise HTTPException(status_code=500, detail=str(e))
 
 

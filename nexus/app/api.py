@@ -21,6 +21,8 @@ class GenerateSQLRequest(BaseModel):
     nl_query: str
     conversation_history: Optional[List[str]] = []
     session_id: Optional[str] = None
+    last_sql: Optional[str] = None  # For intent-aware schema reuse
+    last_schema_recommendations: Optional[List[dict]] = None  # For intent-aware schema reuse
 
 class ExecuteSQLRequest(BaseModel):
     sql: str
@@ -88,11 +90,13 @@ async def generate_sql(
     request: GenerateSQLRequest,
     current_user: dict = Depends(require_viewer)
 ):
-    """Generate SQL from natural language without executing it."""
-    # We can pass user_id for logging if orchestration service supports it
+    """Generate SQL from natural language without executing it (with ML-based intent detection)."""
     result = await orchestration_service.generate_sql_from_nl(
         request.nl_query, 
-        request.conversation_history
+        request.conversation_history,
+        session_id=request.session_id,
+        last_sql=request.last_sql,
+        last_schema_recommendations=request.last_schema_recommendations
     )
     return result
 
@@ -171,15 +175,18 @@ async def get_query_history(
     limit: int = 50,
     offset: int = 0,
     query_type: Optional[str] = None,
+    favorites_only: bool = False,
     current_user: dict = Depends(require_viewer)
 ):
-    """Get query execution history for the current user (Recent Queries tab)."""
+    """Get query execution history for the current user.
+    Use favorites_only=true for Favorite Queries tab, false for Recent Queries tab."""
     user_id = current_user.get("id")
     result = await user_service.get_query_history(
         user_id=user_id,
         limit=limit,
         offset=offset,
-        query_type=query_type
+        query_type=query_type,
+        favorites_only=favorites_only
     )
     if not result.get("success"):
         raise HTTPException(status_code=500, detail=result.get("error"))
@@ -281,117 +288,18 @@ class SaveFromHistoryRequest(BaseModel):
     query_name: str
     description: Optional[str] = None
 
-@router.get("/favorite-queries")
-async def get_favorite_queries(
-    limit: int = 50,
-    offset: int = 0,
-    favorites_only: bool = False,
-    current_user: dict = Depends(require_viewer)
-):
-    """Get favorite queries for the current user (Favorite Queries tab)."""
-    user_id = current_user.get("id")
-    result = await user_service.get_favorite_queries(
-        user_id=user_id,
-        limit=limit,
-        offset=offset,
-        favorites_only=favorites_only
-    )
-    if not result.get("success"):
-        raise HTTPException(status_code=500, detail=result.get("error"))
-    return result
-
-@router.get("/favorite-queries/{query_id}")
-async def get_favorite_query(
+@router.post("/query-history/{query_id}/favorite")
+async def toggle_favorite(
     query_id: int,
+    favorite_name: Optional[str] = None,
     current_user: dict = Depends(require_viewer)
 ):
-    """Get a specific favorite query."""
+    """Toggle favorite status for a query history entry."""
     user_id = current_user.get("id")
-    result = await user_service.get_favorite_query(
-        query_id=query_id,
-        user_id=user_id
-    )
-    if not result.get("success"):
-        if "not found" in result.get("error", "").lower():
-            raise HTTPException(status_code=404, detail=result.get("error"))
-        raise HTTPException(status_code=500, detail=result.get("error"))
-    return result
-
-@router.post("/favorite-queries")
-async def create_favorite_query(
-    request: CreateFavoriteQueryRequest,
-    current_user: dict = Depends(require_viewer)
-):
-    """Create a new favorite query."""
-    user_id = current_user.get("id")
-    result = await user_service.create_favorite_query(
-        user_id=user_id,
-        query_name=request.query_name,
-        natural_language_query=request.natural_language_query,
-        generated_sql=request.generated_sql,
-        description=request.description,
-        tags=request.tags,
-        chart_recommendation=request.chart_recommendation,
-        created_from_history_id=request.created_from_history_id
-    )
-    if not result.get("success"):
-        raise HTTPException(status_code=500, detail=result.get("error"))
-    return result
-
-@router.put("/favorite-queries/{query_id}")
-async def update_favorite_query(
-    query_id: int,
-    request: UpdateFavoriteQueryRequest,
-    current_user: dict = Depends(require_viewer)
-):
-    """Update a favorite query."""
-    user_id = current_user.get("id")
-    result = await user_service.update_favorite_query(
+    result = await user_service.toggle_query_favorite(
         query_id=query_id,
         user_id=user_id,
-        query_name=request.query_name,
-        description=request.description,
-        natural_language_query=request.natural_language_query,
-        generated_sql=request.generated_sql,
-        is_favorite=request.is_favorite,
-        tags=request.tags
-    )
-    if not result.get("success"):
-        if "not found" in result.get("error", "").lower():
-            raise HTTPException(status_code=404, detail=result.get("error"))
-        raise HTTPException(status_code=500, detail=result.get("error"))
-    return result
-
-@router.delete("/favorite-queries/{query_id}")
-async def delete_favorite_query(
-    query_id: int,
-    current_user: dict = Depends(require_viewer)
-):
-    """Delete a favorite query."""
-    user_id = current_user.get("id")
-    result = await user_service.delete_favorite_query(
-        query_id=query_id,
-        user_id=user_id
-    )
-    if not result.get("success"):
-        if "not found" in result.get("error", "").lower():
-            raise HTTPException(status_code=404, detail=result.get("error"))
-        raise HTTPException(status_code=500, detail=result.get("error"))
-    return result
-
-@router.post("/favorite-queries/from-history/{history_id}")
-async def save_favorite_query_from_history(
-    history_id: int,
-    request: SaveFromHistoryRequest,
-    current_user: dict = Depends(require_viewer)
-):
-    """Save a query from history to favorite queries."""
-    user_id = current_user.get("id")
-    result = await user_service.save_favorite_query_from_history(
-        user_id=user_id,
-        history_id=history_id,
-        query_name=request.query_name,
-        description=request.description
+        favorite_name=favorite_name
     )
     if not result.get("success"):
         if "not found" in result.get("error", "").lower():

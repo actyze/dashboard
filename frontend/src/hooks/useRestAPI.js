@@ -64,17 +64,19 @@ export const useProcessNaturalLanguage = (options = {}) => {
   const { onSqlGenerated, onResultsReady, onError, ...mutationOptions } = options;
   
   return useMutation({
-    mutationFn: async ({ nlQuery, conversationHistory = [] }) => {
+    mutationFn: async ({ nlQuery, conversationHistory = [], context = {} }) => {
       let generatedSql = null;
       let chartRecommendation = null;
       let schemaRecommendations = null;
       let processingTime = null;
       let reasoning = null;
+      let intent = null;
+      let intentConfidence = null;
       
-      // STAGE 1: Generate SQL
+      // STAGE 1: Generate SQL (with ML-based intent detection)
       try {
-        console.log('Stage 1: Generating SQL...');
-        const generateResponse = await RestService.generateSql(nlQuery, conversationHistory);
+        console.log('Stage 1: Generating SQL with intent detection...');
+        const generateResponse = await RestService.generateSql(nlQuery, conversationHistory, context);
         
         if (!generateResponse.success) {
           const error = generateResponse.error || 'Failed to generate SQL';
@@ -87,6 +89,10 @@ export const useProcessNaturalLanguage = (options = {}) => {
         schemaRecommendations = generateResponse.schema_recommendations;
         processingTime = generateResponse.processing_time;
         reasoning = generateResponse.model_reasoning;
+        intent = generateResponse.intent;  // NEW: ML-detected intent
+        intentConfidence = generateResponse.intent_confidence;
+        
+        console.log(`Intent detected: ${intent} (confidence: ${intentConfidence?.toFixed(3)})`);
         
         // CALLBACK: SQL is ready - update UI immediately!
         if (onSqlGenerated) {
@@ -178,7 +184,7 @@ export const useProcessNaturalLanguage = (options = {}) => {
           onResultsReady(transformedResults, chartData);
         }
         
-        // Return complete result
+        // Return complete result (including context for next query)
         return {
           success: true,
           generatedSql,
@@ -188,7 +194,16 @@ export const useProcessNaturalLanguage = (options = {}) => {
           schemaRecommendations,
           processingTime,
           executionTime,
-          error: null
+          error: null,
+          // Intent detection results
+          intent,
+          intentConfidence,
+          // Context for next query (schema reuse)
+          contextForNextQuery: {
+            lastSql: generatedSql,
+            lastSchemaRecommendations: schemaRecommendations,
+            lastReasoning: reasoning
+          }
         };
         
       } catch (error) {

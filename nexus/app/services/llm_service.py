@@ -18,9 +18,20 @@ class LLMService:
         self,
         natural_language_query: str,
         conversation_history: Optional[List[str]] = None,
-        schema_recommendations: Optional[Dict[str, Any]] = None
+        schema_recommendations: Optional[Dict[str, Any]] = None,
+        last_sql: Optional[str] = None,
+        intent: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Generate SQL from natural language query using external LLM API."""
+        """
+        Generate SQL from natural language query using external LLM API.
+        
+        Args:
+            natural_language_query: User's query
+            conversation_history: Previous conversation messages
+            schema_recommendations: Recommended tables/schemas
+            last_sql: Previous SQL (for REFINE/REJECT intents)
+            intent: Detected user intent (for context-aware prompting)
+        """
         
         if not settings.external_llm_enabled:
             return {
@@ -39,8 +50,14 @@ class LLMService:
         )
         
         try:
-            # Build the prompt with schema context
-            prompt = self._build_sql_prompt(natural_language_query, schema_recommendations, conversation_history)
+            # Build the prompt with schema context and previous SQL (for refinement intents)
+            prompt = self._build_sql_prompt(
+                natural_language_query, 
+                schema_recommendations, 
+                conversation_history,
+                last_sql,
+                intent
+            )
             
             # Call external LLM API
             response = await self._call_external_llm(prompt)
@@ -296,15 +313,36 @@ Generated SQL (Main Data):
         self, 
         query: str, 
         schema_recommendations: Optional[Dict[str, Any]] = None,
-        conversation_history: Optional[List[str]] = None
+        conversation_history: Optional[List[str]] = None,
+        last_sql: Optional[str] = None,
+        intent: Optional[str] = None
     ) -> str:
-        """Build SQL generation prompt with schema context and chart recommendations."""
+        """Build SQL generation prompt with schema context, previous SQL, and chart recommendations."""
         
         # Build strict prompt that enforces using ONLY provided tables
         prompt_parts = [
             "You are an expert SQL developer and data visualization specialist.",
             "Generate a Trino SQL query for the following request, AND recommend the best chart configuration."
         ]
+        
+        # Add previous SQL context for refinement/rejection intents
+        if last_sql and intent in ["REJECT_RESULT", "REFINE_RESULT", "EXPLAIN_RESULT", "FOLLOW_UP_SAME_DOMAIN"]:
+            prompt_parts.append("\n=== PREVIOUS SQL (FOR CONTEXT) ===")
+            prompt_parts.append(f"Intent: {intent}")
+            prompt_parts.append("The user is referring to this previous query:")
+            prompt_parts.append(f"```sql\n{last_sql}\n```")
+            
+            if intent == "REJECT_RESULT":
+                prompt_parts.append("User feedback: The previous result was incorrect.")
+                prompt_parts.append("Please analyze what might be wrong and generate a corrected query.")
+            elif intent == "REFINE_RESULT":
+                prompt_parts.append("User feedback: The user wants to refine/modify this result.")
+                prompt_parts.append("Apply the requested changes to the previous query.")
+            elif intent == "FOLLOW_UP_SAME_DOMAIN":
+                prompt_parts.append("User feedback: The user wants related analysis on the same data.")
+                prompt_parts.append("Build upon or extend the previous query.")
+            
+            prompt_parts.append("======================================\n")
         
         # Add schema context FIRST (before rules) to make it prominent
         if schema_recommendations and schema_recommendations.get("recommendations"):

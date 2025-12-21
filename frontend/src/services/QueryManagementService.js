@@ -113,26 +113,26 @@ class QueryManagementService {
   }
   
   // ============================================
-  // SAVED QUERIES - Tab 2
+  // FAVORITES (Now unified with query history)
   // ============================================
   
   /**
-   * Get favorite queries with optional filters
+   * Get favorite queries (now just query_history with favorites_only filter)
    * @param {Object} options - Filter options
    * @param {number} options.limit - Number of records to return (default 50)
    * @param {number} options.offset - Offset for pagination (default 0)
-   * @param {boolean} options.favorites_only - Show only favorite queries
    */
   static async getSavedQueries(options = {}) {
     try {
-      const { limit = 50, offset = 0, favorites_only = false } = options;
+      const { limit = 50, offset = 0 } = options;
       
-      const params = new URLSearchParams({ limit, offset });
-      if (favorites_only) {
-        params.append('favorites_only', 'true');
-      }
+      const params = new URLSearchParams({ 
+        limit, 
+        offset,
+        favorites_only: 'true'  // Filter for favorites only
+      });
       
-      const response = await apiInstance.get(`/api/favorite-queries?${params.toString()}`);
+      const response = await apiInstance.get(`/api/query-history?${params.toString()}`);
       
       return {
         success: true,
@@ -150,134 +150,19 @@ class QueryManagementService {
   }
   
   /**
-   * Get a single favorite query by ID
-   * @param {number} queryId - Favorite query ID
+   * Toggle favorite status for a query history entry
+   * @param {number} queryId - Query history ID
+   * @param {string} favoriteName - Optional name for the favorite
    */
-  static async getSavedQueryById(queryId) {
+  static async toggleFavorite(queryId, favoriteName = null) {
     try {
-      const response = await apiInstance.get(`/api/favorite-queries/${queryId}`);
+      const body = favoriteName ? { favorite_name: favoriteName } : {};
+      const response = await apiInstance.post(`/api/query-history/${queryId}/favorite`, body);
       
       return {
         success: true,
-        query: response.data.query
-      };
-    } catch (error) {
-      console.error('Failed to fetch favorite query:', error);
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message || 'Failed to fetch favorite query'
-      };
-    }
-  }
-  
-  /**
-   * Create a new favorite query
-   * @param {Object} queryData - Query data
-   * @param {string} queryData.query_name - Query name
-   * @param {string} queryData.description - Query description (optional)
-   * @param {string} queryData.natural_language_query - NL query (optional)
-   * @param {string} queryData.generated_sql - SQL query
-   * @param {Array<string>} queryData.tags - Tags (optional)
-   */
-  static async createSavedQuery(queryData) {
-    try {
-      const response = await apiInstance.post('/api/favorite-queries', queryData);
-      
-      return {
-        success: true,
-        query_id: response.data.query_id
-      };
-    } catch (error) {
-      console.error('Failed to create favorite query:', error);
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message || 'Failed to create favorite query'
-      };
-    }
-  }
-  
-  /**
-   * Update an existing favorite query
-   * @param {number} queryId - Favorite query ID
-   * @param {Object} updates - Fields to update
-   */
-  static async updateSavedQuery(queryId, updates) {
-    try {
-      const response = await apiInstance.put(`/api/favorite-queries/${queryId}`, updates);
-      
-      return {
-        success: true,
-        data: response.data
-      };
-    } catch (error) {
-      console.error('Failed to update favorite query:', error);
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message || 'Failed to update favorite query'
-      };
-    }
-  }
-  
-  /**
-   * Delete a favorite query
-   * @param {number} queryId - Favorite query ID
-   */
-  static async deleteSavedQuery(queryId) {
-    try {
-      await apiInstance.delete(`/api/favorite-queries/${queryId}`);
-      
-      return {
-        success: true
-      };
-    } catch (error) {
-      console.error('Failed to delete favorite query:', error);
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message || 'Failed to delete favorite query'
-      };
-    }
-  }
-  
-  /**
-   * Save a query from history to favorite queries
-   * @param {number} historyId - Query history ID
-   * @param {string} queryName - Name for the favorite query
-   * @param {string} description - Description (optional)
-   */
-  static async saveQueryFromHistory(historyId, queryName, description = '') {
-    try {
-      const response = await apiInstance.post(`/api/favorite-queries/from-history/${historyId}`, {
-        query_name: queryName,
-        description
-      });
-      
-      return {
-        success: true,
-        query_id: response.data.query_id
-      };
-    } catch (error) {
-      console.error('Failed to save query from history:', error);
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message || 'Failed to save query'
-      };
-    }
-  }
-  
-  /**
-   * Toggle favorite status for a favorite query
-   * @param {number} queryId - Favorite query ID
-   * @param {boolean} isFavorite - New favorite status
-   */
-  static async toggleFavorite(queryId, isFavorite) {
-    try {
-      const response = await apiInstance.put(`/api/favorite-queries/${queryId}`, {
-        is_favorite: isFavorite
-      });
-      
-      return {
-        success: true,
-        data: response.data
+        is_favorite: response.data.is_favorite,
+        favorite_name: response.data.favorite_name
       };
     } catch (error) {
       console.error('Failed to toggle favorite:', error);
@@ -286,6 +171,24 @@ class QueryManagementService {
         error: error.response?.data?.detail || error.message || 'Failed to toggle favorite'
       };
     }
+  }
+  
+  /**
+   * Mark a query as favorite (convenience method)
+   * @param {number} queryId - Query history ID
+   * @param {string} favoriteName - Name for the favorite
+   */
+  static async saveQueryFromHistory(queryId, favoriteName, description = '') {
+    // Just toggle favorite with a name
+    return this.toggleFavorite(queryId, favoriteName);
+  }
+  
+  /**
+   * Delete a saved/favorite query (same as deleting from history)
+   * @param {number} queryId - Query ID
+   */
+  static async deleteSavedQuery(queryId) {
+    return this.deleteQueryFromHistory(queryId);
   }
 }
 

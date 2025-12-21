@@ -9,7 +9,7 @@ import uuid
 
 from app.database import (
     db_manager, User, UserPreferences, ConversationHistory, 
-    QueryHistory, FavoriteQueries, FavoriteQueryVersion, 
+    QueryHistory, 
     Role, UserRole, Group, UserGroup, GroupRole, RefreshToken
 )
 from app.auth.utils import get_password_hash, verify_password, create_access_token
@@ -317,9 +317,10 @@ class UserService:
         user_id: str, 
         limit: int = 50, 
         offset: int = 0,
-        query_type: Optional[str] = None
+        query_type: Optional[str] = None,
+        favorites_only: bool = False
     ):
-        """Get query history for a user."""
+        """Get query history for a user. Use favorites_only=True for favorites."""
         async with db_manager.get_session() as session:
             try:
                 query = select(QueryHistory).where(
@@ -329,7 +330,11 @@ class UserService:
                 if query_type:
                     query = query.where(QueryHistory.query_type == query_type)
                 
-                query = query.order_by(QueryHistory.executed_at.desc()).limit(limit).offset(offset)
+                if favorites_only:
+                    query = query.where(QueryHistory.is_favorite == True)
+                
+                # Order by last_executed_at instead of executed_at
+                query = query.order_by(QueryHistory.last_executed_at.desc()).limit(limit).offset(offset)
                 
                 result = await session.execute(query)
                 queries = result.scalars().all()
@@ -351,8 +356,12 @@ class UserService:
                             "chart_recommendation": q.chart_recommendation,
                             "model_reasoning": q.model_reasoning,
                             "schema_recommendations": q.schema_recommendations,
+                            "is_favorite": q.is_favorite,
+                            "favorite_name": q.favorite_name,
+                            "tags": q.tags,
                             "generated_at": q.generated_at.isoformat() if q.generated_at else None,
                             "executed_at": q.executed_at.isoformat() if q.executed_at else None,
+                            "last_executed_at": q.last_executed_at.isoformat() if q.last_executed_at else None,
                             "created_at": q.created_at.isoformat()
                         }
                         for q in queries
@@ -390,376 +399,47 @@ class UserService:
                 self.logger.error("Failed to delete query history", error=str(e))
                 return {"success": False, "error": str(e)}
     
-    # =============================================================================
-    # Saved Queries CRUD Operations
-    # =============================================================================
-    
-    async def create_favorite_query(
-        self,
-        user_id: str,
-        query_name: str,
-        natural_language_query: str,
-        generated_sql: str,
-        description: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        chart_recommendation: Optional[Dict] = None,
-        created_from_history_id: Optional[int] = None
-    ):
-        """Create a new favorite query."""
+    async def toggle_query_favorite(self, query_id: int, user_id: str, favorite_name: Optional[str] = None):
+        """Toggle favorite status for a query history entry."""
         async with db_manager.get_session() as session:
             try:
-                favorite_query = FavoriteQueries(
-                    user_id=uuid.UUID(user_id),
-                    query_name=query_name,
-                    description=description,
-                    natural_language_query=natural_language_query,
-                    generated_sql=generated_sql,
-                    tags=tags or [],
-                    chart_recommendation=chart_recommendation or {},
-                    created_from_history_id=created_from_history_id
-                )
-                session.add(favorite_query)
-                await session.commit()
-                await session.refresh(favorite_query)
-                
-                self.logger.info("Favorite query created", query_id=favorite_query.id, user_id=user_id)
-                return {"success": True, "query_id": favorite_query.id}
-                
-            except Exception as e:
-                await session.rollback()
-                self.logger.error("Failed to create favorite query", error=str(e))
-                return {"success": False, "error": str(e)}
-    
-    async def get_favorite_queries(
-        self,
-        user_id: str,
-        limit: int = 50,
-        offset: int = 0,
-        favorites_only: bool = False
-    ):
-        """Get favorite queries for a user."""
-        async with db_manager.get_session() as session:
-            try:
-                query = select(FavoriteQueries).where(
-                    FavoriteQueries.user_id == uuid.UUID(user_id)
-                )
-                
-                if favorites_only:
-                    query = query.where(FavoriteQueries.is_favorite == True)
-                
-                query = query.order_by(FavoriteQueries.updated_at.desc()).limit(limit).offset(offset)
-                
-                result = await session.execute(query)
-                queries = result.scalars().all()
-                
-                return {
-                    "success": True,
-                    "queries": [
-                        {
-                            "id": q.id,
-                            "query_name": q.query_name,
-                            "description": q.description,
-                            "natural_language_query": q.natural_language_query,
-                            "generated_sql": q.generated_sql,
-                            "is_favorite": q.is_favorite,
-                            "tags": q.tags,
-                            "chart_recommendation": q.chart_recommendation,
-                            "execution_count": q.execution_count,
-                            "last_executed_at": q.last_executed_at.isoformat() if q.last_executed_at else None,
-                            "created_at": q.created_at.isoformat(),
-                            "updated_at": q.updated_at.isoformat()
-                        }
-                        for q in queries
-                    ]
-                }
-            except Exception as e:
-                self.logger.error("Failed to get favorite queries", error=str(e))
-                return {"success": False, "error": str(e)}
-    
-    async def get_favorite_query(self, query_id: int, user_id: str):
-        """Get a specific favorite query."""
-        async with db_manager.get_session() as session:
-            try:
-                result = await session.execute(
-                    select(FavoriteQueries).where(
-                        and_(
-                            FavoriteQueries.id == query_id,
-                            FavoriteQueries.user_id == uuid.UUID(user_id)
-                        )
-                    )
-                )
-                query = result.scalar_one_or_none()
-                
-                if not query:
-                    return {"success": False, "error": "Query not found or access denied"}
-                
-                return {
-                    "success": True,
-                    "query": {
-                        "id": query.id,
-                        "query_name": query.query_name,
-                        "description": query.description,
-                        "natural_language_query": query.natural_language_query,
-                        "generated_sql": query.generated_sql,
-                        "is_favorite": query.is_favorite,
-                        "tags": query.tags,
-                        "chart_recommendation": query.chart_recommendation,
-                        "execution_count": query.execution_count,
-                        "last_executed_at": query.last_executed_at.isoformat() if query.last_executed_at else None,
-                        "created_at": query.created_at.isoformat(),
-                        "updated_at": query.updated_at.isoformat()
-                    }
-                }
-            except Exception as e:
-                self.logger.error("Failed to get favorite query", error=str(e))
-                return {"success": False, "error": str(e)}
-    
-    async def update_favorite_query(
-        self,
-        query_id: int,
-        user_id: str,
-        query_name: Optional[str] = None,
-        description: Optional[str] = None,
-        natural_language_query: Optional[str] = None,
-        generated_sql: Optional[str] = None,
-        is_favorite: Optional[bool] = None,
-        tags: Optional[List[str]] = None,
-        chart_recommendation: Optional[Dict] = None,
-        version_notes: Optional[str] = None
-    ):
-        """
-        Update a favorite query.
-        
-        If SQL changes, automatically creates a version snapshot using the
-        update_favorite_query_sql SQL function.
-        """
-        async with db_manager.get_session() as session:
-            try:
-                user_uuid = uuid.UUID(user_id)
-                
-                # Check if SQL is being updated
-                if generated_sql is not None:
-                    # Use SQL function for versioning
-                    result = await session.execute(
-                        select(func.nexus.update_favorite_query_sql(
-                            query_id,
-                            user_uuid,
-                            generated_sql,
-                            natural_language_query,
-                            chart_recommendation,
-                            version_notes
-                        ))
-                    )
-                    new_version = result.scalar_one()
-                    await session.commit()
-                    
-                    self.logger.info("Favorite query SQL updated (versioned)",
-                        query_id=query_id,
-                        new_version=new_version
-                    )
-                
-                # Update non-SQL fields separately (doesn't trigger versioning)
-                result = await session.execute(
-                    select(FavoriteQueries).where(
-                        and_(
-                            FavoriteQueries.id == query_id,
-                            FavoriteQueries.user_id == user_uuid
-                        )
-                    )
-                )
-                query = result.scalar_one_or_none()
-                
-                if not query:
-                    return {"success": False, "error": "Query not found or access denied"}
-                
-                # Update non-SQL fields
-                if query_name is not None:
-                    query.query_name = query_name
-                if description is not None:
-                    query.description = description
-                if is_favorite is not None:
-                    query.is_favorite = is_favorite
-                if tags is not None:
-                    query.tags = tags
-                
-                query.updated_at = datetime.utcnow()
-                await session.commit()
-                
-                self.logger.info("Favorite query updated", query_id=query_id)
-                return {"success": True, "version": query.version}
-                
-            except Exception as e:
-                await session.rollback()
-                self.logger.error("Failed to update favorite query", error=str(e))
-                return {"success": False, "error": str(e)}
-    
-    async def delete_favorite_query(self, query_id: int, user_id: str):
-        """Delete a favorite query."""
-        async with db_manager.get_session() as session:
-            try:
-                result = await session.execute(
-                    select(FavoriteQueries).where(
-                        and_(
-                            FavoriteQueries.id == query_id,
-                            FavoriteQueries.user_id == uuid.UUID(user_id)
-                        )
-                    )
-                )
-                query = result.scalar_one_or_none()
-                
-                if not query:
-                    return {"success": False, "error": "Query not found or access denied"}
-                
-                await session.delete(query)
-                await session.commit()
-                
-                self.logger.info("Favorite query deleted", query_id=query_id)
-                return {"success": True}
-                
-            except Exception as e:
-                await session.rollback()
-                self.logger.error("Failed to delete favorite query", error=str(e))
-                return {"success": False, "error": str(e)}
-    
-    async def save_favorite_query_from_history(
-        self,
-        user_id: str,
-        history_id: int,
-        query_name: str,
-        description: Optional[str] = None
-    ):
-        """Save a query from history to favorite queries."""
-        async with db_manager.get_session() as session:
-            try:
-                # Get history record
                 result = await session.execute(
                     select(QueryHistory).where(
                         and_(
-                            QueryHistory.id == history_id,
+                            QueryHistory.id == query_id,
                             QueryHistory.user_id == uuid.UUID(user_id)
                         )
                     )
                 )
-                history = result.scalar_one_or_none()
-                
-                if not history:
-                    return {"success": False, "error": "Query history not found or access denied"}
-                
-                # Create favorite query
-                favorite_query = FavoriteQueries(
-                    user_id=uuid.UUID(user_id),
-                    query_name=query_name,
-                    description=description,
-                    natural_language_query=history.natural_language_query,
-                    generated_sql=history.generated_sql,
-                    chart_recommendation=history.chart_recommendation,
-                    created_from_history_id=history_id,
-                    tags=[]
-                )
-                session.add(favorite_query)
-                await session.commit()
-                await session.refresh(favorite_query)
-                
-                self.logger.info("Query saved from history as favorite", 
-                    history_id=history_id, 
-                    favorite_query_id=favorite_query.id
-                )
-                return {"success": True, "query_id": str(favorite_query.id)}
-                
-            except Exception as e:
-                await session.rollback()
-                self.logger.error("Failed to save query from history", error=str(e))
-                return {"success": False, "error": str(e)}
-    
-    async def get_favorite_query_versions(
-        self,
-        query_id: int,
-        user_id: str
-    ):
-        """Get all versions of a favorite query."""
-        async with db_manager.get_session() as session:
-            try:
-                user_uuid = uuid.UUID(user_id)
-                
-                # Check if user owns the query
-                result = await session.execute(
-                    select(FavoriteQueries).where(
-                        and_(
-                            FavoriteQueries.id == query_id,
-                            FavoriteQueries.user_id == user_uuid
-                        )
-                    )
-                )
                 query = result.scalar_one_or_none()
                 
                 if not query:
                     return {"success": False, "error": "Query not found or access denied"}
                 
-                # Get all versions
-                versions_result = await session.execute(
-                    select(FavoriteQueryVersion)
-                    .where(FavoriteQueryVersion.favorite_query_id == query_id)
-                    .order_by(FavoriteQueryVersion.version.desc())
-                )
-                versions = versions_result.scalars().all()
+                # Toggle favorite status
+                query.is_favorite = not query.is_favorite
                 
-                return {
-                    "success": True,
-                    "current_version": query.version,
-                    "versions": [
-                        {
-                            "version": v.version,
-                            "query_name": v.query_name,
-                            "description": v.description,
-                            "natural_language_query": v.natural_language_query,
-                            "generated_sql": v.generated_sql,
-                            "chart_recommendation": v.chart_recommendation,
-                            "version_notes": v.version_notes,
-                            "created_by": str(v.created_by) if v.created_by else None,
-                            "created_at": v.created_at.isoformat()
-                        }
-                        for v in versions
-                    ]
-                }
-            except Exception as e:
-                self.logger.error("Failed to get favorite query versions", error=str(e))
-                return {"success": False, "error": str(e)}
-    
-    async def revert_favorite_query_version(
-        self,
-        query_id: int,
-        user_id: str,
-        target_version: int
-    ):
-        """Revert a favorite query to a previous version."""
-        async with db_manager.get_session() as session:
-            try:
-                user_uuid = uuid.UUID(user_id)
+                # Set or clear favorite_name
+                if query.is_favorite:
+                    query.favorite_name = favorite_name or query.favorite_name or "Unnamed Favorite"
                 
-                # Use SQL function for revert (creates auto-save snapshot)
-                result = await session.execute(
-                    select(func.nexus.revert_favorite_query_version(
-                        query_id,
-                        target_version,
-                        user_uuid
-                    ))
-                )
-                new_version = result.scalar_one()
                 await session.commit()
                 
-                self.logger.info("Favorite query reverted",
-                    query_id=query_id,
-                    target_version=target_version,
-                    new_version=new_version
-                )
-                
+                self.logger.info("Query favorite toggled", query_id=query_id, is_favorite=query.is_favorite)
                 return {
                     "success": True,
-                    "new_version": new_version,
-                    "reverted_to": target_version
+                    "is_favorite": query.is_favorite,
+                    "favorite_name": query.favorite_name
                 }
                 
             except Exception as e:
                 await session.rollback()
-                self.logger.error("Failed to revert favorite query version", error=str(e))
+                self.logger.error("Failed to toggle query favorite", error=str(e))
                 return {"success": False, "error": str(e)}
+    
+    # =============================================================================
+    # Removed: Saved Queries / Favorite Queries CRUD Operations
+    # All functionality now consolidated in query_history with is_favorite flag
+    # Use toggle_query_favorite() to mark/unmark favorites
+    # Use get_query_history(favorites_only=True) to get favorites
+    # =============================================================================

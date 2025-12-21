@@ -18,6 +18,13 @@ const QueryPage = () => {
   
   const queryFromState = location.state?.query;
   
+  console.log('[QueryPage] Received state:', {
+    has_query: !!queryFromState,
+    has_sql: !!queryFromState?.generated_sql,
+    sql_preview: queryFromState?.generated_sql?.substring(0, 50),
+    location_state: location.state
+  });
+  
   const [queryName, setQueryName] = useState(queryFromState?.query_name || queryFromState?.created_at || 'Untitled Query');
   const [databasePanelCollapsed, setDatabasePanelCollapsed] = useState(true);
   const [aiPanelCollapsed, setAiPanelCollapsed] = useState(false);
@@ -42,10 +49,27 @@ const QueryPage = () => {
     }
   });
 
+  // Query context for intent-aware schema reuse (NEW)
+  const [queryContext, setQueryContext] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('queryContext');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+  
+  const sessionIdRef = useRef(`session-${Date.now()}`);
+
   // Save conversation history to sessionStorage
   useEffect(() => {
     sessionStorage.setItem('conversationHistory', JSON.stringify(conversationHistory));
   }, [conversationHistory]);
+  
+  // Save query context to sessionStorage  
+  useEffect(() => {
+    sessionStorage.setItem('queryContext', JSON.stringify(queryContext));
+  }, [queryContext]);
 
   useEffect(() => {
     if (isEditingTitle && titleInputRef.current) {
@@ -101,6 +125,10 @@ const QueryPage = () => {
     onSuccess: (data) => {
       if (!data.success && data.error) {
         setQueryError(data.error);
+      } else if (data.contextForNextQuery) {
+        // Save context for intent-aware schema reuse on next query
+        setQueryContext(data.contextForNextQuery);
+        console.log(`Intent: ${data.intent} (${(data.intentConfidence * 100).toFixed(1)}%) - Context saved for next query`);
       }
     },
     // React-query's onError for network/unexpected errors
@@ -136,15 +164,29 @@ const QueryPage = () => {
     
     // Pass conversation history to LLM (extract just the content strings)
     const historyStrings = updatedHistory.map(msg => msg.content);
+    
+    // Build context for intent-aware schema reuse
+    const context = {
+      sessionId: sessionIdRef.current,
+      ...(queryContext.lastSql && { lastSql: queryContext.lastSql }),
+      ...(queryContext.lastSchemaRecommendations && { lastSchemaRecommendations: queryContext.lastSchemaRecommendations })
+    };
+    
     processNaturalLanguage({ 
       nlQuery: naturalLanguageQuery,
-      conversationHistory: historyStrings
+      conversationHistory: historyStrings,
+      context
     });
   };
 
   const handleClearContext = () => {
     setConversationHistory([]);
+    setQueryContext({});
     sessionStorage.removeItem('conversationHistory');
+    sessionStorage.removeItem('queryContext');
+    // Generate new session ID
+    sessionIdRef.current = `session-${Date.now()}`;
+    console.log('Conversation context cleared - starting fresh session');
   };
 
   const handleExecuteQuery = () => {

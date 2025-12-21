@@ -6,16 +6,24 @@ import { Network } from './network';
  */
 export class RestService {
   /**
-   * Generate SQL from natural language query
+   * Generate SQL from natural language query (with ML-based intent detection)
    * @param {string} nlQuery - Natural language query
    * @param {Array} conversationHistory - Previous conversation messages (optional)
+   * @param {Object} context - Context for intent-aware schema reuse (optional)
+   * @param {string} context.sessionId - Session ID for state tracking
+   * @param {string} context.lastSql - Last generated SQL (for refinements)
+   * @param {Array} context.lastSchemaRecommendations - Last schema recommendations (for refinements)
    * @returns {Promise} API response containing generated SQL
    */
-  static async generateSql(nlQuery, conversationHistory = []) {
+  static async generateSql(nlQuery, conversationHistory = [], context = {}) {
     const endpoint = '/api/generate-sql';
     const payload = {
       nl_query: nlQuery,
-      conversation_history: conversationHistory
+      conversation_history: conversationHistory,
+      // Intent-aware context for schema reuse
+      ...(context.sessionId && { session_id: context.sessionId }),
+      ...(context.lastSql && { last_sql: context.lastSql }),
+      ...(context.lastSchemaRecommendations && { last_schema_recommendations: context.lastSchemaRecommendations })
     };
 
     try {

@@ -3,6 +3,18 @@ import { useTheme } from '../../contexts/ThemeContext';
 
 // SVG Mini-Chart Icons - Clear visual representations
 const ChartIcons = {
+  indicator: ({ className }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <text x="12" y="16" textAnchor="middle" fontSize="14" fontWeight="bold" fill="currentColor" stroke="none">123</text>
+      <path d="M3 3h18M3 21h18" opacity="0.3" />
+    </svg>
+  ),
+  metric: ({ className }) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <text x="12" y="16" textAnchor="middle" fontSize="14" fontWeight="bold" fill="currentColor" stroke="none">123</text>
+      <path d="M3 3h18M3 21h18" opacity="0.3" />
+    </svg>
+  ),
   bar: ({ className }) => (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
       <rect x="3" y="12" width="4" height="9" rx="1" />
@@ -147,6 +159,7 @@ const ChartIcons = {
 const CHART_TYPES = {
   // Basic Charts - Always shown
   basic: [
+    { id: 'indicator', label: 'Metric', description: 'Single value KPI', requiresNumeric: true, minCols: 1 },
     { id: 'bar', label: 'Bar', description: 'Compare categories', requiresNumeric: true, requiresCategory: true },
     { id: 'line', label: 'Line', description: 'Trends over time', requiresNumeric: true, requiresCategory: true },
     { id: 'pie', label: 'Pie', description: 'Parts of whole', requiresNumeric: true, requiresCategory: true },
@@ -204,6 +217,9 @@ const ChartTypeSelector = ({
     const totalCols = dataColumns.length;
     const chartId = chartType.id;
 
+    // Single-value metrics - compatible with any numeric data
+    if (['indicator', 'metric'].includes(chartId)) return totalCols >= 1;
+    
     if (['bar', 'line', 'area', 'pie', 'scatter', 'box', 'violin', 'treemap', 'sunburst', 'funnel', 'waterfall'].includes(chartId)) {
       return totalCols >= 2;
     }

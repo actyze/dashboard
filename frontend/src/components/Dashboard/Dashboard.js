@@ -35,6 +35,9 @@ const Dashboard = ({ isPublic = false }) => {
   
   // Ref to prevent duplicate dashboard creation (React StrictMode runs effects twice)
   const isCreatingRef = useRef(false);
+  
+  // Ref to track in-flight tile query executions (prevents duplicate API calls)
+  const executingTilesRef = useRef(new Set());
 
   // Load dashboard and tiles on mount or when ID changes
   useEffect(() => {
@@ -133,6 +136,15 @@ const Dashboard = ({ isPublic = false }) => {
   };
 
   const executeTileQuery = async (tile) => {
+    // Prevent duplicate execution using synchronous ref check
+    if (executingTilesRef.current.has(tile.id)) {
+      console.log(`Skipping duplicate execution for tile ${tile.id}`);
+      return;
+    }
+    
+    // Mark tile as executing (synchronous, prevents race conditions)
+    executingTilesRef.current.add(tile.id);
+    
     setLoadingTiles(prev => ({ ...prev, [tile.id]: true }));
     setTileErrors(prev => ({ ...prev, [tile.id]: null }));
 
@@ -210,36 +222,66 @@ const Dashboard = ({ isPublic = false }) => {
         }
       }
 
-      // Prepare chart data if needed
-      // For dashboard tiles, charts are always in "manual" mode (pre-configured via tile settings)
-      // We set source: 'tile' and ensure xField/yField are always present to avoid the config placeholder
-      const chartData = tile.chart_type !== 'table' ? {
-        chart: {
-          type: tile.chart_type,
-          config: {
-            ...chartConfig,
-            // Ensure xField and yField are always set to prevent manual config UI
-            xField: chartConfig.xField || chartConfig.x_column,
-            yField: chartConfig.yField || chartConfig.y_column,
-          },
-          fallback: false,
-          source: 'tile'
-        },
-        data: queryData,
-        cached: false
-      } : null;
-
-      setTileData(prev => ({
-        ...prev,
-        [tile.id]: {
-          queryResults: queryData,
-          chartData
+      // Validate chart data compatibility
+      let chartData = null;
+      let validationError = null;
+      
+      if (tile.chart_type !== 'table') {
+        // Check if chart type is compatible with data
+        const isIndicatorChart = tile.chart_type === 'indicator' || tile.chart_type === 'metric';
+        const hasOnlyOneColumn = queryData.columns.length === 1;
+        const hasNumericData = queryData.columns.some(col => 
+          col.type && (col.type.toLowerCase().includes('int') || 
+                      col.type.toLowerCase().includes('decimal') || 
+                      col.type.toLowerCase().includes('float') ||
+                      col.type.toLowerCase().includes('double') ||
+                      col.type.toLowerCase().includes('numeric'))
+        );
+        
+        // Validate: Non-indicator charts need at least 2 columns or numeric data
+        if (!isIndicatorChart && hasOnlyOneColumn && !hasNumericData) {
+          validationError = `Chart type "${tile.chart_type}" requires numeric data. Your query returns only categorical data. Try adding a COUNT() or SUM() to your query, or change the chart type to "Table".`;
+        } else if (!isIndicatorChart && queryData.columns.length === 0) {
+          validationError = 'No data columns returned from query.';
+        } else {
+          // Prepare chart data if needed
+          // For dashboard tiles, charts are always in "manual" mode (pre-configured via tile settings)
+          // We set source: 'tile' and ensure xField/yField are always present to avoid the config placeholder
+          chartData = {
+            chart: {
+              type: tile.chart_type,
+              config: {
+                ...chartConfig,
+                // Ensure xField and yField are always set to prevent manual config UI
+                xField: chartConfig.xField || chartConfig.x_column,
+                yField: chartConfig.yField || chartConfig.y_column,
+              },
+              fallback: false,
+              source: 'tile'
+            },
+            data: queryData,
+            cached: false
+          };
         }
-      }));
+      }
+
+      if (validationError) {
+        setTileErrors(prev => ({ ...prev, [tile.id]: validationError }));
+      } else {
+        setTileData(prev => ({
+          ...prev,
+          [tile.id]: {
+            queryResults: queryData,
+            chartData
+          }
+        }));
+      }
     } catch (error) {
       console.error('Error executing tile query:', error);
       setTileErrors(prev => ({ ...prev, [tile.id]: error.message }));
     } finally {
+      // Remove from in-flight set (synchronous cleanup)
+      executingTilesRef.current.delete(tile.id);
       setLoadingTiles(prev => ({ ...prev, [tile.id]: false }));
     }
   };

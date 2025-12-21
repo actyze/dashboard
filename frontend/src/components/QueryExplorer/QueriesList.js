@@ -51,12 +51,6 @@ const QueriesList = () => {
   };
 
   const handleQueryClick = (query) => {
-    console.log('[QueriesList] Navigating with query:', {
-      id: query.id,
-      has_sql: !!query.generated_sql,
-      sql_preview: query.generated_sql?.substring(0, 50)
-    });
-    
     navigate('/query/new', { 
       state: { 
         query: query  // Pass the entire query object

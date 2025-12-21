@@ -18,13 +18,6 @@ const QueryPage = () => {
   
   const queryFromState = location.state?.query;
   
-  console.log('[QueryPage] Received state:', {
-    has_query: !!queryFromState,
-    has_sql: !!queryFromState?.generated_sql,
-    sql_preview: queryFromState?.generated_sql?.substring(0, 50),
-    location_state: location.state
-  });
-  
   const [queryName, setQueryName] = useState(queryFromState?.query_name || queryFromState?.created_at || 'Untitled Query');
   const [databasePanelCollapsed, setDatabasePanelCollapsed] = useState(true);
   const [aiPanelCollapsed, setAiPanelCollapsed] = useState(false);

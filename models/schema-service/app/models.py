@@ -93,3 +93,15 @@ class SchemaRecommendationResponse(BaseModel):
     entity_count: Optional[int] = None
     enhanced_terms_count: Optional[int] = None
 
+
+class IntentDetectionRequest(BaseModel):
+    """Request model for intent detection."""
+    text: str
+
+
+class IntentDetectionResponse(BaseModel):
+    """Response model for intent detection."""
+    intent: str
+    confidence: float
+    all_scores: Optional[Dict[str, float]] = None
+

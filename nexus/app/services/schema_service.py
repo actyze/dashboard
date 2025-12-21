@@ -118,6 +118,51 @@ class SchemaService(BaseService):
         except Exception as e:
             self.logger.error("Failed to get schemas", error=str(e))
             return {"success": False, "error": str(e)}
+    
+    async def detect_intent(self, user_text: str) -> Dict[str, Any]:
+        """
+        Detect user intent using MPNet-based classification.
+        
+        Returns:
+            {
+                "intent": str,  # NEW_QUERY, REFINE_RESULT, REJECT_RESULT, etc.
+                "confidence": float,
+                "all_scores": dict
+            }
+        """
+        request_data = {"text": user_text}
+        
+        self.logger.info("Detecting user intent", text=user_text[:100])
+        
+        try:
+            headers = await self._get_auth_headers()
+            result = await self._make_request("POST", "/intent/detect", data=request_data, headers=headers)
+            
+            intent = result.get("intent", "AMBIGUOUS")
+            confidence = result.get("confidence", 0.0)
+            
+            self.logger.info(
+                "Intent detected",
+                intent=intent,
+                confidence=f"{confidence:.3f}"
+            )
+            
+            return {
+                "success": True,
+                "intent": intent,
+                "confidence": confidence,
+                "all_scores": result.get("all_scores", {})
+            }
+            
+        except Exception as e:
+            self.logger.error("Failed to detect intent", error=str(e))
+            # Fallback to AMBIGUOUS on error
+            return {
+                "success": False,
+                "intent": "AMBIGUOUS",
+                "confidence": 0.0,
+                "error": str(e)
+            }
 
     # ============================================================================
     # Explorer Endpoints

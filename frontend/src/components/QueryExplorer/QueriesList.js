@@ -51,7 +51,8 @@ const QueriesList = () => {
   };
 
   const handleQueryClick = (query) => {
-    navigate('/query/new', { 
+    // Navigate to the specific query page using its ID
+    navigate(`/query/${query.id}`, { 
       state: { 
         query: query  // Pass the entire query object
       } 

@@ -47,7 +47,16 @@ const AIQueryInput = ({ onSubmit, loading = false }) => {
 
   const handleSubmit = () => {
     if (query.trim() && !loading) {
+      // Submit the query
       onSubmit(query.trim());
+      
+      // Clear the input immediately
+      setQuery('');
+      
+      // Reset textarea height
+      if (textAreaRef.current) {
+        textAreaRef.current.style.height = 'auto';
+      }
     }
   };
 

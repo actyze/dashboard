@@ -3,11 +3,12 @@ import { useParams, useNavigate, useLocation } from 'react-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { DatabaseSchemaPanel, ViewToggle } from '../Common';
 import AIQueryInput from './AIQueryInput';
+import TypingIndicator from './TypingIndicator';
 import SqlQuery from './SqlQuery';
 import QueryResults from './QueryResults';
 import { Chart } from '../Charts';
 import { Text } from '../ui';
-import { useProcessNaturalLanguage, useExecuteSql } from '../../hooks';
+import { useProcessNaturalLanguage, useExecuteSql, useConversationHistory } from '../../hooks';
 import { QueryManagementService } from '../../services';
 
 const QueryPage = () => {
@@ -32,37 +33,22 @@ const QueryPage = () => {
   const [editedTitle, setEditedTitle] = useState('');
   const titleInputRef = useRef(null);
 
-  // Conversation history (frontend-only)
-  const [conversationHistory, setConversationHistory] = useState(() => {
-    try {
-      const saved = sessionStorage.getItem('conversationHistory');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+  // Conversation history scoped to this query ID (persisted to localStorage)
+  const { conversationHistory, addUserMessage, addBotMessage, clearHistory } = useConversationHistory(id);
 
-  // Query context for intent-aware schema reuse (NEW)
-  const [queryContext, setQueryContext] = useState(() => {
-    try {
-      const saved = sessionStorage.getItem('queryContext');
-      return saved ? JSON.parse(saved) : {};
-    } catch (e) {
-      return {};
-    }
-  });
+  // Query context for intent-aware schema reuse
+  const [queryContext, setQueryContext] = useState({});
   
-  const sessionIdRef = useRef(`session-${Date.now()}`);
+  // Track when AI is "thinking" (before response arrives)
+  const [isAiTyping, setIsAiTyping] = useState(false);
+  
+  const sessionIdRef = useRef(`session-${id || 'new'}-${Date.now()}`);
 
-  // Save conversation history to sessionStorage
+  // Reset context when query ID changes
   useEffect(() => {
-    sessionStorage.setItem('conversationHistory', JSON.stringify(conversationHistory));
-  }, [conversationHistory]);
-  
-  // Save query context to sessionStorage  
-  useEffect(() => {
-    sessionStorage.setItem('queryContext', JSON.stringify(queryContext));
-  }, [queryContext]);
+    setQueryContext({});
+    sessionIdRef.current = `session-${id || 'new'}-${Date.now()}`;
+  }, [id]);
 
   useEffect(() => {
     if (isEditingTitle && titleInputRef.current) {
@@ -104,10 +90,18 @@ const QueryPage = () => {
   };
 
   const { mutate: processNaturalLanguage, isPending: aiQueryLoading } = useProcessNaturalLanguage({
-    onSqlGenerated: (sql) => {
+    onSqlGenerated: (sql, chartRecommendation, reasoning) => {
       const commentPrefix = `-- Generated from natural language query\n`;
       setSqlQuery(commentPrefix + sql);
       setQueryError(null);
+      
+      // AI has responded - stop typing indicator immediately
+      setIsAiTyping(false);
+      
+      // Save the model's reasoning as a bot message
+      if (reasoning) {
+        addBotMessage(reasoning);
+      }
     },
     // PROGRESSIVE CALLBACK: Results ready - show immediately!
     onResultsReady: (results, chartData) => {
@@ -128,6 +122,7 @@ const QueryPage = () => {
     onError: (error) => {
       console.error('AI Query failed:', error);
       setQueryError(error.message || 'Failed to process natural language query');
+      setIsAiTyping(false); // Stop typing indicator on error
     }
   });
 
@@ -149,14 +144,15 @@ const QueryPage = () => {
 
   const handleAIQuery = (naturalLanguageQuery) => {
     setQueryError(null);
+    setIsAiTyping(true); // Start typing indicator
     
-    // Add user query to conversation history
-    const userMessage = { role: 'user', content: naturalLanguageQuery };
-    const updatedHistory = [...conversationHistory, userMessage];
-    setConversationHistory(updatedHistory);
+    // Add user message to conversation history (scoped to this query ID)
+    addUserMessage(naturalLanguageQuery);
     
-    // Pass conversation history to LLM (extract just the content strings)
-    const historyStrings = updatedHistory.map(msg => msg.content);
+    // Pass conversation history to LLM (only user messages)
+    const historyStrings = conversationHistory
+      .filter(m => m.role === 'user')
+      .map(m => m.content);
     
     // Build context for intent-aware schema reuse
     const context = {
@@ -167,19 +163,17 @@ const QueryPage = () => {
     
     processNaturalLanguage({ 
       nlQuery: naturalLanguageQuery,
-      conversationHistory: historyStrings,
+      conversationHistory: [naturalLanguageQuery, ...historyStrings],
       context
     });
   };
 
-  const handleClearContext = () => {
-    setConversationHistory([]);
+  const handleClearHistory = () => {
+    clearHistory();
     setQueryContext({});
-    sessionStorage.removeItem('conversationHistory');
-    sessionStorage.removeItem('queryContext');
-    // Generate new session ID
-    sessionIdRef.current = `session-${Date.now()}`;
-    console.log('Conversation context cleared - starting fresh session');
+    // Generate new session ID for this query
+    sessionIdRef.current = `session-${id || 'new'}-${Date.now()}`;
+    console.log(`Conversation history cleared for query ${id || 'new'} - starting fresh session`);
   };
 
   const handleExecuteQuery = () => {
@@ -394,105 +388,126 @@ const QueryPage = () => {
             border-l flex flex-col overflow-hidden
           `}
         >
-          <div className={`${aiPanelCollapsed ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300 flex-1 flex flex-col`} style={{ width: 320 }}>
-            <div className="p-3 border-b border-gray-200/50 dark:border-gray-700/50">
-              <div className="flex items-center space-x-2 mb-1">
-                <div className="w-5 h-5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
+          <div className={`${aiPanelCollapsed ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300 h-full flex flex-col overflow-hidden`} style={{ width: 320 }}>
+            {/* Header - Fixed */}
+            <div className="flex-shrink-0 p-3 border-b border-gray-200/50 dark:border-gray-700/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </div>
+                  <Text variant="h6" className="font-bold text-sm whitespace-nowrap">
+                    Actyze AI
+                  </Text>
                 </div>
-                <Text variant="h6" className="font-bold text-sm whitespace-nowrap">
-                  AI Assistant
-                </Text>
+                {conversationHistory.length > 0 && (
+                  <button
+                    onClick={handleClearHistory}
+                    className={`text-xs px-2 py-1 rounded transition-colors ${
+                      isDark 
+                        ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' 
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                    }`}
+                    title="Clear conversation history"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
-              <Text color="secondary" className="text-xs">
-                Ask questions about your data in natural language
-              </Text>
             </div>
             
-            <div className="flex-1 p-3 overflow-y-auto">
+            {/* Conversation History - Scrollable */}
+            <div className="flex-1 min-h-0 p-3 overflow-y-auto">
+              {conversationHistory.length > 0 || isAiTyping ? (
+                <div className="space-y-3">
+                  {/* Reverse to show oldest first (like chat) */}
+                  {[...conversationHistory].reverse().map((message, index) => {
+                    const isBot = message.role === 'assistant';
+                    return (
+                      <div 
+                        key={message.timestamp || index} 
+                        className={`flex ${isBot ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`
+                            max-w-[85%] text-left px-3 py-2 text-sm
+                            ${isBot
+                              ? `rounded-2xl rounded-tr-sm ${
+                                  isDark
+                                    ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white'
+                                    : 'bg-gradient-to-r from-violet-500 to-purple-500 text-white'
+                                }`
+                              : `rounded-2xl rounded-tl-sm ${
+                                  isDark
+                                    ? 'bg-gray-700 text-gray-100'
+                                    : 'bg-gray-200 text-gray-800'
+                                }`
+                            }
+                          `}
+                        >
+                          {message.content}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* Typing indicator when AI is thinking */}
+                  {isAiTyping && <TypingIndicator />}
+                </div>
+              ) : (
+                <div className="h-full flex flex-col p-2 overflow-y-auto">
+                  {/* Welcome Header */}
+                  <h3 className={`text-sm font-semibold mb-1 ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
+                    How can I help?
+                  </h3>
+                  <p className={`text-xs mb-3 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                    I can assist you with:
+                  </p>
+                  
+                  {/* Capability Cards */}
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    {/* Card 1 */}
+                    <div className={`p-2.5 rounded-lg border ${isDark ? 'bg-gray-800/40 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                      <svg className={`w-4 h-4 mb-1.5 ${isDark ? 'text-blue-400' : 'text-blue-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+                      </svg>
+                      <p className={`text-xs leading-snug ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Generate SQL from natural language
+                      </p>
+                    </div>
+                    
+                    {/* Card 2 */}
+                    <div className={`p-2.5 rounded-lg border ${isDark ? 'bg-gray-800/40 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                      <svg className={`w-4 h-4 mb-1.5 ${isDark ? 'text-green-400' : 'text-green-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                      </svg>
+                      <p className={`text-xs leading-snug ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Refine queries through conversation
+                      </p>
+                    </div>
+                    
+                  </div>
+                  
+                  {/* Note */}
+                  <div className={`flex items-start gap-2 p-2 rounded-lg ${isDark ? 'bg-gray-800/40' : 'bg-gray-50'}`}>
+                    <svg className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                    </svg>
+                    <p className={`text-xs leading-snug ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                      Responses may take a moment and queries should be reviewed before running.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* AI Input - Fixed at Bottom */}
+            <div className={`flex-shrink-0 p-3 border-t ${isDark ? 'border-gray-700/50 bg-gray-800/30' : 'border-gray-200/50 bg-gray-50/50'}`}>
               <AIQueryInput 
                 onSubmit={handleAIQuery}
                 loading={queryLoading}
               />
-              
-              {/* Recent Queries */}
-              <div className="mt-4">
-                <div className="flex items-center justify-between mb-2">
-                  <Text variant="subtitle2" className="font-medium text-xs text-gray-600 dark:text-gray-400">
-                    Recent Queries
-                  </Text>
-                  {conversationHistory.length > 0 && (
-                    <button
-                      onClick={handleClearContext}
-                      className={`text-xs px-2 py-1 rounded transition-colors ${
-                        isDark 
-                          ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700' 
-                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                      }`}
-                      title="Clear conversation history"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  {conversationHistory.length > 0 ? (
-                    conversationHistory
-                      .filter(msg => msg.role === 'user')
-                      .reverse()
-                      .map((msg, index) => (
-                        <button
-                          key={index}
-                          onClick={() => !queryLoading && handleAIQuery(msg.content)}
-                          disabled={queryLoading}
-                          className={`
-                            w-full text-left p-2 rounded-lg border transition-all duration-200
-                            ${queryLoading 
-                              ? 'opacity-50 cursor-not-allowed'
-                              : isDark
-                                ? 'bg-gray-800/60 border-gray-700/60 hover:bg-gray-700/70 text-gray-200 hover:border-gray-600/70' 
-                                : 'bg-white/80 border-gray-200/60 hover:bg-white text-gray-700 hover:border-gray-300/80'
-                            }
-                            text-xs
-                          `}
-                          type="button"
-                        >
-                          {msg.content}
-                        </button>
-                      ))
-                  ) : (
-                    <>
-                      {[
-                        "Show me sales data from the last quarter",
-                        "Create a chart of customer demographics",
-                        "Find all orders over $1000 this month",
-                        "Compare revenue by region",
-                      ].map((query, index) => (
-                        <button
-                          key={index}
-                          onClick={() => !queryLoading && handleAIQuery(query)}
-                          disabled={queryLoading}
-                          className={`
-                            w-full text-left p-2 rounded-lg border transition-all duration-200
-                            ${queryLoading 
-                              ? 'opacity-50 cursor-not-allowed'
-                              : isDark
-                                ? 'bg-gray-800/60 border-gray-700/60 hover:bg-gray-700/70 text-gray-200 hover:border-gray-600/70' 
-                                : 'bg-white/80 border-gray-200/60 hover:bg-white text-gray-700 hover:border-gray-300/80'
-                            }
-                            text-xs
-                          `}
-                          type="button"
-                        >
-                          {query}
-                        </button>
-                      ))}
-                    </>
-                  )}
-                </div>
-              </div>
             </div>
           </div>
         </div>

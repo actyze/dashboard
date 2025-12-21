@@ -41,41 +41,121 @@ class OrchestrationService:
     async def generate_sql_from_nl(
         self,
         nl_query: str,
-        conversation_history: Optional[List[str]] = None
+        conversation_history: Optional[List[str]] = None,
+        session_id: Optional[str] = None,
+        last_sql: Optional[str] = None,
+        last_schema_recommendations: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
         Step 1 & 2: Generate SQL from Natural Language using Schema Service and LLM.
+        
+        NEW: Implements ML-based intent detection to prevent schema hallucination.
+        Only calls schema narrowing for NEW_QUERY intent.
         """
         conversation_history = conversation_history or []
         start_time = asyncio.get_event_loop().time()
         
-        self.logger.info("Generating SQL from NL", query=nl_query)
+        self.logger.info("Generating SQL from NL", 
+            query=nl_query, 
+            has_context=bool(last_sql),
+            context_source="frontend" if last_sql or last_schema_recommendations else "none"
+        )
         
         try:
-            # Step 1: Get schema recommendations
-            self.logger.info("=== STEP 1: SCHEMA RECOMMENDATIONS ===")
+            # STEP 0: Intent Detection (NEW - prevents hallucination)
+            self.logger.info("=== STEP 0: INTENT DETECTION ===")
             
-            cached_schema = await self.cache_service.get_schema_recommendations(
-                nl_query, conversation_history
+            intent_result = await self.schema_service.detect_intent(nl_query)
+            intent = intent_result.get("intent", "AMBIGUOUS")
+            intent_confidence = intent_result.get("confidence", 0.0)
+            
+            self.logger.info(
+                "Intent detected",
+                intent=intent,
+                confidence=f"{intent_confidence:.3f}",
+                will_reuse_schema=(intent not in ["NEW_QUERY", "AMBIGUOUS"])
             )
             
-            if cached_schema:
-                self.logger.info("Using cached schema recommendations")
-                schema_recommendations = cached_schema
-            else:
-                schema_recommendations = await self.schema_service.get_recommendations(
+            # SPECIAL CASE: ACCEPT_RESULT - User is satisfied, no new SQL needed
+            if intent == "ACCEPT_RESULT":
+                if last_sql:
+                    self.logger.info("Intent is ACCEPT_RESULT - returning previous SQL without LLM call")
+                    processing_time = (asyncio.get_event_loop().time() - start_time) * 1000
+                    return {
+                        "success": True,
+                        "nl_query": nl_query,
+                        "generated_sql": last_sql,
+                        "schema_recommendations": last_schema_recommendations or [],
+                        "model_confidence": 1.0,
+                        "model_reasoning": "User accepted the previous result. Returning the same SQL.",
+                        "processing_time": processing_time,
+                        "intent": intent,
+                        "intent_confidence": intent_confidence,
+                        "no_llm_call": True
+                    }
+                else:
+                    # No previous SQL to return, treat as AMBIGUOUS
+                    self.logger.warning("Intent is ACCEPT_RESULT but no previous SQL - treating as AMBIGUOUS")
+                    intent = "AMBIGUOUS"
+            
+            # STEP 1: Schema Recommendations (conditional based on intent)
+            self.logger.info("=== STEP 1: SCHEMA RECOMMENDATIONS (CONDITIONAL) ===")
+            
+            recommendations = []
+            schema_recommendations = {"success": False}  # Initialize to avoid NameError
+            
+            # Only call schema narrowing for NEW_QUERY or AMBIGUOUS
+            if intent in ["NEW_QUERY", "AMBIGUOUS"]:
+                self.logger.info(f"Intent is {intent} - fetching fresh schema recommendations")
+                
+                cached_schema = await self.cache_service.get_schema_recommendations(
                     nl_query, conversation_history
                 )
-                if schema_recommendations.get("success"):
-                    await self.cache_service.cache_schema_recommendations(
-                        nl_query, conversation_history, schema_recommendations
+                
+                if cached_schema:
+                    self.logger.info("Using cached schema recommendations")
+                    schema_recommendations = cached_schema
+                else:
+                    schema_recommendations = await self.schema_service.get_recommendations(
+                        nl_query, conversation_history
                     )
+                    if schema_recommendations.get("success"):
+                        await self.cache_service.cache_schema_recommendations(
+                            nl_query, conversation_history, schema_recommendations
+                        )
+                
+                if not schema_recommendations.get("success"):
+                    error_msg = schema_recommendations.get("error", "Schema service failed")
+                    return self._create_error_response(error_msg, "SCHEMA_SERVICE_ERROR", start_time)
+                
+                recommendations = schema_recommendations.get("recommendations", []) or []
             
-            if not schema_recommendations.get("success"):
-                error_msg = schema_recommendations.get("error", "Schema service failed")
-                return self._create_error_response(error_msg, "SCHEMA_SERVICE_ERROR", start_time)
-            
-            recommendations = schema_recommendations.get("recommendations", []) or []
+            else:
+                # REFINE_RESULT, REJECT_RESULT, EXPLAIN_RESULT, FOLLOW_UP_SAME_DOMAIN
+                self.logger.info(f"Intent is {intent} - reusing previous schema context from frontend")
+                
+                # Reuse last schema recommendations passed from frontend
+                if last_schema_recommendations:
+                    recommendations = last_schema_recommendations
+                    self.logger.info(f"Reused schema from frontend (count={len(recommendations)})")
+                else:
+                    self.logger.warning("No previous schema from frontend, falling back to fresh recommendations")
+                    # Fallback to fresh schema recommendations
+                    schema_recommendations = await self.schema_service.get_recommendations(
+                        nl_query, conversation_history
+                    )
+                    if schema_recommendations.get("success"):
+                        recommendations = schema_recommendations.get("recommendations", []) or []
+                
+                # Construct schema_recommendations dict for LLM (CRITICAL FIX)
+                # Only construct if we got recommendations from session/params (not from fallback)
+                if recommendations:
+                    schema_recommendations = {
+                        "success": True,
+                        "recommendations": recommendations,
+                        "query": nl_query
+                    }
+                    self.logger.info(f"Constructed schema_recommendations dict from reused schema (count={len(recommendations)})")
             
             # Step 2: Generate SQL using LLM
             self.logger.info("=== STEP 2: SQL GENERATION (LLM) ===")
@@ -102,8 +182,13 @@ class OrchestrationService:
                     )
                     sql_generation = cached_response
             else:
+                # Pass intent and last_sql for context-aware prompting
                 sql_generation = await self.llm_service.generate_sql(
-                    nl_query, conversation_history, schema_recommendations
+                    nl_query, 
+                    conversation_history, 
+                    schema_recommendations,
+                    last_sql=last_sql,
+                    intent=intent
                 )
                 # Cache the entire response (SQL + chart_recommendation + reasoning)
                 if sql_generation.get("success") and sql_generation.get("sql"):
@@ -154,6 +239,10 @@ class OrchestrationService:
                         recommended_y=chart_rec.get("y_column")
                     )
             
+            # Include intent in response (frontend will handle state)
+            result["intent"] = intent
+            result["intent_confidence"] = intent_confidence
+            
             return result
             
         except Exception as e:
@@ -181,8 +270,13 @@ class OrchestrationService:
         start_time = asyncio.get_event_loop().time()
         
         try:
-            # Step 1 & 2: Generate SQL
-            generation_result = await self.generate_sql_from_nl(nl_query, conversation_history)
+            # Step 1 & 2: Generate SQL (with intent detection)
+            # Note: process_natural_language_workflow expects context to be passed from caller
+            generation_result = await self.generate_sql_from_nl(
+                nl_query, 
+                conversation_history,
+                session_id=session_id
+            )
             
             if not generation_result.get("success"):
                 return generation_result

@@ -4,3 +4,4 @@ export {
   useProcessNaturalLanguage,
 } from './useRestAPI';
 
+export { useConversationHistory } from './useConversationHistory';

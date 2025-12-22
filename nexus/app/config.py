@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     schema_service_timeout: int = 30
     schema_service_retries: int = 3
     schema_service_retry_delay: float = 1.0
+    schema_service_max_recommendations: int = 7  # Top K table recommendations from FAISS
+    schema_service_confidence_threshold: float = 0.0  # No filtering - let LLM decide
     
     # ML/LLM Service Configuration
     llm_service_url: str = "http://dashboard-fastapi:8000"

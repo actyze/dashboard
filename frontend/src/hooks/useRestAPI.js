@@ -80,11 +80,62 @@ export const useProcessNaturalLanguage = (options = {}) => {
         
         if (!generateResponse.success) {
           const error = generateResponse.error || 'Failed to generate SQL';
+          const suggestions = generateResponse.suggestions || [];
+          const reasoning = generateResponse.model_reasoning || '';
+          
+          // If we have suggestions, this is a graceful "no SQL" response (not a failure)
+          if (suggestions.length > 0 || reasoning) {
+            console.log('No SQL generated - LLM provided guidance:', reasoning);
+            
+            // Format error message with suggestions
+            let errorMessage = reasoning || error;
+            if (suggestions.length > 0) {
+              errorMessage += '\n\nSuggestions:\n' + suggestions.map((s, i) => `${i + 1}. ${s}`).join('\n');
+            }
+            
+            if (onError) onError(errorMessage, 'generate');
+            
+            return {
+              success: false,
+              error: errorMessage,
+              reasoning: reasoning,
+              suggestions: suggestions,
+              stage: 'generate',
+              error_type: generateResponse.error_type || 'NO_SQL_GENERATED'
+            };
+          }
+          
+          // Otherwise, it's a real error
           if (onError) onError(error, 'generate');
           throw new Error(error);
         }
         
         generatedSql = generateResponse.generated_sql;
+        
+        // Check if SQL is actually present (defensive)
+        if (!generatedSql) {
+          const error = generateResponse.model_reasoning || 'No SQL query was generated';
+          const suggestions = generateResponse.suggestions || [];
+          
+          console.log('No SQL in response - returning guidance');
+          
+          let errorMessage = error;
+          if (suggestions.length > 0) {
+            errorMessage += '\n\nSuggestions:\n' + suggestions.map((s, i) => `${i + 1}. ${s}`).join('\n');
+          }
+          
+          if (onError) onError(errorMessage, 'generate');
+          
+          return {
+            success: false,
+            error: errorMessage,
+            reasoning: error,
+            suggestions: suggestions,
+            stage: 'generate',
+            error_type: 'NO_SQL_GENERATED'
+          };
+        }
+        
         chartRecommendation = generateResponse.chart_recommendation;
         schemaRecommendations = generateResponse.schema_recommendations;
         processingTime = generateResponse.processing_time;

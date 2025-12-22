@@ -116,17 +116,27 @@ class OrchestrationService:
                     self.logger.info("Using cached schema recommendations")
                     schema_recommendations = cached_schema
                 else:
+                    # Request top K recommendations from config
+                    # Let LLM decide what to do with the results (no confidence filtering)
                     schema_recommendations = await self.schema_service.get_recommendations(
-                        nl_query, conversation_history
+                        nl_query, conversation_history,
+                        max_recommendations=settings.schema_service_max_recommendations,
+                        confidence_threshold=settings.schema_service_confidence_threshold
                     )
                     if schema_recommendations.get("success"):
                         await self.cache_service.cache_schema_recommendations(
                             nl_query, conversation_history, schema_recommendations
                         )
                 
+                # Defensive: Even if schema service fails or returns 0 results, continue to LLM
+                # LLM can provide helpful guidance to user
                 if not schema_recommendations.get("success"):
-                    error_msg = schema_recommendations.get("error", "Schema service failed")
-                    return self._create_error_response(error_msg, "SCHEMA_SERVICE_ERROR", start_time)
+                    self.logger.warning(f"Schema service failed: {schema_recommendations.get('error')}, continuing to LLM anyway")
+                    schema_recommendations = {
+                        "success": True,
+                        "recommendations": [],
+                        "error": schema_recommendations.get("error")
+                    }
                 
                 recommendations = schema_recommendations.get("recommendations", []) or []
             
@@ -140,12 +150,17 @@ class OrchestrationService:
                     self.logger.info(f"Reused schema from frontend (count={len(recommendations)})")
                 else:
                     self.logger.warning("No previous schema from frontend, falling back to fresh recommendations")
-                    # Fallback to fresh schema recommendations
+                    # Fallback to fresh schema recommendations (use config values)
                     schema_recommendations = await self.schema_service.get_recommendations(
-                        nl_query, conversation_history
+                        nl_query, conversation_history,
+                        max_recommendations=settings.schema_service_max_recommendations,
+                        confidence_threshold=settings.schema_service_confidence_threshold
                     )
                     if schema_recommendations.get("success"):
                         recommendations = schema_recommendations.get("recommendations", []) or []
+                    else:
+                        # Defensive: Continue even if schema service fails
+                        recommendations = []
                 
                 # Construct schema_recommendations dict for LLM (CRITICAL FIX)
                 # Only construct if we got recommendations from session/params (not from fallback)
@@ -197,14 +212,59 @@ class OrchestrationService:
                     )
             
             if not sql_generation.get("success"):
+                # Check if this is a "graceful no-SQL" response with guidance
+                reasoning = sql_generation.get("reasoning")
+                suggestions = sql_generation.get("suggestions", [])
+                
+                if reasoning or suggestions:
+                    # LLM provided guidance instead of SQL - pass it through
+                    processing_time = (asyncio.get_event_loop().time() - start_time) * 1000
+                    self.logger.info("LLM provided guidance instead of SQL", 
+                                   has_reasoning=bool(reasoning),
+                                   suggestions_count=len(suggestions))
+                    return {
+                        "success": False,
+                        "nl_query": nl_query,
+                        "generated_sql": None,
+                        "schema_recommendations": recommendations,
+                        "model_reasoning": reasoning,
+                        "suggestions": suggestions,
+                        "processing_time": processing_time,
+                        "intent": intent,
+                        "intent_confidence": intent_confidence,
+                        "error": sql_generation.get("error", "Unable to generate SQL"),
+                        "error_type": sql_generation.get("error_type", "NO_SQL_GENERATED")
+                    }
+                
+                # Otherwise, it's a real error (API failure, etc.)
                 error_msg = sql_generation.get("error", "SQL generation failed")
                 error_type = sql_generation.get("error_type", "SQL_GENERATION_ERROR")
                 user_friendly_error = self.error_analysis_service.get_user_friendly_error(error_type, error_msg)
                 return self._create_error_response(user_friendly_error, error_type, start_time)
             
-            generated_sql = sql_generation.get("sql", "").strip()
+            generated_sql = sql_generation.get("sql", "").strip() if sql_generation.get("sql") else None
+            
+            # Defensive: If no SQL was generated (e.g., no relevant tables), return guidance instead
             if not generated_sql:
-                return self._create_error_response("Generated SQL is empty", "EMPTY_SQL_ERROR", start_time)
+                reasoning = sql_generation.get("reasoning", "Unable to generate SQL query.")
+                suggestions = sql_generation.get("suggestions", [])
+                processing_time = (asyncio.get_event_loop().time() - start_time) * 1000
+                
+                self.logger.info("No SQL generated - returning guidance to user", reasoning=reasoning[:100])
+                
+                return {
+                    "success": False,  # False because no SQL was generated
+                    "nl_query": nl_query,
+                    "generated_sql": None,
+                    "schema_recommendations": recommendations,
+                    "model_reasoning": reasoning,
+                    "suggestions": suggestions,
+                    "processing_time": processing_time,
+                    "intent": intent,
+                    "intent_confidence": intent_confidence,
+                    "error": "No relevant tables found for this query",
+                    "error_type": "NO_SCHEMA_MATCH"
+                }
             
             processing_time = (asyncio.get_event_loop().time() - start_time) * 1000
             
@@ -485,13 +545,24 @@ class OrchestrationService:
                 if as_match:
                     columns.append(as_match.group(1).lower())
                 else:
-                    # Get last word (implicit alias or column name)
+                    # Handle table-qualified columns (e.g., "c.city" → "city", not "ccity")
+                    # Extract column name after the dot if present, otherwise use the word
                     words = part.split()
                     if words:
-                        # Clean up any trailing parentheses or special chars
-                        last_word = re.sub(r'[^\w]', '', words[-1])
-                        if last_word:
-                            columns.append(last_word.lower())
+                        last_word = words[-1]
+                        # Check for table.column pattern
+                        if '.' in last_word:
+                            # Extract just the column name (after the dot)
+                            col_name = last_word.split('.')[-1]
+                            # Clean up any trailing special chars
+                            col_name = re.sub(r'[^\w]', '', col_name)
+                            if col_name:
+                                columns.append(col_name.lower())
+                        else:
+                            # No dot - just clean up special chars
+                            col_name = re.sub(r'[^\w]', '', last_word)
+                            if col_name:
+                                columns.append(col_name.lower())
             
             self.logger.info("Extracted SQL columns", columns=columns)
             

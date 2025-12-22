@@ -69,16 +69,78 @@ class LLMService:
             generated_text = response.get("content", "").strip()
             sql = self._extract_sql_from_response(generated_text)
             
+            # Defensive: If no SQL, try to extract reasoning/guidance JSON
             if not sql:
-                self.logger.error("No SQL found in LLM response", response_text=generated_text[:200])
+                self.logger.info("No SQL found - checking for guidance/reasoning response")
+                # Try to extract JSON with reasoning and suggestions
+                import json
+                import re
+                
+                # Try multiple JSON extraction strategies
+                guidance = None
+                
+                # Strategy 1: JSON code block
+                json_match = re.search(r'```json\s*(.*?)\s*```', generated_text, re.DOTALL)
+                if json_match:
+                    try:
+                        guidance = json.loads(json_match.group(1).strip())
+                    except json.JSONDecodeError:
+                        pass
+                
+                # Strategy 2: Generic code block containing JSON
+                if not guidance:
+                    code_match = re.search(r'```\s*(json\s*)?\s*(\{.*?\})\s*```', generated_text, re.DOTALL)
+                    if code_match:
+                        try:
+                            guidance = json.loads(code_match.group(2).strip())
+                        except json.JSONDecodeError:
+                            pass
+                
+                # Strategy 3: Look for raw JSON in text (no code block)
+                if not guidance:
+                    try:
+                        start = generated_text.find('{')
+                        end = generated_text.rfind('}') + 1
+                        if start != -1 and end > start:
+                            guidance = json.loads(generated_text[start:end])
+                    except json.JSONDecodeError:
+                        pass
+                
+                # If we found guidance JSON with reasoning/suggestions
+                if guidance and ("reasoning" in guidance or "suggestions" in guidance):
+                    self.logger.info("LLM provided guidance instead of SQL", 
+                                   reasoning=guidance.get("reasoning", "")[:100] if guidance.get("reasoning") else "")
+                    return {
+                        "success": False,  # Mark as failure since no SQL was generated
+                        "sql": None,  # No SQL generated
+                        "reasoning": guidance.get("reasoning", "Unable to generate SQL for this request"),
+                        "suggestions": guidance.get("suggestions", []),
+                        "no_sql_reason": "invalid_or_unclear_request",
+                        "error": "Unable to generate valid SQL from your request"
+                    }
+                
+                # Fallback: No SQL and no valid guidance JSON
+                self.logger.warning("No SQL or guidance found in LLM response", response_text=generated_text[:200])
                 return {
-                    "success": False,
-                    "error": "No valid SQL found in LLM response",
-                    "error_type": "PARSING_ERROR"
+                    "success": False,  # Mark as failure
+                    "sql": None,
+                    "reasoning": "I couldn't understand your request or find relevant tables in the database. Please try rephrasing your query or asking about specific data you need.",
+                    "suggestions": [
+                        "Try using clearer language with specific table or column names",
+                        "Ask about available data: 'What tables are available?'",
+                        "Provide a concrete example: 'Show me sales data for last month'"
+                    ],
+                    "no_sql_reason": "parsing_failed",
+                    "error": "Unable to generate SQL from your request"
                 }
             
             # Extract chart recommendations and reasoning from response
             chart_recommendation = self._extract_chart_recommendation(generated_text)
+            
+            # SAFETY NET: Fix malformed column names (e.g., "ccity" → "city")
+            if chart_recommendation:
+                chart_recommendation = self._fix_chart_column_names(sql, chart_recommendation)
+            
             reasoning = self._extract_reasoning(generated_text, chart_recommendation)
             
             self.logger.info(
@@ -345,45 +407,60 @@ Generated SQL (Main Data):
             prompt_parts.append("======================================\n")
         
         # Add schema context FIRST (before rules) to make it prominent
-        if schema_recommendations and schema_recommendations.get("recommendations"):
-            prompt_parts.append("\n=== AVAILABLE TABLES (USE ONLY THESE) ===")
+        recommendations = schema_recommendations.get("recommendations", []) if schema_recommendations else []
+        
+        if recommendations:
+            prompt_parts.append("\n=== AVAILABLE TABLES (RANKED BY RELEVANCE) ===")
+            prompt_parts.append("Note: Tables are ranked by confidence score. Higher scores = better match to your query.\n")
             
-            # Build table list with columns
-            tables_info = []
-            for rec in schema_recommendations["recommendations"][:7]:  # Top 7 recommendations
-                table_info = f"- {rec.get('full_name', 'unknown')}"
+            # Build table list with columns and confidence scores
+            # Show all recommendations provided (already filtered by orchestration service)
+            for rec in recommendations:
+                confidence = rec.get('confidence', 0.0)
+                table_info = f"- {rec.get('full_name', 'unknown')} (confidence: {confidence:.2f})"
                 if rec.get('columns'):
                     columns_str = ", ".join(rec['columns'][:10])  # Show first 10 columns
                     table_info += f"\n  Columns: {columns_str}"
-                tables_info.append(table_info)
                 prompt_parts.append(table_info)
             
             # Infer and add relationships hint
-            relationships = self._infer_table_relationships(schema_recommendations["recommendations"][:7])
+            relationships = self._infer_table_relationships(recommendations)
             if relationships:
                 prompt_parts.append("\n=== INFERRED TABLE RELATIONSHIPS ===")
                 for rel in relationships:
                     prompt_parts.append(f"- {rel}")
             
             prompt_parts.append("===========================================\n")
+        else:
+            # Defensive: No schema recommendations available
+            prompt_parts.append("\n=== ⚠️ NO TABLE RECOMMENDATIONS AVAILABLE ===")
+            prompt_parts.append("The schema recommendation system could not find relevant tables for this query.")
+            prompt_parts.append("This could mean:")
+            prompt_parts.append("1. The requested data doesn't exist in the available database")
+            prompt_parts.append("2. The query needs to be rephrased to match available table/column names")
+            prompt_parts.append("3. The semantic search couldn't find a good match")
+            prompt_parts.append("\nYou MUST respond with helpful guidance in the 'reasoning' field.")
+            prompt_parts.append("Examples of helpful responses:")
+            prompt_parts.append('- "I couldn\'t find tables with [specific data type]. Available data includes [general categories]."')
+            prompt_parts.append('- "Could you rephrase your question? For example: [example query]"')
+            prompt_parts.append('- "The database might not contain [requested data]. Try asking about [alternative]."')
+            prompt_parts.append("\nDO NOT generate SQL. Instead, provide helpful reasoning to guide the user.")
+            prompt_parts.append("===========================================\n")
         
         prompt_parts.extend([
             "CRITICAL RULES FOR SQL:",
-            "1. YOU MUST ONLY USE TABLES FROM THE 'AVAILABLE TABLES' LIST ABOVE",
-            "2. DO NOT use tables from your training data (tpch, tpcds, etc.) - ONLY use the provided tables",
+            "1. YOU MUST ONLY USE TABLES FROM THE 'AVAILABLE TABLES' LIST ABOVE (if any were provided)",
+            "2. If NO tables were provided above, DO NOT generate SQL - provide helpful guidance instead",
             "3. Use the EXACT full table names as shown (catalog.schema.table)",
             "4. Use Trino SQL syntax",
             "5. Include proper table aliases",
             "6. Use appropriate JOINs when needed",
             "7. Format the query cleanly",
             "",
-            "CRITICAL RULES FOR CHART RECOMMENDATIONS:",
-            "- The x_column and y_column MUST BE ACTUAL COLUMN ALIASES FROM YOUR SQL SELECT LIST",
-            "- If you need customer name, create it in SQL: CONCAT(first_name, ' ', last_name) AS customer_name",
-            "- DO NOT recommend column names that don't exist in your SELECT clause",
-            "- X-axis: category/dimension (name, date, category, product, etc.)",
-            "- Y-axis: measure/metric (sales, count, amount, quantity, etc.)",
-            "- Chart types: bar (comparisons), line (trends), pie (parts of whole), scatter (correlations)",
+            "CHART COLUMN RULES:",
+            "- Result columns drop table prefixes: 'SELECT c.city' → column is 'city' (NOT 'ccity')",
+            "- With AS: 'SELECT c.city AS loc' → column is 'loc'",
+            "- x_column/y_column must match exact result column names",
             "",
             f"User Request: {query}"
         ])
@@ -394,34 +471,35 @@ Generated SQL (Main Data):
             for msg in conversation_history[-3:]:  # Last 3 messages
                 prompt_parts.append(f"- {msg}")
         
-        prompt_parts.append("\nEXAMPLE - Correct way to handle column names:")
-        prompt_parts.append("If you SELECT first_name, last_name separately, you have TWO options:")
-        prompt_parts.append("Option 1: Concatenate in SQL and use the alias:")
-        prompt_parts.append("```sql")
-        prompt_parts.append("SELECT CONCAT(first_name, ' ', last_name) AS customer_name, SUM(amount) AS total")
-        prompt_parts.append("```")
-        prompt_parts.append('```json\n{"x_column": "customer_name", "y_column": "total"}\n```')
-        prompt_parts.append("")
-        prompt_parts.append("Option 2: Use an existing column:")
-        prompt_parts.append("```sql")
-        prompt_parts.append("SELECT first_name, SUM(amount) AS total")
-        prompt_parts.append("```")
-        prompt_parts.append('```json\n{"x_column": "first_name", "y_column": "total"}\n```')
+        prompt_parts.append("\nEXAMPLE:")
+        prompt_parts.append('SQL: SELECT c.city, SUM(o.amount) AS total → columns: ["city", "total"]')
+        prompt_parts.append('❌ {"x_column": "ccity"} ✅ {"x_column": "city"}')
         prompt_parts.append("")
         prompt_parts.append("\nRespond in this EXACT format:")
+        prompt_parts.append("")
+        prompt_parts.append("IF YOU CAN GENERATE SQL (tables were provided):")
         prompt_parts.append("```sql")
         prompt_parts.append("YOUR SQL QUERY HERE")
         prompt_parts.append("```")
         prompt_parts.append("```json")
         prompt_parts.append('{')
-        prompt_parts.append('  "reasoning": "Brief explanation of table selection, joins, filters used (max 2 sentences)",')
+        prompt_parts.append('  "reasoning": "Brief explanation (max 2 sentences)",')
         prompt_parts.append('  "chart_type": "bar",')
-        prompt_parts.append('  "x_column": "actual_column_from_your_SELECT_clause",')
-        prompt_parts.append('  "y_column": "actual_column_from_your_SELECT_clause",')
+        prompt_parts.append('  "x_column": "order_date",')
+        prompt_parts.append('  "y_column": "total_amount",')
         prompt_parts.append('  "title": "Chart Title"')
         prompt_parts.append('}')
         prompt_parts.append("```")
-        prompt_parts.append("\nREMINDER: x_column and y_column must EXACTLY match column names/aliases in your SELECT clause!")
+        prompt_parts.append("")
+        prompt_parts.append("IF YOU CANNOT GENERATE SQL (no tables OR low confidence matches):")
+        prompt_parts.append("```json")
+        prompt_parts.append('{')
+        prompt_parts.append('  "reasoning": "Helpful explanation of why SQL cannot be generated and guidance for the user (2-3 sentences)",')
+        prompt_parts.append('  "suggestions": ["Alternative query 1", "Alternative query 2", "Alternative query 3"]')
+        prompt_parts.append('}')
+        prompt_parts.append("```")
+        prompt_parts.append("")
+        prompt_parts.append("Remember: Table prefixes are NOT in result columns!")
         
         return "\n".join(prompt_parts)
     
@@ -504,6 +582,74 @@ Generated SQL (Main Data):
             "success": True,
             "content": content
         }
+    
+    def _fix_chart_column_names(self, sql: str, chart_rec: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Safety net: Fix malformed column names in chart recommendations.
+        LLMs sometimes incorrectly concatenate table aliases with column names (e.g., 'ccity' instead of 'city').
+        This function extracts actual column names from SQL and corrects the chart recommendation.
+        """
+        import re
+        
+        try:
+            # Extract column names from SELECT clause
+            select_match = re.search(r'SELECT\s+(.*?)\s+FROM', sql, re.IGNORECASE | re.DOTALL)
+            if not select_match:
+                self.logger.info("Safety net: No SELECT...FROM found in SQL")
+                return chart_rec
+            
+            select_clause = select_match.group(1)
+            
+            # Extract column names (handling aliases)
+            actual_columns = []
+            # Pattern: capture either "col AS alias" or just "col"
+            for part in select_clause.split(','):
+                part = part.strip()
+                # Check for AS alias
+                if ' AS ' in part.upper():
+                    alias = re.search(r'\sAS\s+(\w+)', part, re.IGNORECASE)
+                    if alias:
+                        actual_columns.append(alias.group(1))
+                else:
+                    # No alias - extract the column name (after the dot if qualified)
+                    # Handle: "table.column" or "function(table.column)" or just "column"
+                    col_match = re.search(r'\.(\w+)|\b(\w+)\s*$', part)
+                    if col_match:
+                        col_name = col_match.group(1) or col_match.group(2)
+                        if col_name and col_name.upper() not in ['SELECT', 'FROM', 'WHERE', 'JOIN', 'ON']:
+                            actual_columns.append(col_name)
+            
+            self.logger.info(f"Safety net: Extracted columns from SQL: {actual_columns}")
+            
+            if not actual_columns:
+                self.logger.info("Safety net: No columns extracted")
+                return chart_rec
+            
+            # Check and fix x_column
+            x_col = chart_rec.get('x_column') or chart_rec.get('x_axis')
+            self.logger.info(f"Safety net: Checking x_column='{x_col}' against {actual_columns}")
+            if x_col and x_col not in actual_columns:
+                # Try stripping first character (common pattern: ccity → city)
+                if len(x_col) > 1 and x_col[1:] in actual_columns:
+                    self.logger.warning(f"Safety net: Fixed malformed x_column: '{x_col}' → '{x_col[1:]}'")
+                    chart_rec['x_column'] = x_col[1:]
+                else:
+                    self.logger.warning(f"Safety net: x_column '{x_col}' not found in SQL columns and can't auto-fix")
+            
+            # Check and fix y_column
+            y_col = chart_rec.get('y_column') or chart_rec.get('y_axis')
+            if y_col and y_col not in actual_columns:
+                # Try stripping first character
+                if len(y_col) > 1 and y_col[1:] in actual_columns:
+                    self.logger.warning(f"Safety net: Fixed malformed y_column: '{y_col}' → '{y_col[1:]}'")
+                    chart_rec['y_column'] = y_col[1:]
+                else:
+                    self.logger.warning(f"Safety net: y_column '{y_col}' not found in SQL columns and can't auto-fix")
+            
+            return chart_rec
+        except Exception as e:
+            self.logger.error(f"Safety net: Error in _fix_chart_column_names: {e}")
+            return chart_rec  # Return unchanged on error
     
     def _extract_sql_from_response(self, response_text: str) -> str:
         """Extract SQL query from LLM response."""
@@ -622,17 +768,27 @@ Generated SQL (Main Data):
             end = text.find("```", start)
             if end != -1:
                 sql = text[start:end].strip()
-                return sql
+                # Validate it's actually SQL, not JSON
+                if self._is_valid_sql(sql):
+                    return sql
         
         # Look for generic code blocks
         if "```" in text:
             start = text.find("```") + 3
             end = text.find("```", start)
             if end != -1:
-                sql = text[start:end].strip()
+                candidate = text[start:end].strip()
+                
+                # Skip if it starts with "json" or looks like JSON guidance
+                first_line = candidate.split('\n')[0].strip().lower()
+                if first_line in ['json', '{', 'javascript', 'js']:
+                    # Check if it's a guidance JSON (contains reasoning/suggestions)
+                    if any(keyword in candidate.lower() for keyword in ['"reasoning":', '"suggestions":', '"error":']):
+                        return ""  # Not SQL, it's guidance
+                
                 # Check if it looks like SQL
-                if any(keyword in sql.upper() for keyword in ["SELECT", "INSERT", "UPDATE", "DELETE", "WITH"]):
-                    return sql
+                if self._is_valid_sql(candidate):
+                    return candidate
         
         # Look for SQL keywords at the start of lines
         lines = text.split("\n")
@@ -660,10 +816,37 @@ Generated SQL (Main Data):
                     break
         
         if sql_lines:
-            return "\n".join(sql_lines)
+            sql = "\n".join(sql_lines)
+            if self._is_valid_sql(sql):
+                return sql
         
         # No SQL found
         return ""
+    
+    def _is_valid_sql(self, text: str) -> bool:
+        """Check if the text looks like valid SQL (not JSON or guidance)."""
+        if not text:
+            return False
+        
+        text_upper = text.strip().upper()
+        
+        # Must start with a SQL keyword
+        sql_keywords = ["SELECT", "WITH", "INSERT", "UPDATE", "DELETE", "CREATE", "ALTER", "DROP"]
+        if not any(text_upper.startswith(keyword) for keyword in sql_keywords):
+            return False
+        
+        # Should NOT contain JSON guidance markers
+        text_lower = text.lower()
+        guidance_markers = ['"reasoning":', '"suggestions":', '"error":', '"message":']
+        if any(marker in text_lower for marker in guidance_markers):
+            return False
+        
+        # Should contain typical SQL keywords
+        sql_structure_keywords = ["FROM", "WHERE", "JOIN", "SELECT"]
+        if not any(keyword in text_upper for keyword in sql_structure_keywords):
+            return False
+        
+        return True
     
     def _extract_chart_recommendation(self, response_text: str) -> Optional[Dict[str, Any]]:
         """Extract chart recommendation JSON from LLM response."""

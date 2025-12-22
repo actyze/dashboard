@@ -111,7 +111,19 @@ const QueryPage = () => {
     // Final success/error handler (react-query's onSuccess)
     onSuccess: (data) => {
       if (!data.success && data.error) {
-        setQueryError(data.error);
+        // Check if this is a "no SQL generated" scenario
+        if (data.error_type === 'NO_SQL_GENERATED') {
+          setQueryError(null); // Don't show in results area
+          setIsAiTyping(false);
+          
+          // Add bot message for the guidance
+          if (data.reasoning) {
+            addBotMessage(data.reasoning);
+          }
+        } else {
+          // Regular error - show in results area
+          setQueryError(data.error);
+        }
       } else if (data.contextForNextQuery) {
         // Save context for intent-aware schema reuse on next query
         setQueryContext(data.contextForNextQuery);
@@ -155,9 +167,16 @@ const QueryPage = () => {
       .map(m => m.content);
     
     // Build context for intent-aware schema reuse
+    // Use SQL from editor if available (excluding placeholder), otherwise fall back to last generated SQL
+    const hasValidSql = sqlQuery && 
+                        sqlQuery.trim() !== "" && 
+                        sqlQuery !== "-- Write your query here" &&
+                        sqlQuery.toLowerCase().includes('select');
+    const currentSql = hasValidSql ? sqlQuery.replace(/^-- Generated from natural language query\n/, '').trim() : queryContext.lastSql;
+    
     const context = {
       sessionId: sessionIdRef.current,
-      ...(queryContext.lastSql && { lastSql: queryContext.lastSql }),
+      ...(currentSql && { lastSql: currentSql }),
       ...(queryContext.lastSchemaRecommendations && { lastSchemaRecommendations: queryContext.lastSchemaRecommendations })
     };
     

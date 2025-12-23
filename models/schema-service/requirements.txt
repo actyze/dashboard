@@ -9,3 +9,4 @@ python-dotenv>=1.0.0
 apscheduler>=3.10.0
 httpx>=0.24.0
 python-jose[cryptography]
+asyncpg>=0.29.0

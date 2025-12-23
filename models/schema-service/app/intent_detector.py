@@ -8,7 +8,6 @@ Intent examples are loaded from database for easy maintenance and expansion.
 
 import logging
 import numpy as np
-import asyncpg
 from typing import Dict, List, Tuple, Optional
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -97,47 +96,45 @@ class IntentDetector:
         """Load intent examples from database or use fallback."""
         if self.db_config and all(self.db_config.values()):
             try:
-                import asyncio
-                # Use asyncio.run to load from DB synchronously during init
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+                import psycopg2
+                # Use psycopg2 for synchronous database access during initialization
+                conn = psycopg2.connect(
+                    host=self.db_config['host'],
+                    port=self.db_config['port'],
+                    database=self.db_config['database'],
+                    user=self.db_config['user'],
+                    password=self.db_config['password']
+                )
                 try:
-                    self.intent_examples = loop.run_until_complete(self._load_from_database())
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT intent, example_text 
+                        FROM nexus.intent_examples 
+                        WHERE is_active = TRUE 
+                        ORDER BY intent, id
+                    """)
+                    rows = cursor.fetchall()
+                    
+                    # Group by intent
+                    examples_by_intent = {}
+                    for row in rows:
+                        intent = row[0]  # intent column
+                        example_text = row[1]  # example_text column
+                        if intent not in examples_by_intent:
+                            examples_by_intent[intent] = []
+                        examples_by_intent[intent].append(example_text)
+                    
+                    self.intent_examples = examples_by_intent
                     logger.info(f"Loaded intent examples from database: {sum(len(v) for v in self.intent_examples.values())} total examples")
                     return
                 finally:
-                    loop.close()
+                    conn.close()
             except Exception as e:
                 logger.error(f"Failed to load intent examples from database: {e}, using fallback")
         
         # Use fallback examples
         self.intent_examples = self.FALLBACK_INTENT_EXAMPLES.copy()
         logger.warning(f"Using fallback intent examples: {sum(len(v) for v in self.intent_examples.values())} total examples")
-    
-    async def _load_from_database(self) -> Dict[str, List[str]]:
-        """Load intent examples from PostgreSQL database."""
-        conn = await asyncpg.connect(**self.db_config)
-        try:
-            # Query active intent examples
-            rows = await conn.fetch("""
-                SELECT intent, example_text 
-                FROM nexus.intent_examples 
-                WHERE is_active = TRUE 
-                ORDER BY intent, id
-            """)
-            
-            # Group by intent
-            examples_by_intent = {}
-            for row in rows:
-                intent = row['intent']
-                if intent not in examples_by_intent:
-                    examples_by_intent[intent] = []
-                examples_by_intent[intent].append(row['example_text'])
-            
-            logger.info(f"Loaded {len(rows)} examples for {len(examples_by_intent)} intents from database")
-            return examples_by_intent
-        finally:
-            await conn.close()
     
     def reload_examples(self):
         """Reload intent examples from database and recompute embeddings."""

@@ -383,123 +383,86 @@ Generated SQL (Main Data):
         
         # Build strict prompt that enforces using ONLY provided tables
         prompt_parts = [
-            "You are an expert SQL developer and data visualization specialist.",
-            "Generate a Trino SQL query for the following request, AND recommend the best chart configuration."
+            "Expert Trino SQL developer. Generate query + chart recommendation."
         ]
         
-        # Add previous SQL context for refinement/rejection intents
-        if last_sql and intent in ["REJECT_RESULT", "REFINE_RESULT", "EXPLAIN_RESULT", "FOLLOW_UP_SAME_DOMAIN"]:
-            prompt_parts.append("\n=== PREVIOUS SQL (FOR CONTEXT) ===")
-            prompt_parts.append(f"Intent: {intent}")
-            prompt_parts.append("The user is referring to this previous query:")
+        # Add previous SQL context for refinement/rejection/ambiguous intents
+        if last_sql and intent in ["REJECT_RESULT", "REFINE_RESULT", "EXPLAIN_RESULT", "FOLLOW_UP_SAME_DOMAIN", "AMBIGUOUS"]:
+            prompt_parts.append(f"\n=== PREVIOUS SQL ({intent}) ===")
             prompt_parts.append(f"```sql\n{last_sql}\n```")
             
             if intent == "REJECT_RESULT":
-                prompt_parts.append("User feedback: The previous result was incorrect.")
-                prompt_parts.append("Please analyze what might be wrong and generate a corrected query.")
+                prompt_parts.append("Previous result incorrect. Analyze and correct.")
             elif intent == "REFINE_RESULT":
-                prompt_parts.append("User feedback: The user wants to refine/modify this result.")
-                prompt_parts.append("Apply the requested changes to the previous query.")
+                prompt_parts.append("Refine/optimize above query. Apply requested changes.")
+                prompt_parts.append("If optimizing: analyze inefficiencies, optimize JOINs/predicates/CTEs, explain in reasoning.")
             elif intent == "FOLLOW_UP_SAME_DOMAIN":
-                prompt_parts.append("User feedback: The user wants related analysis on the same data.")
-                prompt_parts.append("Build upon or extend the previous query.")
+                prompt_parts.append("Related analysis on same data. Build upon above query.")
+            elif intent == "EXPLAIN_RESULT":
+                prompt_parts.append("Explain above query's logic and results.")
+            elif intent == "AMBIGUOUS":
+                prompt_parts.append("Intent unclear. If request relates to above query, refine it. Otherwise, generate fresh query using available tables.")
             
-            prompt_parts.append("======================================\n")
+            prompt_parts.append("="*40 + "\n")
         
         # Add schema context FIRST (before rules) to make it prominent
         recommendations = schema_recommendations.get("recommendations", []) if schema_recommendations else []
         
         if recommendations:
-            prompt_parts.append("\n=== AVAILABLE TABLES (RANKED BY RELEVANCE) ===")
-            prompt_parts.append("Note: Tables are ranked by confidence score. Higher scores = better match to your query.\n")
+            prompt_parts.append("\n=== AVAILABLE TABLES (by relevance) ===")
             
             # Build table list with columns and confidence scores
-            # Show all recommendations provided (already filtered by orchestration service)
             for rec in recommendations:
                 confidence = rec.get('confidence', 0.0)
-                table_info = f"- {rec.get('full_name', 'unknown')} (confidence: {confidence:.2f})"
+                table_info = f"- {rec.get('full_name', 'unknown')} ({confidence:.2f})"
                 if rec.get('columns'):
-                    columns_str = ", ".join(rec['columns'][:10])  # Show first 10 columns
-                    table_info += f"\n  Columns: {columns_str}"
+                    columns_str = ", ".join(rec['columns'][:10])
+                    table_info += f"\n  Cols: {columns_str}"
                 prompt_parts.append(table_info)
             
             # Infer and add relationships hint
             relationships = self._infer_table_relationships(recommendations)
             if relationships:
-                prompt_parts.append("\n=== INFERRED TABLE RELATIONSHIPS ===")
+                prompt_parts.append("\n=== TABLE RELATIONSHIPS ===")
                 for rel in relationships:
                     prompt_parts.append(f"- {rel}")
             
-            prompt_parts.append("===========================================\n")
+            prompt_parts.append("="*40 + "\n")
         else:
             # Defensive: No schema recommendations available
-            prompt_parts.append("\n=== ⚠️ NO TABLE RECOMMENDATIONS AVAILABLE ===")
-            prompt_parts.append("The schema recommendation system could not find relevant tables for this query.")
-            prompt_parts.append("This could mean:")
-            prompt_parts.append("1. The requested data doesn't exist in the available database")
-            prompt_parts.append("2. The query needs to be rephrased to match available table/column names")
-            prompt_parts.append("3. The semantic search couldn't find a good match")
-            prompt_parts.append("\nYou MUST respond with helpful guidance in the 'reasoning' field.")
-            prompt_parts.append("Examples of helpful responses:")
-            prompt_parts.append('- "I couldn\'t find tables with [specific data type]. Available data includes [general categories]."')
-            prompt_parts.append('- "Could you rephrase your question? For example: [example query]"')
-            prompt_parts.append('- "The database might not contain [requested data]. Try asking about [alternative]."')
-            prompt_parts.append("\nDO NOT generate SQL. Instead, provide helpful reasoning to guide the user.")
-            prompt_parts.append("===========================================\n")
+            prompt_parts.append("\n=== NO TABLES FOUND ===")
+            prompt_parts.append("No relevant tables found. DO NOT generate SQL.")
+            prompt_parts.append("Provide reasoning + suggestions for rephrasing or alternative queries.")
+            prompt_parts.append("="*40 + "\n")
         
         prompt_parts.extend([
-            "CRITICAL RULES FOR SQL:",
-            "1. YOU MUST ONLY USE TABLES FROM THE 'AVAILABLE TABLES' LIST ABOVE (if any were provided)",
-            "2. If NO tables were provided above, DO NOT generate SQL - provide helpful guidance instead",
-            "3. Use the EXACT full table names as shown (catalog.schema.table)",
-            "4. Use Trino SQL syntax",
-            "5. Include proper table aliases",
-            "6. Use appropriate JOINs when needed",
-            "7. Format the query cleanly",
+            "SQL RULES:",
+            "1. ONLY use tables from AVAILABLE TABLES list above",
+            "2. No tables = no SQL (provide guidance instead)",
+            "3. Use exact qualified names (catalog.schema.table)",
+            "4. Trino syntax, proper aliases, appropriate JOINs",
             "",
-            "CHART COLUMN RULES:",
-            "- Result columns drop table prefixes: 'SELECT c.city' → column is 'city' (NOT 'ccity')",
-            "- With AS: 'SELECT c.city AS loc' → column is 'loc'",
-            "- x_column/y_column must match exact result column names",
+            "CHART RULES:",
+            "- Result columns drop prefixes: 'c.city' → 'city' NOT 'ccity'",
+            "- With AS: 'c.city AS loc' → 'loc'",
+            "- x_column/y_column must match exact result names",
             "",
-            f"User Request: {query}"
+            f"REQUEST: {query}"
         ])
         
         # Add conversation context if available
         if conversation_history:
-            prompt_parts.append("\nPrevious conversation:")
-            for msg in conversation_history[-3:]:  # Last 3 messages
+            prompt_parts.append("\nHistory:")
+            for msg in conversation_history[-3:]:
                 prompt_parts.append(f"- {msg}")
         
         prompt_parts.append("\nEXAMPLE:")
-        prompt_parts.append('SQL: SELECT c.city, SUM(o.amount) AS total → columns: ["city", "total"]')
-        prompt_parts.append('❌ {"x_column": "ccity"} ✅ {"x_column": "city"}')
+        prompt_parts.append('SELECT c.city, SUM(o.amt) AS total → cols: ["city", "total"]')
+        prompt_parts.append('❌ "ccity" ✅ "city"')
         prompt_parts.append("")
-        prompt_parts.append("\nRespond in this EXACT format:")
-        prompt_parts.append("")
-        prompt_parts.append("IF YOU CAN GENERATE SQL (tables were provided):")
-        prompt_parts.append("```sql")
-        prompt_parts.append("YOUR SQL QUERY HERE")
-        prompt_parts.append("```")
-        prompt_parts.append("```json")
-        prompt_parts.append('{')
-        prompt_parts.append('  "reasoning": "Brief explanation (max 2 sentences)",')
-        prompt_parts.append('  "chart_type": "bar",')
-        prompt_parts.append('  "x_column": "order_date",')
-        prompt_parts.append('  "y_column": "total_amount",')
-        prompt_parts.append('  "title": "Chart Title"')
-        prompt_parts.append('}')
-        prompt_parts.append("```")
-        prompt_parts.append("")
-        prompt_parts.append("IF YOU CANNOT GENERATE SQL (no tables OR low confidence matches):")
-        prompt_parts.append("```json")
-        prompt_parts.append('{')
-        prompt_parts.append('  "reasoning": "Helpful explanation of why SQL cannot be generated and guidance for the user (2-3 sentences)",')
-        prompt_parts.append('  "suggestions": ["Alternative query 1", "Alternative query 2", "Alternative query 3"]')
-        prompt_parts.append('}')
-        prompt_parts.append("```")
-        prompt_parts.append("")
-        prompt_parts.append("Remember: Table prefixes are NOT in result columns!")
+        prompt_parts.append("FORMAT:")
+        prompt_parts.append("With tables: ```sql\\nQUERY\\n```\\n```json\\n{\"reasoning\":\"...\",\"chart_type\":\"bar\",\"x_column\":\"...\",\"y_column\":\"...\",\"title\":\"...\"}\\n```")
+        prompt_parts.append("No tables: ```json\\n{\"reasoning\":\"...\",\"suggestions\":[...]}\\n```")
         
         return "\n".join(prompt_parts)
     

@@ -57,18 +57,18 @@ class ConversationMessage(BaseModel):
 
 
 class QueryHistoryItem(BaseModel):
-    """Query history item model."""
+    """Query history item model (immutable audit log)."""
     id: int = Field(..., description="Query ID")
-    session_id: str = Field(..., description="Session ID")
-    natural_language_query: str = Field(..., description="Natural language query")
-    generated_sql: Optional[str] = Field(default=None, description="Generated SQL")
+    generated_sql: str = Field(..., description="Generated SQL query")
     execution_status: str = Field(..., description="Execution status")
     execution_time_ms: Optional[int] = Field(default=None, description="Execution time in milliseconds")
     row_count: Optional[int] = Field(default=None, description="Number of rows returned")
+    execution_count: int = Field(default=1, description="Number of times this query was executed")
     error_message: Optional[str] = Field(default=None, description="Error message if failed")
-    model_confidence: Optional[float] = Field(default=None, description="Model confidence score")
-    retry_attempts: int = Field(..., description="Number of retry attempts")
-    created_at: str = Field(..., description="Creation timestamp")
+    query_name: Optional[str] = Field(default=None, description="Optional custom name")
+    is_favorite: bool = Field(default=False, description="Whether query is marked as favorite")
+    created_at: str = Field(..., description="First execution timestamp")
+    last_executed_at: Optional[str] = Field(default=None, description="Last execution timestamp")
 
 
 class SavedQuery(BaseModel):

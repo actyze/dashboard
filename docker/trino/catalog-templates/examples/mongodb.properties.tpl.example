@@ -1,0 +1,11 @@
+# MongoDB Connector
+# To enable: Copy this file to ../mongodb.properties.tpl and set environment variables
+
+connector.name=mongodb
+mongodb.connection-url=mongodb://${MONGO_HOST}:${MONGO_PORT}
+mongodb.credentials=${MONGO_USER}:${MONGO_PASSWORD}@admin
+
+# Optional: Additional settings
+# mongodb.read-preference=primaryPreferred
+# mongodb.write-concern=ACKNOWLEDGED
+

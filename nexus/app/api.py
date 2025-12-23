@@ -131,29 +131,15 @@ async def execute_sql(
     
     # Save to query history (fire and forget - don't block response)
     try:
-        # Determine query type based on whether NL query was provided
-        query_type = 'natural_language' if request.nl_query else 'manual'
-        
-        # Save query execution to history
+        # Save query execution to audit log (simplified - only essential fields)
         asyncio.create_task(
             user_service.save_query_execution(
                 user_id=user_id,
-                session_id=session_id,
-                natural_language_query=request.nl_query or request.sql,
                 generated_sql=request.sql,
-                execution_status="success" if result.get("success") else "error",
+                execution_status="SUCCESS" if result.get("success") else "FAILURE",
                 execution_time_ms=execution_time_ms,
                 row_count=result.get("query_results", {}).get("row_count") if result.get("query_results") else None,
-                error_message=result.get("error"),
-                schema_recommendations={"recommendations": request.schema_recommendations} if request.schema_recommendations else None,
-                model_confidence=0.85 if request.chart_recommendation else None,  # Default confidence if LLM was used
-                retry_attempts=0,
-                query_type=query_type,
-                chart_recommendation=request.chart_recommendation,
-                model_reasoning=request.model_reasoning,
-                llm_response_time_ms=request.llm_response_time_ms,
-                generated_at=generated_at,
-                executed_at=executed_at
+                error_message=result.get("error")
             )
         )
     except Exception as e:
@@ -174,7 +160,6 @@ class UpdateQueryNameRequest(BaseModel):
 async def get_query_history(
     limit: int = 50,
     offset: int = 0,
-    query_type: Optional[str] = None,
     favorites_only: bool = False,
     current_user: dict = Depends(require_viewer)
 ):
@@ -185,7 +170,6 @@ async def get_query_history(
         user_id=user_id,
         limit=limit,
         offset=offset,
-        query_type=query_type,
         favorites_only=favorites_only
     )
     if not result.get("success"):
@@ -211,22 +195,7 @@ async def update_query_history_name(
         raise HTTPException(status_code=500, detail=result.get("error"))
     return result
 
-@router.delete("/query-history/{query_id}")
-async def delete_query_history(
-    query_id: int,
-    current_user: dict = Depends(require_viewer)
-):
-    """Delete a query from history."""
-    user_id = current_user.get("id")
-    result = await user_service.delete_query_history(
-        query_id=query_id,
-        user_id=user_id
-    )
-    if not result.get("success"):
-        if "not found" in result.get("error", "").lower():
-            raise HTTPException(status_code=404, detail=result.get("error"))
-        raise HTTPException(status_code=500, detail=result.get("error"))
-    return result
+# Removed: delete_query_history endpoint - query_history is now an immutable audit log
 
 @router.post("/query-history/manual")
 async def save_manual_query(
@@ -243,22 +212,16 @@ async def save_manual_query(
         request.timeout_seconds
     )
     
-    # Save to history
+    # Save to audit log (simplified - only essential fields)
     user_id = current_user.get("id")
-    session_id = f"manual-{datetime.utcnow().timestamp()}"
     
     await user_service.save_query_execution(
         user_id=user_id,
-        session_id=session_id,
-        natural_language_query="",  # Empty for manual queries
         generated_sql=request.sql,
-        execution_status="success" if result.get("success") else "error",
+        execution_status="SUCCESS" if result.get("success") else "FAILURE",
         execution_time_ms=int(result.get("execution_time", 0) or 0),
         row_count=result.get("query_results", {}).get("row_count") if result.get("query_results") else None,
-        error_message=result.get("error"),
-        query_type='manual',
-        generated_at=datetime.utcnow(),
-        executed_at=datetime.utcnow()
+        error_message=result.get("error")
     )
     
     return result
@@ -291,15 +254,15 @@ class SaveFromHistoryRequest(BaseModel):
 @router.post("/query-history/{query_id}/favorite")
 async def toggle_favorite(
     query_id: int,
-    favorite_name: Optional[str] = None,
+    query_name: Optional[str] = None,
     current_user: dict = Depends(require_viewer)
 ):
-    """Toggle favorite status for a query history entry."""
+    """Toggle favorite status for a query history entry. Optionally provide a query_name."""
     user_id = current_user.get("id")
     result = await user_service.toggle_query_favorite(
         query_id=query_id,
         user_id=user_id,
-        favorite_name=favorite_name
+        query_name=query_name
     )
     if not result.get("success"):
         if "not found" in result.get("error", "").lower():

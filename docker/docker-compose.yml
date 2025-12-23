@@ -127,6 +127,12 @@ services:
       TRINO_SCHEMA: ${TRINO_SCHEMA:-demo_ecommerce}
       TRINO_SSL: ${TRINO_SSL:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # PostgreSQL connection for intent examples
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-dashboard}
+      POSTGRES_USER: ${POSTGRES_USER:-nexus_service}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     depends_on:
       trino:
         condition: service_healthy

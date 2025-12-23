@@ -216,64 +216,42 @@ class UserService:
     async def save_query_execution(
         self,
         user_id: str,
-        session_id: str,
-        natural_language_query: str,
         generated_sql: str,
         execution_status: str,
         execution_time_ms: Optional[int] = None,
         row_count: Optional[int] = None,
         error_message: Optional[str] = None,
-        schema_recommendations: Optional[Dict] = None,
-        model_confidence: Optional[float] = None,
-        retry_attempts: int = 0,
-        query_name: Optional[str] = None,
-        query_type: str = 'natural_language',
-        chart_recommendation: Optional[Dict] = None,
-        llm_response_time_ms: Optional[int] = None,
-        model_reasoning: Optional[str] = None,
-        generated_at: Optional[datetime] = None,
-        executed_at: Optional[datetime] = None
+        **kwargs  # Accept but ignore deprecated params for backward compatibility
     ):
         """
-        Save query execution to history with de-duplication.
+        Save query execution to immutable audit log with hash-based deduplication.
         
-        Uses upsert_query_history SQL function to:
-        - Find existing query by hash (SQL + user_id)
-        - Update execution count and metadata if found
-        - Create new entry if not found
+        Tracks only essential execution metadata:
+        - User + SQL query
+        - Execution outcome (status, time, rows, errors)
+        - Automatic count increment for repeated queries
+        
+        No updates/deletes allowed (audit log).
         """
         async with db_manager.get_session() as session:
             try:
-                # Cast dicts to JSONB type (SQLAlchemy will handle JSON serialization)
-                from sqlalchemy import cast
-                from sqlalchemy.dialects.postgresql import JSONB
-                
-                # Cast directly to JSONB - SQLAlchemy will serialize the dict
-                chart_rec_casted = cast(chart_recommendation, JSONB) if chart_recommendation else None
-                schema_rec_casted = cast(schema_recommendations, JSONB) if schema_recommendations else None
-                
-                # Call the SQL function for upsert
+                # Call simplified SQL function (no NL query needed)
                 result = await session.execute(
                     select(func.nexus.upsert_query_history(
                         uuid.UUID(user_id),
-                        natural_language_query,
                         generated_sql,
                         execution_status,
                         execution_time_ms,
                         row_count,
-                        chart_rec_casted,
-                        model_reasoning,
-                        schema_rec_casted,
-                        llm_response_time_ms
+                        error_message
                     ))
                 )
                 query_id = result.scalar_one()
                 await session.commit()
                 
-                self.logger.info("Query execution saved to history (de-duplicated)",
+                self.logger.info("Query execution saved to audit log",
                     query_id=str(query_id),
                     user_id=user_id,
-                    query_type=query_type,
                     status=execution_status
                 )
                 
@@ -317,7 +295,6 @@ class UserService:
         user_id: str, 
         limit: int = 50, 
         offset: int = 0,
-        query_type: Optional[str] = None,
         favorites_only: bool = False
     ):
         """Get query history for a user. Use favorites_only=True for favorites."""
@@ -327,13 +304,10 @@ class UserService:
                     QueryHistory.user_id == uuid.UUID(user_id)
                 )
                 
-                if query_type:
-                    query = query.where(QueryHistory.query_type == query_type)
-                
                 if favorites_only:
                     query = query.where(QueryHistory.is_favorite == True)
                 
-                # Order by last_executed_at instead of executed_at
+                # Order by last_executed_at (most recent first)
                 query = query.order_by(QueryHistory.last_executed_at.desc()).limit(limit).offset(offset)
                 
                 result = await session.execute(query)
@@ -345,22 +319,13 @@ class UserService:
                         {
                             "id": q.id,
                             "query_name": q.query_name,
-                            "query_type": q.query_type,
-                            "natural_language_query": q.natural_language_query,
                             "generated_sql": q.generated_sql,
                             "execution_status": q.execution_status,
                             "execution_time_ms": q.execution_time_ms,
-                            "llm_response_time_ms": q.llm_response_time_ms,
                             "row_count": q.row_count,
                             "execution_count": q.execution_count,
-                            "chart_recommendation": q.chart_recommendation,
-                            "model_reasoning": q.model_reasoning,
-                            "schema_recommendations": q.schema_recommendations,
+                            "error_message": q.error_message,
                             "is_favorite": q.is_favorite,
-                            "favorite_name": q.favorite_name,
-                            "tags": q.tags,
-                            "generated_at": q.generated_at.isoformat() if q.generated_at else None,
-                            "executed_at": q.executed_at.isoformat() if q.executed_at else None,
                             "last_executed_at": q.last_executed_at.isoformat() if q.last_executed_at else None,
                             "created_at": q.created_at.isoformat()
                         }
@@ -371,36 +336,13 @@ class UserService:
                 self.logger.error("Failed to get query history", error=str(e))
                 return {"success": False, "error": str(e)}
     
-    async def delete_query_history(self, query_id: int, user_id: str):
-        """Delete a query from history."""
-        async with db_manager.get_session() as session:
-            try:
-                result = await session.execute(
-                    select(QueryHistory).where(
-                        and_(
-                            QueryHistory.id == query_id,
-                            QueryHistory.user_id == uuid.UUID(user_id)
-                        )
-                    )
-                )
-                query = result.scalar_one_or_none()
-                
-                if not query:
-                    return {"success": False, "error": "Query not found or access denied"}
-                
-                await session.delete(query)
-                await session.commit()
-                
-                self.logger.info("Query history deleted", query_id=query_id)
-                return {"success": True}
-                
-            except Exception as e:
-                await session.rollback()
-                self.logger.error("Failed to delete query history", error=str(e))
-                return {"success": False, "error": str(e)}
+    # Removed: delete_query_history - query_history is now an immutable audit log
     
-    async def toggle_query_favorite(self, query_id: int, user_id: str, favorite_name: Optional[str] = None):
-        """Toggle favorite status for a query history entry."""
+    async def toggle_query_favorite(self, query_id: int, user_id: str, query_name: Optional[str] = None):
+        """
+        Toggle favorite status for a query history entry.
+        Optionally update the query_name when marking as favorite.
+        """
         async with db_manager.get_session() as session:
             try:
                 result = await session.execute(
@@ -419,17 +361,21 @@ class UserService:
                 # Toggle favorite status
                 query.is_favorite = not query.is_favorite
                 
-                # Set or clear favorite_name
-                if query.is_favorite:
-                    query.favorite_name = favorite_name or query.favorite_name or "Unnamed Favorite"
+                # Update query_name if provided (useful when marking as favorite)
+                if query.is_favorite and query_name:
+                    query.query_name = query_name
                 
                 await session.commit()
                 
-                self.logger.info("Query favorite toggled", query_id=query_id, is_favorite=query.is_favorite)
+                self.logger.info("Query favorite toggled", 
+                    query_id=query_id, 
+                    is_favorite=query.is_favorite,
+                    query_name=query.query_name
+                )
                 return {
                     "success": True,
                     "is_favorite": query.is_favorite,
-                    "favorite_name": query.favorite_name
+                    "query_name": query.query_name
                 }
                 
             except Exception as e:

@@ -1,0 +1,12 @@
+# MySQL Connector
+# To enable: Copy this file to ../mysql.properties.tpl and set environment variables
+
+connector.name=mysql
+connection-url=jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DB}
+connection-user=${MYSQL_USER}
+connection-password=${MYSQL_PASSWORD}
+
+# Optional: Connection pooling
+# connection-pool.max-size=50
+# connection-pool.min-size=5
+

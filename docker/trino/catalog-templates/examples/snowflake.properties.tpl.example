@@ -1,0 +1,15 @@
+# Snowflake Connector
+# To enable: Copy this file to ../snowflake.properties.tpl and set environment variables
+
+connector.name=snowflake
+connection-url=jdbc:snowflake://${SNOWFLAKE_ACCOUNT}.snowflakecomputing.com
+connection-user=${SNOWFLAKE_USER}
+connection-password=${SNOWFLAKE_PASSWORD}
+snowflake.account=${SNOWFLAKE_ACCOUNT}
+snowflake.database=${SNOWFLAKE_DATABASE}
+snowflake.role=${SNOWFLAKE_ROLE}
+
+# Optional: Warehouse and schema
+# snowflake.warehouse=${SNOWFLAKE_WAREHOUSE}
+# snowflake.schema=${SNOWFLAKE_SCHEMA}
+

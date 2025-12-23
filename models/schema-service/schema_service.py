@@ -47,6 +47,13 @@ class SchemaService:
         self.trino_user = os.getenv("TRINO_USER", "admin")
         self.trino_catalog = os.getenv("TRINO_CATALOG")  # optional
         self.refresh_hours = int(os.getenv("SCHEMA_REFRESH_HOURS", "3"))
+        
+        # PostgreSQL connection for intent examples (same as Nexus uses)
+        self.postgres_host = os.getenv("POSTGRES_HOST", "dashboard-postgres")
+        self.postgres_port = int(os.getenv("POSTGRES_PORT", "5432"))
+        self.postgres_db = os.getenv("POSTGRES_DB", "dashboard")
+        self.postgres_user = os.getenv("POSTGRES_USER", "dashboard_user")
+        self.postgres_password = os.getenv("POSTGRES_PASSWORD", "")
 
         self.trino_service = TrinoSchemaService(
             host=self.trino_host, port=self.trino_port, user=self.trino_user, catalog=self.trino_catalog
@@ -60,9 +67,16 @@ class SchemaService:
         logger.info("Initializing: first schema load + FAISS build")
         await self.refresh_schemas()
         
-        # Initialize intent detector with shared MPNet model
-        logger.info("Initializing IntentDetector with shared MPNet model...")
-        self.intent_detector = IntentDetector(model=self.embedder.model)
+        # Initialize intent detector with shared MPNet model and DB connection
+        logger.info("Initializing IntentDetector with shared MPNet model and database...")
+        self.intent_detector = IntentDetector(
+            model=self.embedder.model,
+            db_host=self.postgres_host,
+            db_port=self.postgres_port,
+            db_name=self.postgres_db,
+            db_user=self.postgres_user,
+            db_password=self.postgres_password
+        )
         logger.info("IntentDetector initialized successfully")
         
         self.scheduler.add_job(self.refresh_schemas, "interval", hours=self.refresh_hours, id="schema_refresh")
@@ -269,6 +283,26 @@ async def manual_refresh(user: dict = Depends(verify_service_token)):
         return {"status": "success", "last_updated": schema_service.embedder.last_updated.isoformat()}
     except Exception as e:
         logger.exception("Manual refresh failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/intent/reload")
+async def reload_intent_examples(user: dict = Depends(verify_service_token)):
+    """Reload intent examples from database without restarting service."""
+    try:
+        schema_service.intent_detector.reload_examples()
+        total_examples = sum(len(v) for v in schema_service.intent_detector.intent_examples.values())
+        return {
+            "status": "success",
+            "message": "Intent examples reloaded from database",
+            "total_examples": total_examples,
+            "intents": {
+                intent: len(examples) 
+                for intent, examples in schema_service.intent_detector.intent_examples.items()
+            }
+        }
+    except Exception as e:
+        logger.exception("Intent examples reload failed")
         raise HTTPException(status_code=500, detail=str(e))
 
 

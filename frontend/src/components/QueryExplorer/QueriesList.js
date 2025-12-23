@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { QueryManagementService } from '../../services';
+import { getQueryDisplayTitle } from '../../utils/queryTitleGenerator';
 
 const QueriesList = () => {
   const { isDark } = useTheme();
@@ -25,17 +26,10 @@ const QueriesList = () => {
     setError(null);
     
     try {
-      let response;
-      
-      if (activeTab === 'recent') {
-        response = await QueryManagementService.getQueryHistory({
-          limit: 100
-        });
-      } else {
-        response = await QueryManagementService.getSavedQueries({
-          limit: 100
-        });
-      }
+      const response = await QueryManagementService.getQueryHistory({
+        limit: 100,
+        favorites_only: activeTab === 'saved'
+      });
       
       if (response.success) {
         setQueries(response.queries || []);
@@ -59,31 +53,7 @@ const QueriesList = () => {
     });
   };
 
-  const handleDelete = async (e, queryId) => {
-    e.stopPropagation();
-    
-    if (!window.confirm('Are you sure you want to delete this query?')) {
-      return;
-    }
-    
-    try {
-      let response;
-      if (activeTab === 'recent') {
-        response = await QueryManagementService.deleteQueryFromHistory(queryId);
-      } else {
-        response = await QueryManagementService.deleteSavedQuery(queryId);
-      }
-      
-      if (response.success) {
-        loadQueries();
-      } else {
-        alert(`Failed to delete: ${response.error}`);
-      }
-    } catch (err) {
-      alert('An error occurred while deleting');
-      console.error(err);
-    }
-  };
+  // Query history is now an immutable audit log - no delete functionality
 
   const handleAddToFavorites = async (e, query) => {
     e.stopPropagation();
@@ -131,9 +101,6 @@ const QueriesList = () => {
     return date.toLocaleDateString();
   };
 
-  const getQueryType = (query) => {
-    return query.query_type === 'natural_language' ? 'AI Query' : 'SQL Query';
-  };
 
   return (
     <div className={`h-full flex flex-col ${isDark ? 'bg-[#1a1f2e]' : 'bg-gray-50'}`}>
@@ -195,11 +162,9 @@ const QueriesList = () => {
       <div className="flex-1 px-8 pt-4 overflow-hidden flex flex-col pb-4">
         {/* Table Header */}
         <div className={`grid grid-cols-12 gap-4 px-4 py-3 text-xs font-medium uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-          <div className="col-span-5">Title</div>
-          <div className="col-span-2">Type</div>
-          <div className="col-span-2">Viewed</div>
-          <div className="col-span-2">Updated</div>
-          <div className="col-span-1"></div>
+          <div className="col-span-7">Title</div>
+          <div className="col-span-3">Last Executed</div>
+          <div className="col-span-2">Created</div>
         </div>
 
         {/* Table Body */}
@@ -259,53 +224,32 @@ const QueriesList = () => {
                   `}
                 >
                   {/* Title */}
-                  <div className="col-span-5 flex items-center space-x-3 min-w-0">
+                  <div className="col-span-7 flex items-center space-x-3 min-w-0">
                     <svg className={`w-4 h-4 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     <span className={`truncate text-sm ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
-                      {query.query_name || 'Unnamed Query'}
+                      {getQueryDisplayTitle(query)}
+                    </span>
+                    {query.execution_count > 1 && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
+                        ×{query.execution_count}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Last Executed */}
+                  <div className="col-span-3 flex items-center">
+                    <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {formatDate(query.last_executed_at || query.created_at)}
                     </span>
                   </div>
                   
-                  {/* Type */}
+                  {/* Created */}
                   <div className="col-span-2 flex items-center">
                     <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {getQueryType(query)}
+                      {formatDate(query.created_at)}
                     </span>
-                  </div>
-                  
-                  {/* Viewed */}
-                  <div className="col-span-2 flex items-center">
-                    <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {formatDate(query.executed_at || query.created_at)}
-                    </span>
-                  </div>
-                  
-                  {/* Updated */}
-                  <div className="col-span-2 flex items-center">
-                    <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {formatDate(query.updated_at || query.created_at)}
-                    </span>
-                  </div>
-                  
-                  {/* Delete */}
-                  <div className="col-span-1 flex items-center justify-end">
-                    <button
-                      onClick={(e) => handleDelete(e, query.id)}
-                      className={`
-                        p-1.5 rounded transition-colors
-                        ${isDark 
-                          ? 'hover:bg-red-900/30 text-gray-500 hover:text-red-400' 
-                          : 'hover:bg-red-50 text-gray-400 hover:text-red-600'
-                        }
-                      `}
-                      title="Delete query"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
                   </div>
                 </div>
               ))}

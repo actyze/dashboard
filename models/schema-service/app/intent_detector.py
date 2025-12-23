@@ -52,7 +52,17 @@ class IntentDetector:
             "show only values above 1000",
             "order by date descending",
             "aggregate by month",
-            "remove duplicates"
+            "remove duplicates",
+            "optimize this query",
+            "can you improve this query",
+            "make this query faster",
+            "suggest a better version",
+            "optimize this for trino",
+            "check the query and improve it",
+            "is there a better way to write this",
+            "rewrite this query",
+            "improve the performance",
+            "make this more efficient"
         ],
         "REJECT_RESULT": [
             "this is wrong",

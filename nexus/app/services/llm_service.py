@@ -441,6 +441,7 @@ Generated SQL (Main Data):
             "2. No tables = no SQL (provide guidance instead)",
             "3. Use exact qualified names (catalog.schema.table)",
             "4. Trino syntax, proper aliases, appropriate JOINs",
+            "5. Text filters: use LOWER() for case-insensitive match",
             "",
             "CHART RULES:",
             "- Result columns drop prefixes: 'c.city' → 'city' NOT 'ccity'",
@@ -450,15 +451,15 @@ Generated SQL (Main Data):
             f"REQUEST: {query}"
         ])
         
-        # Add conversation context if available
+        # Add conversation context if available (last 5 for better reasoning)
         if conversation_history:
             prompt_parts.append("\nHistory:")
-            for msg in conversation_history[-3:]:
+            for msg in conversation_history[-5:]:  # LLM benefits from more context than FAISS
                 prompt_parts.append(f"- {msg}")
         
-        prompt_parts.append("\nEXAMPLE:")
-        prompt_parts.append('SELECT c.city, SUM(o.amt) AS total → cols: ["city", "total"]')
-        prompt_parts.append('❌ "ccity" ✅ "city"')
+        prompt_parts.append("\nEXAMPLES:")
+        prompt_parts.append('Columns: SELECT c.city, SUM(o.amt) AS total → ["city", "total"] (NOT "ccity")')
+        prompt_parts.append('Text filter: WHERE LOWER(city) = LOWER(\'Delhi\') (NOT city = \'Delhi\')')
         prompt_parts.append("")
         prompt_parts.append("FORMAT:")
         prompt_parts.append("With tables: ```sql\\nQUERY\\n```\\n```json\\n{\"reasoning\":\"...\",\"chart_type\":\"bar\",\"x_column\":\"...\",\"y_column\":\"...\",\"title\":\"...\"}\\n```")

@@ -3,7 +3,7 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import String, Text, DateTime, JSON, Integer, Boolean, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
 from datetime import datetime
 import uuid
 from typing import Optional, Dict, Any, List
@@ -135,10 +135,10 @@ class ConversationHistory(Base):
 
 class QueryHistory(Base):
     """
-    Simplified query execution history with de-duplication.
+    User-saved queries (explicit saves only, no automatic deduplication).
     
-    Essential columns only - tracks query execution, favorites, and performance.
-    Removed unused LLM internal columns (schema_recommendations, model_reasoning, etc.)
+    Queries are only saved when user clicks "Save" or "Save As New" button.
+    Sorted by updated_at timestamp.
     """
     __tablename__ = "query_history"
     __table_args__ = {'schema': 'nexus'}
@@ -146,25 +146,23 @@ class QueryHistory(Base):
     # Core identifiers
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), nullable=False, index=True)
-    query_hash: Mapped[Optional[str]] = mapped_column(String(64), index=True)  # MD5 of SQL + user_id for de-duplication
     
     # Query content (SQL is the source of truth)
     generated_sql: Mapped[str] = mapped_column(Text, nullable=False)
     
-    # Execution metadata
+    # Execution metadata (captured at save time)
     execution_status: Mapped[str] = mapped_column(String(20), nullable=False)  # 'SUCCESS' or 'FAILURE'
     execution_time_ms: Mapped[Optional[int]] = mapped_column(Integer)
     row_count: Mapped[Optional[int]] = mapped_column(Integer)
-    execution_count: Mapped[int] = mapped_column(Integer, default=1)  # Number of times executed
     error_message: Mapped[Optional[str]] = mapped_column(Text)
     
-    # Favorite/naming
-    query_name: Mapped[Optional[str]] = mapped_column(String(255))  # Optional name for favorites
+    # User preferences
+    query_name: Mapped[Optional[str]] = mapped_column(String(255))  # User-provided name
     is_favorite: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)  # First execution
-    last_executed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)  # Most recent execution
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)  # When first saved
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # When last updated
 
 
 class DatabaseManager:

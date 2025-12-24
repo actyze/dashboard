@@ -213,33 +213,30 @@ class UserService:
             except Exception as e:
                 return {"success": False, "error": str(e)}
 
-    async def save_query_execution(
+    async def save_new_query(
         self,
         user_id: str,
         generated_sql: str,
-        execution_status: str,
+        query_name: Optional[str] = None,
+        natural_language_query: Optional[str] = None,  # Kept for API compatibility but not used
+        chart_recommendation: Optional[dict] = None,  # Kept for API compatibility but not used
+        execution_status: str = "SUCCESS",
         execution_time_ms: Optional[int] = None,
         row_count: Optional[int] = None,
-        error_message: Optional[str] = None,
-        **kwargs  # Accept but ignore deprecated params for backward compatibility
+        error_message: Optional[str] = None
     ):
         """
-        Save query execution to immutable audit log with hash-based deduplication.
-        
-        Tracks only essential execution metadata:
-        - User + SQL query
-        - Execution outcome (status, time, rows, errors)
-        - Automatic count increment for repeated queries
-        
-        No updates/deletes allowed (audit log).
+        Save a new query - EXPLICIT user action only.
+        User clicks "Save As New" button to trigger this.
         """
         async with db_manager.get_session() as session:
             try:
-                # Call simplified SQL function (no NL query needed)
+                # Call new SQL function for explicit saves
                 result = await session.execute(
-                    select(func.nexus.upsert_query_history(
+                    select(func.nexus.save_new_query(
                         uuid.UUID(user_id),
                         generated_sql,
+                        query_name,
                         execution_status,
                         execution_time_ms,
                         row_count,
@@ -249,16 +246,66 @@ class UserService:
                 query_id = result.scalar_one()
                 await session.commit()
                 
-                self.logger.info("Query execution saved to audit log",
+                self.logger.info("New query saved",
                     query_id=str(query_id),
                     user_id=user_id,
-                    status=execution_status
+                    query_name=query_name
                 )
                 
-                return {"success": True, "query_id": str(query_id)}
+                return {"success": True, "query_id": int(query_id)}
             except Exception as e:
                 await session.rollback()
-                self.logger.error("Failed to save query execution", error=str(e))
+                self.logger.error("Failed to save new query", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    async def update_query(
+        self,
+        query_id: int,
+        user_id: str,
+        generated_sql: Optional[str] = None,
+        query_name: Optional[str] = None,
+        natural_language_query: Optional[str] = None,  # Kept for API compatibility but not used
+        chart_recommendation: Optional[dict] = None,  # Kept for API compatibility but not used
+        execution_status: Optional[str] = None,
+        execution_time_ms: Optional[int] = None,
+        row_count: Optional[int] = None,
+        error_message: Optional[str] = None
+    ):
+        """
+        Update an existing query - EXPLICIT user action only.
+        User clicks "Save" button to trigger this.
+        """
+        async with db_manager.get_session() as session:
+            try:
+                # Call SQL function to update query
+                result = await session.execute(
+                    select(func.nexus.update_existing_query(
+                        query_id,
+                        uuid.UUID(user_id),
+                        generated_sql,
+                        query_name,
+                        execution_status,
+                        execution_time_ms,
+                        row_count,
+                        error_message
+                    ))
+                )
+                updated = result.scalar_one()
+                await session.commit()
+                
+                if not updated:
+                    return {"success": False, "error": "Query not found or access denied"}
+                
+                self.logger.info("Query updated",
+                    query_id=query_id,
+                    user_id=user_id,
+                    query_name=query_name
+                )
+                
+                return {"success": True, "query_id": query_id}
+            except Exception as e:
+                await session.rollback()
+                self.logger.error("Failed to update query", error=str(e))
                 return {"success": False, "error": str(e)}
     
     async def update_query_name(self, query_id: int, user_id: str, query_name: str):
@@ -290,6 +337,34 @@ class UserService:
                 self.logger.error("Failed to update query name", error=str(e))
                 return {"success": False, "error": str(e)}
     
+    async def delete_query(self, query_id: int, user_id: str):
+        """Delete a saved query."""
+        async with db_manager.get_session() as session:
+            try:
+                result = await session.execute(
+                    select(QueryHistory).where(
+                        and_(
+                            QueryHistory.id == query_id,
+                            QueryHistory.user_id == uuid.UUID(user_id)
+                        )
+                    )
+                )
+                query = result.scalar_one_or_none()
+                
+                if not query:
+                    return {"success": False, "error": "Query not found or access denied"}
+                
+                await session.delete(query)
+                await session.commit()
+                
+                self.logger.info("Query deleted", query_id=query_id)
+                return {"success": True}
+                
+            except Exception as e:
+                await session.rollback()
+                self.logger.error("Failed to delete query", error=str(e))
+                return {"success": False, "error": str(e)}
+    
     async def get_query_history(
         self, 
         user_id: str, 
@@ -307,8 +382,8 @@ class UserService:
                 if favorites_only:
                     query = query.where(QueryHistory.is_favorite == True)
                 
-                # Order by last_executed_at (most recent first)
-                query = query.order_by(QueryHistory.last_executed_at.desc()).limit(limit).offset(offset)
+                # Sort by updated_at (most recently saved/updated first)
+                query = query.order_by(QueryHistory.updated_at.desc()).limit(limit).offset(offset)
                 
                 result = await session.execute(query)
                 queries = result.scalars().all()
@@ -323,11 +398,10 @@ class UserService:
                             "execution_status": q.execution_status,
                             "execution_time_ms": q.execution_time_ms,
                             "row_count": q.row_count,
-                            "execution_count": q.execution_count,
                             "error_message": q.error_message,
                             "is_favorite": q.is_favorite,
-                            "last_executed_at": q.last_executed_at.isoformat() if q.last_executed_at else None,
-                            "created_at": q.created_at.isoformat()
+                            "created_at": q.created_at.isoformat(),
+                            "updated_at": q.updated_at.isoformat() if q.updated_at else None
                         }
                         for q in queries
                     ]

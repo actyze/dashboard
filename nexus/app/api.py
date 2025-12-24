@@ -129,23 +129,8 @@ async def execute_sql(
     executed_at = datetime.utcnow()
     execution_time_ms = int((execution_end - execution_start) * 1000)
     
-    # Save to query history (fire and forget - don't block response)
-    try:
-        # Save query execution to audit log (simplified - only essential fields)
-        asyncio.create_task(
-            user_service.save_query_execution(
-                user_id=user_id,
-                generated_sql=request.sql,
-                execution_status="SUCCESS" if result.get("success") else "FAILURE",
-                execution_time_ms=execution_time_ms,
-                row_count=result.get("query_results", {}).get("row_count") if result.get("query_results") else None,
-                error_message=result.get("error")
-            )
-        )
-    except Exception as e:
-        # Log but don't fail the request if history save fails
-        logger = orchestration_service.logger
-        logger.warning("Failed to save query history", error=str(e), user_id=user_id)
+    # NO AUTOMATIC SAVE - User must click "Save" or "Save As New" button
+    # This removes the confusing hash-based auto-deduplication
     
     return result
 
@@ -195,35 +180,84 @@ async def update_query_history_name(
         raise HTTPException(status_code=500, detail=result.get("error"))
     return result
 
-# Removed: delete_query_history endpoint - query_history is now an immutable audit log
+# Removed: delete_query_history endpoint - queries are user-controlled now
 
-@router.post("/query-history/manual")
-async def save_manual_query(
-    request: ExecuteSQLRequest,
+class SaveQueryRequest(BaseModel):
+    generated_sql: str
+    query_name: Optional[str] = None
+    natural_language_query: Optional[str] = None
+    chart_recommendation: Optional[Dict[str, Any]] = None
+    execution_status: Optional[str] = "SUCCESS"
+    execution_time_ms: Optional[int] = None
+    row_count: Optional[int] = None
+
+class UpdateQueryRequest(BaseModel):
+    generated_sql: Optional[str] = None
+    query_name: Optional[str] = None
+    natural_language_query: Optional[str] = None
+    chart_recommendation: Optional[Dict[str, Any]] = None
+    execution_status: Optional[str] = None
+    execution_time_ms: Optional[int] = None
+    row_count: Optional[int] = None
+
+@router.post("/query-history/save")
+async def save_query(
+    request: SaveQueryRequest,
     current_user: dict = Depends(require_viewer)
 ):
-    """Execute and save a manual SQL query to history."""
-    from datetime import datetime
-    
-    # Execute the SQL
-    result = await orchestration_service.execute_sql_directly(
-        request.sql,
-        request.max_results,
-        request.timeout_seconds
-    )
-    
-    # Save to audit log (simplified - only essential fields)
+    """Save a new query - explicit user action (Save As New button)."""
     user_id = current_user.get("id")
-    
-    await user_service.save_query_execution(
+    result = await user_service.save_new_query(
         user_id=user_id,
-        generated_sql=request.sql,
-        execution_status="SUCCESS" if result.get("success") else "FAILURE",
-        execution_time_ms=int(result.get("execution_time", 0) or 0),
-        row_count=result.get("query_results", {}).get("row_count") if result.get("query_results") else None,
-        error_message=result.get("error")
+        generated_sql=request.generated_sql,
+        query_name=request.query_name,
+        natural_language_query=request.natural_language_query,
+        chart_recommendation=request.chart_recommendation,
+        execution_status=request.execution_status,
+        execution_time_ms=request.execution_time_ms,
+        row_count=request.row_count
     )
-    
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error"))
+    return result
+
+@router.patch("/query-history/{query_id}")
+async def update_query_by_id(
+    query_id: int,
+    request: UpdateQueryRequest,
+    current_user: dict = Depends(require_viewer)
+):
+    """Update an existing query - explicit user action (Save button)."""
+    user_id = current_user.get("id")
+    result = await user_service.update_query(
+        query_id=query_id,
+        user_id=user_id,
+        generated_sql=request.generated_sql,
+        query_name=request.query_name,
+        natural_language_query=request.natural_language_query,
+        chart_recommendation=request.chart_recommendation,
+        execution_status=request.execution_status,
+        execution_time_ms=request.execution_time_ms,
+        row_count=request.row_count
+    )
+    if not result.get("success"):
+        if "not found" in result.get("error", "").lower():
+            raise HTTPException(status_code=404, detail=result.get("error"))
+        raise HTTPException(status_code=500, detail=result.get("error"))
+    return result
+
+@router.delete("/query-history/{query_id}")
+async def delete_query_by_id(
+    query_id: int,
+    current_user: dict = Depends(require_viewer)
+):
+    """Delete a saved query."""
+    user_id = current_user.get("id")
+    result = await user_service.delete_query(query_id=query_id, user_id=user_id)
+    if not result.get("success"):
+        if "not found" in result.get("error", "").lower():
+            raise HTTPException(status_code=404, detail=result.get("error"))
+        raise HTTPException(status_code=500, detail=result.get("error"))
     return result
 
 # =============================================================================
@@ -837,66 +871,6 @@ async def revert_dashboard_version(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-# =============================================================================
-# Internal Service Endpoints (Schema Service to Nexus)
-# =============================================================================
-
-from fastapi import Header
-from app.config import settings
-
-@router.get("/internal/quality-metrics")
-async def get_quality_metrics_for_schema_service(
-    x_service_token: str = Header(..., alias="X-Service-Token")
-):
-    """
-    Internal API: Schema service fetches quality metrics.
-    
-    Only accessible by schema service with valid service token.
-    Fetches aggregated quality metrics for FAISS quality-aware weighting.
-    
-    Returns:
-        {
-            "success": true,
-            "metrics": {
-                "tables": {
-                    "catalog.schema.table": {
-                        "times_used": int,
-                        "success_rate": float,
-                        "avg_rows": float,
-                        "avg_time_ms": float,
-                        "last_used": datetime
-                    },
-                    ...
-                },
-                "join_pairs": {
-                    "catalog.schema.table_a|catalog.schema.table_b": {
-                        "times_joined": int,
-                        "success_rate": float,
-                        "avg_rows": float
-                    },
-                    ...
-                }
-            },
-            "generated_at": "2024-01-01T00:00:00"
-        }
-    """
-    # Verify service token
-    if x_service_token != settings.service_to_service_token:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid service token"
-        )
-    
-    # Fetch aggregated metrics
-    metrics = await analytics_service.get_quality_metrics_summary()
-    
-    from datetime import datetime
-    return {
-        "success": True,
-        "metrics": metrics,
-        "generated_at": datetime.utcnow().isoformat()
-    }
 
 # =============================================================================
 # Public Endpoints (No Authentication Required)

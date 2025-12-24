@@ -241,12 +241,12 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
       {/* Modal */}
       <div className={`
         relative w-full max-w-2xl mx-4 rounded-xl shadow-2xl
-        ${isDark ? 'bg-gray-900 border border-gray-700' : 'bg-white border border-gray-200'}
+        ${isDark ? 'bg-[#17181a] border border-[#2a2b2e]' : 'bg-white border border-gray-200'}
       `}>
         {/* Header */}
         <div className={`
           flex items-center justify-between px-5 py-4 border-b
-          ${isDark ? 'border-gray-700' : 'border-gray-200'}
+          ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}
         `}>
           <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
             {initialData ? 'Edit Tile' : 'Create New Tile'}
@@ -290,7 +290,7 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
                   w-full px-3 py-2 rounded-lg text-sm
                   transition-all duration-200
                   ${isDark 
-                    ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500' 
+                    ? 'bg-[#1c1d1f] border-gray-600 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500' 
                     : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                   }
                   border outline-none
@@ -312,7 +312,7 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
                   w-full px-3 py-2 rounded-lg text-sm
                   transition-all duration-200
                   ${isDark 
-                    ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500' 
+                    ? 'bg-[#1c1d1f] border-gray-600 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500' 
                     : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                   }
                   border outline-none
@@ -333,9 +333,9 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
                   className={`
                     flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all
                     ${chartType === 'table'
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-[#5d6ad3] text-white'
                       : isDark
-                        ? 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-600'
+                        ? 'bg-[#1c1d1f] text-gray-300 hover:bg-gray-700 border border-gray-600'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
                     }
                   `}
@@ -364,7 +364,7 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
                     className={`
                       flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all
                       ${isDark
-                        ? 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+                        ? 'bg-[#1c1d1f] text-gray-400 hover:bg-gray-700 hover:text-gray-200'
                         : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
                       }
                     `}
@@ -401,11 +401,11 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
               </div>
             )}
 
-            {/* Axis Configuration - Only show for chart types (not table or indicator) */}
-            {chartType !== 'table' && chartType !== 'indicator' && chartType !== 'metric' && (
+            {/* Axis Configuration - Only show for chart types when columns are available */}
+            {chartType !== 'table' && chartType !== 'indicator' && chartType !== 'metric' && queryColumns.length > 0 && (
               <div className={`
                 p-4 rounded-lg border
-                ${isDark ? 'bg-gray-800/50 border-gray-700' : 'bg-gray-50 border-gray-200'}
+                ${isDark ? 'bg-[#1c1d1f]/50 border-[#2a2b2e]' : 'bg-gray-50 border-gray-200'}
               `}>
                 <div className="flex items-center gap-2 mb-3">
                   <svg className={`w-4 h-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -427,18 +427,8 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
                   </div>
                 )}
 
-                {/* Info message - columns are auto-detected from SQL */}
-                {queryColumns.length === 0 && sqlQuery.trim() && (
-                  <div className={`
-                    text-center py-3 rounded-lg text-xs
-                    ${isDark ? 'bg-gray-800/50 text-gray-500' : 'bg-gray-50 text-gray-400'}
-                  `}>
-                    <p>Enter a valid SQL query above. Column names will be auto-detected.</p>
-                  </div>
-                )}
-
-                {/* Column Selection - Show immediately when editing, or after preview for new tiles */}
-                {(isEditing || hasPreviewedQuery || queryColumns.length > 0) && (
+                {/* Column Selection */}
+                {queryColumns.length > 0 && (
                   <div className="grid grid-cols-2 gap-4">
                     {/* X-Axis Column */}
                     <div>
@@ -452,7 +442,7 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
                           w-full px-3 py-2 rounded-lg text-sm
                           transition-all duration-200
                           ${isDark 
-                            ? 'bg-gray-900 border-gray-600 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500' 
+                            ? 'bg-[#17181a] border-gray-600 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500' 
                             : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                           }
                           border outline-none
@@ -486,7 +476,7 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
                           w-full px-3 py-2 rounded-lg text-sm
                           transition-all duration-200
                           ${isDark 
-                            ? 'bg-gray-900 border-gray-600 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500' 
+                            ? 'bg-[#17181a] border-gray-600 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500' 
                             : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                           }
                           border outline-none
@@ -530,7 +520,7 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
         {/* Footer */}
         <div className={`
           flex items-center justify-end gap-3 px-5 py-4 border-t
-          ${isDark ? 'border-gray-700' : 'border-gray-200'}
+          ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}
         `}>
           <button
             onClick={handleClose}
@@ -546,7 +536,7 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-[#5d6ad3] text-white hover:bg-[#4f5bc4] transition-colors"
           >
             {initialData ? 'Update Tile' : 'Create Tile'}
           </button>

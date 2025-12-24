@@ -32,13 +32,13 @@ const Card = ({
   };
   
   const variantClasses = {
-    default: 'bg-white dark:bg-gray-800',
-    primary: 'bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-800',
-    secondary: 'bg-gray-50 dark:bg-gray-700',
-    success: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800',
-    warning: 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800',
-    error: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
-    gradient: 'bg-gradient-to-br from-primary-50 to-primary-100 dark:from-primary-900/20 dark:to-primary-800/20',
+    default: isDark ? 'bg-[#1c1d1f]' : 'bg-white',
+    primary: isDark ? 'bg-[#1c1d1f] border-[#2a2b2e]' : 'bg-primary-50 border-primary-200',
+    secondary: isDark ? 'bg-[#18181a]' : 'bg-gray-50',
+    success: isDark ? 'bg-[#1c1d1f] border-green-800' : 'bg-green-50 border-green-200',
+    warning: isDark ? 'bg-[#1c1d1f] border-yellow-800' : 'bg-yellow-50 border-yellow-200',
+    error: isDark ? 'bg-[#1c1d1f] border-red-800' : 'bg-red-50 border-red-200',
+    gradient: isDark ? 'bg-[#1c1d1f]' : 'bg-gradient-to-br from-primary-50 to-primary-100',
   };
   
   const baseClasses = `
@@ -46,7 +46,7 @@ const Card = ({
     ${paddingClasses[padding]}
     ${shadowClasses[shadow]}
     ${variantClasses[variant]}
-    ${bordered ? 'border border-gray-200 dark:border-gray-700' : ''}
+    ${bordered ? (isDark ? 'border border-[#2a2b2e]' : 'border border-gray-200') : ''}
     ${hoverable ? 'hover:shadow-lg hover:-translate-y-0.5 cursor-pointer' : ''}
     ${onClick ? 'cursor-pointer' : ''}
   `;
@@ -62,8 +62,8 @@ const Card = ({
   );
 };
 
-// Card Header component
-Card.Header = ({ 
+// Card Header component - using Tailwind dark: prefix for border colors
+const CardHeader = ({ 
   children, 
   className = '', 
   divider = true,
@@ -71,7 +71,7 @@ Card.Header = ({
 }) => (
   <div 
     className={`
-      ${divider ? 'pb-4 mb-4 border-b border-gray-200 dark:border-gray-700' : ''}
+      ${divider ? 'pb-4 mb-4 border-b border-gray-200 dark:border-[#2a2b2e]' : ''}
       ${className}
     `.trim().replace(/\s+/g, ' ')} 
     {...props}
@@ -81,7 +81,7 @@ Card.Header = ({
 );
 
 // Card Body component
-Card.Body = ({ 
+const CardBody = ({ 
   children, 
   className = '', 
   ...props 
@@ -91,8 +91,8 @@ Card.Body = ({
   </div>
 );
 
-// Card Footer component
-Card.Footer = ({ 
+// Card Footer component - using Tailwind dark: prefix for border colors
+const CardFooter = ({ 
   children, 
   className = '', 
   divider = true,
@@ -100,7 +100,7 @@ Card.Footer = ({
 }) => (
   <div 
     className={`
-      ${divider ? 'pt-4 mt-4 border-t border-gray-200 dark:border-gray-700' : ''}
+      ${divider ? 'pt-4 mt-4 border-t border-gray-200 dark:border-[#2a2b2e]' : ''}
       ${className}
     `.trim().replace(/\s+/g, ' ')} 
     {...props}
@@ -110,7 +110,7 @@ Card.Footer = ({
 );
 
 // Card Title component
-Card.Title = ({ 
+const CardTitle = ({ 
   children, 
   size = 'lg',
   className = '', 
@@ -139,7 +139,7 @@ Card.Title = ({
 };
 
 // Card Description component
-Card.Description = ({ 
+const CardDescription = ({ 
   children, 
   className = '', 
   ...props 
@@ -156,7 +156,7 @@ Card.Description = ({
 );
 
 // Card Image component
-Card.Image = ({ 
+const CardImage = ({ 
   src, 
   alt, 
   className = '',
@@ -176,7 +176,7 @@ Card.Image = ({
 );
 
 // Card Actions component
-Card.Actions = ({ 
+const CardActions = ({ 
   children, 
   className = '',
   justify = 'end',
@@ -203,5 +203,14 @@ Card.Actions = ({
     </div>
   );
 };
+
+// Attach subcomponents
+Card.Header = CardHeader;
+Card.Body = CardBody;
+Card.Footer = CardFooter;
+Card.Title = CardTitle;
+Card.Description = CardDescription;
+Card.Image = CardImage;
+Card.Actions = CardActions;
 
 export default Card;

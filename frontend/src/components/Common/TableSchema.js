@@ -150,7 +150,7 @@ const TableSchema = ({ tableName, tableDetails }) => {
         {columns.map((field, index) => (
           <div
             key={index}
-            className={`flex items-center justify-between p-1.5 rounded transition-colors ${isDark ? 'hover:bg-gray-800/60' : 'hover:bg-gray-100/60'}`}
+            className={`flex items-center justify-between p-1.5 rounded transition-colors ${isDark ? 'hover:bg-[#1c1d1f]/60' : 'hover:bg-gray-100/60'}`}
           >
             <div className="flex items-center space-x-2 flex-1 min-w-0">
               <div className={`flex-shrink-0 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>

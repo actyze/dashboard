@@ -4,6 +4,7 @@ import os
 import time
 import logging
 import asyncio
+import httpx
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
 
@@ -94,7 +95,12 @@ class FAISSSchemaEmbedder:
         return raw_cache
 
     async def build_embeddings(self, schemas: List[Dict[str, Any]]):
-        """Build FAISS index from schemas."""
+        """
+        Build FAISS index from schemas.
+        
+        Args:
+            schemas: List of schema dictionaries
+        """
         logger.info(f"Building embeddings for {len(schemas)} schemas...")
         
         # Store raw schema data
@@ -182,13 +188,35 @@ class FAISSSchemaEmbedder:
         return results, embed_time, search_time
 
     def _build_enhanced_query(self, query: str, prior_context: List[str]) -> str:
-        """Combine current query with prior context."""
+        """
+        Combine current query with recent context.
+        
+        Strategy:
+        - Simple concatenation (no artificial weighting)
+        - Only last 2 queries from history (to avoid dilution)
+        - Intent detection in Nexus handles reusing vs. fresh schema search
+        
+        Note: We don't artificially boost current query (2x) because:
+        - For follow-ups like "check for London", it would dilute previous context
+        - Intent detection already determines if we need fresh schema search
+        - FAISS works best with natural semantic signals, not artificial weighting
+        """
         if not prior_context:
-            return query
+            return query  # No context, just use current query
         
-        context_text = " ".join(prior_context)
-        enhanced_query = f"{query} {query} {context_text}"
+        # Take only last 2 queries from history (excluding current query if it's in history)
+        recent_context = []
+        for ctx in reversed(prior_context):
+            if ctx != query and len(recent_context) < 2:
+                recent_context.insert(0, ctx)
         
-        logger.info(f"Enhanced query with {len(prior_context)} context items: {enhanced_query[:100]}...")
+        if not recent_context:
+            return query  # No valid context, just use current query
+        
+        # Simple concatenation: current + last 2 context items
+        context_text = " ".join(recent_context)
+        enhanced_query = f"{query} {context_text}"
+        
+        logger.info(f"Enhanced query with {len(recent_context)} context items: {enhanced_query[:100]}...")
         return enhanced_query
 

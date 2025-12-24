@@ -67,7 +67,7 @@ const Table = ({
   
   if (loading) {
     return (
-      <div className={`bg-white dark:bg-gray-800 rounded-lg shadow ${className}`}>
+      <div className={`bg-white dark:bg-[#1c1d1f] rounded-lg shadow ${className}`}>
         <LoadingSpinner />
       </div>
     );
@@ -75,14 +75,14 @@ const Table = ({
   
   if (!data.length) {
     return (
-      <div className={`bg-white dark:bg-gray-800 rounded-lg shadow ${className}`}>
+      <div className={`bg-white dark:bg-[#1c1d1f] rounded-lg shadow ${className}`}>
         <EmptyState />
       </div>
     );
   }
   
   return (
-    <div className={`overflow-hidden bg-white dark:bg-gray-800 ${className}`} {...props}>
+    <div className={`overflow-hidden bg-white dark:bg-[#1c1d1f] ${className}`} {...props}>
       <div className="overflow-x-auto">
         <table className={`min-w-full divide-y divide-gray-200 dark:divide-gray-700 ${sizeClasses[size]}`}>
           <thead className="bg-gray-50 dark:bg-gray-700">
@@ -104,7 +104,7 @@ const Table = ({
             </tr>
           </thead>
           <tbody className={`
-            bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700
+            bg-white dark:bg-[#1c1d1f] divide-y divide-gray-200 dark:divide-gray-700
             ${striped ? 'divide-y-0' : ''}
           `}>
             {data.map((row, rowIndex) => (
@@ -159,7 +159,7 @@ Table.Header = ({ children, className = '', ...props }) => (
 
 // TableBody component for custom body
 Table.Body = ({ children, className = '', ...props }) => (
-  <tbody className={`bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700 ${className}`} {...props}>
+  <tbody className={`bg-white dark:bg-[#1c1d1f] divide-y divide-gray-200 dark:divide-gray-700 ${className}`} {...props}>
     {children}
   </tbody>
 );

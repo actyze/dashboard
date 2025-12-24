@@ -73,7 +73,7 @@ const Signup = () => {
         </div>
 
         {/* Signup Form */}
-        <Card className={`p-8 ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
+        <Card className={`p-8 ${isDark ? 'bg-[#1c1d1f]' : 'bg-white'}`}>
           <form onSubmit={handleSubmit}>
             {error && (
               <div className={`mb-4 p-3 rounded-lg ${isDark ? 'bg-red-900/20 text-red-400' : 'bg-red-50 text-red-600'}`}>
@@ -172,7 +172,7 @@ const Signup = () => {
             <Button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-[#5d6ad3] hover:bg-[#4f5bc4] text-white py-2 px-4 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Creating account...' : 'Create account'}
             </Button>

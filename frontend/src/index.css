@@ -22,7 +22,7 @@ body {
 }
 
 .dark body {
-  background-color: theme('colors.gray.900');
+  background-color: #101012;
   color: theme('colors.white');
 }
 

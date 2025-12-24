@@ -87,7 +87,7 @@ const AIQueryInput = ({ onSubmit, loading = false }) => {
       {/* Animated Border Wrapper */}
       <div className="ai-input-wrapper">
         {/* Inner Container */}
-        <div className={`ai-input-inner ${isDark ? 'bg-gray-900' : 'bg-white'}`}>
+        <div className={`ai-input-inner ${isDark ? 'bg-[#17181a]' : 'bg-white'}`}>
           <div className="px-4 py-3">
             {/* Input Row */}
             <div className="flex items-end gap-3">
@@ -114,7 +114,7 @@ const AIQueryInput = ({ onSubmit, loading = false }) => {
                   flex-shrink-0 w-8 h-8 mb-0.5 rounded-lg flex items-center justify-center
                   transition-all duration-200
                   ${!query.trim() || loading
-                    ? `${isDark ? 'bg-gray-800 text-gray-600' : 'bg-gray-100 text-gray-400'} cursor-not-allowed`
+                    ? `${isDark ? 'bg-[#1c1d1f] text-gray-600' : 'bg-gray-100 text-gray-400'} cursor-not-allowed`
                     : 'bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white'
                   }
                 `}

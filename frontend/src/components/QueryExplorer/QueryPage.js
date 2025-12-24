@@ -204,9 +204,9 @@ const QueryPage = () => {
 
 
   return (
-    <div className={`h-full flex flex-col ${isDark ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
+    <div className={`h-full flex flex-col ${isDark ? 'bg-[#101012]' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
       {/* Header */}
-      <div className={`${isDark ? 'bg-gray-900/95 border-gray-800/60' : 'bg-white/95 border-gray-200/60'} border-b px-4 py-2 backdrop-blur-sm`}>
+      <div className={`${isDark ? 'bg-[#101012] border-gray-800/60' : 'bg-white/95 border-gray-200/60'} border-b px-4 py-2 backdrop-blur-sm`}>
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center space-x-3">
@@ -296,8 +296,8 @@ const QueryPage = () => {
                         className={`
                           p-2 rounded-md transition-all duration-300 flex items-center justify-center
                           ${queryLoading
-                            ? 'bg-blue-400 cursor-not-allowed'
-                            : 'bg-blue-600 hover:bg-blue-700'
+                            ? 'bg-[#7a84db] cursor-not-allowed'
+                            : 'bg-[#5d6ad3] hover:bg-[#4f5bc4]'
                           }
                           text-white shadow-md hover:shadow-lg
                         `}
@@ -403,7 +403,7 @@ const QueryPage = () => {
           style={{ width: aiPanelCollapsed ? 0 : 320, minWidth: aiPanelCollapsed ? 0 : 320 }}
           className={`
             transition-all duration-300 flex-shrink-0
-            ${isDark ? 'bg-gray-800/50 border-gray-700/50 backdrop-blur-sm' : 'bg-white/50 border-gray-200/50 backdrop-blur-sm'} 
+            ${isDark ? 'bg-[#17181a] border-[#2a2b2e]' : 'bg-white/50 border-gray-200/50 backdrop-blur-sm'} 
             border-l flex flex-col overflow-hidden
           `}
         >
@@ -460,7 +460,7 @@ const QueryPage = () => {
                                 }`
                               : `rounded-2xl rounded-tl-sm ${
                                   isDark
-                                    ? 'bg-gray-700 text-gray-100'
+                                    ? 'bg-[#2a2b2e] text-gray-100'
                                     : 'bg-gray-200 text-gray-800'
                                 }`
                             }
@@ -487,7 +487,7 @@ const QueryPage = () => {
                   {/* Capability Cards */}
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     {/* Card 1 */}
-                    <div className={`p-2.5 rounded-lg border ${isDark ? 'bg-gray-800/40 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                    <div className={`p-2.5 rounded-lg border ${isDark ? 'bg-[#1c1d1f] border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
                       <svg className={`w-4 h-4 mb-1.5 ${isDark ? 'text-blue-400' : 'text-blue-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
                       </svg>
@@ -497,7 +497,7 @@ const QueryPage = () => {
                     </div>
                     
                     {/* Card 2 */}
-                    <div className={`p-2.5 rounded-lg border ${isDark ? 'bg-gray-800/40 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
+                    <div className={`p-2.5 rounded-lg border ${isDark ? 'bg-[#1c1d1f] border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
                       <svg className={`w-4 h-4 mb-1.5 ${isDark ? 'text-green-400' : 'text-green-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
                       </svg>
@@ -509,7 +509,7 @@ const QueryPage = () => {
                   </div>
                   
                   {/* Note */}
-                  <div className={`flex items-start gap-2 p-2 rounded-lg ${isDark ? 'bg-gray-800/40' : 'bg-gray-50'}`}>
+                  <div className={`flex items-start gap-2 p-2 rounded-lg ${isDark ? 'bg-[#1c1d1f]' : 'bg-gray-50'}`}>
                     <svg className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                     </svg>
@@ -522,7 +522,7 @@ const QueryPage = () => {
             </div>
 
             {/* AI Input - Fixed at Bottom */}
-            <div className={`flex-shrink-0 p-3 border-t ${isDark ? 'border-gray-700/50 bg-gray-800/30' : 'border-gray-200/50 bg-gray-50/50'}`}>
+            <div className={`flex-shrink-0 p-3 border-t ${isDark ? 'border-[#2a2b2e] bg-[#131415]' : 'border-gray-200/50 bg-gray-50/50'}`}>
               <AIQueryInput 
                 onSubmit={handleAIQuery}
                 loading={queryLoading}

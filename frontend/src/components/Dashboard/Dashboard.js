@@ -543,7 +543,7 @@ const Dashboard = ({ isPublic = false }) => {
 
     return (
       <Grid item xs={12} md={6} key={tile.id}>
-        <Card padding="xs" className={`h-full ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
+        <Card padding="xs" className={`h-full ${isDark ? 'bg-[#1c1d1f]' : 'bg-white'}`}>
           <Card.Header divider={false} className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 py-2 px-3">
             <Card.Title className="text-sm font-medium">{tile.title}</Card.Title>
             {!isPublic && (
@@ -607,7 +607,7 @@ const Dashboard = ({ isPublic = false }) => {
 
   if (loadingDashboard) {
     return (
-      <div className={`h-full flex items-center justify-center ${isDark ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
+      <div className={`h-full flex items-center justify-center ${isDark ? 'bg-[#101012]' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
         <div className="text-center">
           <CircularProgress size={40} />
           <Typography 
@@ -624,7 +624,7 @@ const Dashboard = ({ isPublic = false }) => {
 
   if (dashboardError) {
     return (
-      <div className={`h-full flex items-center justify-center ${isDark ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
+      <div className={`h-full flex items-center justify-center ${isDark ? 'bg-[#101012]' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
         <div className="text-center">
           <div className="text-red-500 dark:text-red-400 mb-4">
             <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -649,9 +649,9 @@ const Dashboard = ({ isPublic = false }) => {
   }
 
   return (
-    <div className={`h-full flex flex-col ${isDark ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
+    <div className={`h-full flex flex-col ${isDark ? 'bg-[#101012]' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
       {/* Header */}
-      <div className={`${isDark ? 'bg-gray-900/95 border-gray-800/60' : 'bg-white/95 border-gray-200/60'} border-b px-4 py-2 backdrop-blur-sm`}>
+      <div className={`${isDark ? 'bg-[#101012] border-gray-800/60' : 'bg-white/95 border-gray-200/60'} border-b px-4 py-2 backdrop-blur-sm`}>
         <div className="flex items-center space-x-3 w-full">
           {/* Back Button - Only for authenticated users */}
           {!isPublic && (
@@ -747,7 +747,7 @@ const Dashboard = ({ isPublic = false }) => {
             <div className="flex items-center justify-end mb-4">
               <button 
                 onClick={handleCreateTile}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-[#5d6ad3] text-white hover:bg-[#4f5bc4] transition-colors"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -788,7 +788,7 @@ const Dashboard = ({ isPublic = false }) => {
                   <div className="flex justify-center">
                     <button 
                       onClick={handleCreateTile}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-[#5d6ad3] text-white hover:bg-[#4f5bc4] transition-colors"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

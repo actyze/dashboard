@@ -36,12 +36,12 @@ const ManualAxisSelector = ({
   return (
     <div className={`
       rounded-xl border overflow-hidden
-      ${isDark ? 'bg-gray-800/30 border-gray-700/50' : 'bg-white border-gray-200'}
+      ${isDark ? 'bg-[#1c1d1f]/30 border-gray-700/50' : 'bg-white border-gray-200'}
     `}>
       {/* Header */}
       <div className={`
         px-4 py-3 flex items-center justify-between border-b
-        ${isDark ? 'bg-gray-800/50 border-gray-700/50' : 'bg-gray-50 border-gray-100'}
+        ${isDark ? 'bg-[#1c1d1f]/50 border-gray-700/50' : 'bg-gray-50 border-gray-100'}
       `}>
         <div className="flex items-center gap-3">
           <div className={`
@@ -101,7 +101,7 @@ const ManualAxisSelector = ({
                               ? 'bg-blue-500/20 text-blue-400 shadow-sm' 
                               : 'bg-white text-blue-600 shadow-sm')
                           : (isDark
-                              ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+                              ? 'text-gray-500 hover:text-gray-300 hover:bg-[#1c1d1f]'
                               : 'text-gray-500 hover:text-gray-700 hover:bg-white/50')
                         }
                       `}
@@ -115,7 +115,7 @@ const ManualAxisSelector = ({
                       transition-all duration-150 pointer-events-none z-50
                       ${isDark 
                         ? 'bg-gray-900 text-gray-200 shadow-lg border border-gray-700' 
-                        : 'bg-gray-800 text-white shadow-lg'}
+                        : 'bg-[#1c1d1f] text-white shadow-lg'}
                     `}>
                       {type.label}
                       <div className={`
@@ -199,7 +199,7 @@ const ManualAxisSelector = ({
               ${canGenerate
                 ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md'
                 : (isDark
-                    ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                    ? 'bg-[#1c1d1f] text-gray-600 cursor-not-allowed'
                     : 'bg-gray-100 text-gray-400 cursor-not-allowed')
               }
             `}

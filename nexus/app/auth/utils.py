@@ -46,3 +46,31 @@ def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
     except JWTError:
         return None
 
+def should_refresh_token(payload: Dict[str, Any], threshold_minutes: int = 15) -> bool:
+    """
+    Check if token should be refreshed based on remaining time.
+    
+    Args:
+        payload: Decoded JWT payload
+        threshold_minutes: Refresh if less than this many minutes remain (default: 15)
+    
+    Returns:
+        True if token should be refreshed, False otherwise
+    
+    Example:
+        Token expires at 12:00 PM
+        Current time is 11:50 AM (10 minutes left)
+        threshold_minutes = 15
+        → Returns True (refresh needed)
+    """
+    exp = payload.get("exp")
+    if not exp:
+        return False
+    
+    # Calculate time remaining until expiration
+    expiration_time = datetime.utcfromtimestamp(exp)
+    time_remaining = expiration_time - datetime.utcnow()
+    
+    # Refresh if less than threshold minutes remain
+    return time_remaining < timedelta(minutes=threshold_minutes)
+

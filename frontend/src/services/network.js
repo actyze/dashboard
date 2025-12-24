@@ -2,7 +2,7 @@ import axios from 'axios';
 import { API_CONFIG } from './apiConfig';
 
 /**
- * Network service for making HTTP requests
+ * Network service for making HTTP requests with automatic token refresh
  */
 
 // Axios instance for API calls
@@ -14,6 +14,58 @@ export const apiInstance = axios.create({
     indexes: null,
   },
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// REQUEST INTERCEPTOR: Add auth token to all requests
+// ═══════════════════════════════════════════════════════════════════
+apiInstance.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════════
+// RESPONSE INTERCEPTOR: Handle automatic token refresh (sliding session)
+// ═══════════════════════════════════════════════════════════════════
+apiInstance.interceptors.response.use(
+  (response) => {
+    // Check if server sent a new token (sliding session)
+    const newToken = response.headers['x-new-token'];
+    const tokenRefreshed = response.headers['x-token-refreshed'];
+    
+    if (tokenRefreshed === 'true' && newToken) {
+      console.log('🔄 Token refreshed automatically (sliding session)');
+      localStorage.setItem('token', newToken);
+      
+      // Update axios default headers with new token for subsequent requests
+      apiInstance.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+    }
+    
+    return response;
+  },
+  (error) => {
+    // Handle 401 Unauthorized (token expired)
+    if (error.response?.status === 401) {
+      console.log('🔒 Session expired - redirecting to login');
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      
+      // Redirect to login page (only if not already there)
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+    }
+    
+    return Promise.reject(error);
+  }
+);
 
 /**
  * Network class with helper methods for common HTTP operations

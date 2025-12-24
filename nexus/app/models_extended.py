@@ -38,15 +38,6 @@ class ConversationMessageInput(BaseModel):
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
 
 
-class SavedQueryInput(BaseModel):
-    """Input for saving queries."""
-    query_name: str = Field(..., description="Name for the saved query")
-    natural_language_query: str = Field(..., description="Original natural language query")
-    generated_sql: str = Field(..., description="Generated SQL query")
-    description: Optional[str] = Field(default=None, description="Query description")
-    tags: Optional[List[str]] = Field(default=None, description="Query tags")
-
-
 class ConversationMessage(BaseModel):
     """Conversation message model."""
     id: int = Field(..., description="Message ID")
@@ -69,19 +60,6 @@ class QueryHistoryItem(BaseModel):
     is_favorite: bool = Field(default=False, description="Whether query is marked as favorite")
     created_at: str = Field(..., description="First execution timestamp")
     last_executed_at: Optional[str] = Field(default=None, description="Last execution timestamp")
-
-
-class SavedQuery(BaseModel):
-    """Saved query model."""
-    id: int = Field(..., description="Query ID")
-    query_name: str = Field(..., description="Query name")
-    description: Optional[str] = Field(default=None, description="Query description")
-    natural_language_query: str = Field(..., description="Natural language query")
-    generated_sql: str = Field(..., description="Generated SQL")
-    is_favorite: bool = Field(..., description="Whether query is marked as favorite")
-    tags: Optional[List[str]] = Field(default=None, description="Query tags")
-    created_at: str = Field(..., description="Creation timestamp")
-    updated_at: str = Field(..., description="Last update timestamp")
 
 
 # Frontend Integration Models

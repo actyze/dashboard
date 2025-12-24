@@ -83,12 +83,12 @@ const ShareModal = ({ open, onClose, onSave, dashboard }) => {
       {/* Modal */}
       <div className={`
         relative w-full max-w-md mx-4 rounded-xl shadow-2xl
-        ${isDark ? 'bg-gray-900 border border-gray-700' : 'bg-white border border-gray-200'}
+        ${isDark ? 'bg-[#17181a] border border-[#2a2b2e]' : 'bg-white border border-gray-200'}
       `}>
         {/* Header */}
         <div className={`
           flex items-center justify-between px-5 py-4 border-b
-          ${isDark ? 'border-gray-700' : 'border-gray-200'}
+          ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}
         `}>
           <div className="flex items-center gap-3">
             <div className={`
@@ -136,7 +136,7 @@ const ShareModal = ({ open, onClose, onSave, dashboard }) => {
                       ? 'bg-blue-900/30 border-blue-600 ring-1 ring-blue-600' 
                       : 'bg-blue-50 border-blue-500 ring-1 ring-blue-500'
                     : isDark
-                      ? 'bg-gray-800 border-gray-700 hover:border-gray-600'
+                      ? 'bg-[#1c1d1f] border-[#2a2b2e] hover:border-gray-600'
                       : 'bg-white border-gray-200 hover:border-gray-300'
                   }
                 `}
@@ -144,7 +144,7 @@ const ShareModal = ({ open, onClose, onSave, dashboard }) => {
                 <div className={`
                   p-2 rounded-lg flex-shrink-0
                   ${accessLevel === option.id
-                    ? isDark ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white'
+                    ? isDark ? 'bg-[#5d6ad3] text-white' : 'bg-[#5d6ad3] text-white'
                     : isDark ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-500'
                   }
                 `}>
@@ -162,7 +162,7 @@ const ShareModal = ({ open, onClose, onSave, dashboard }) => {
                 <div className={`
                   w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0
                   ${accessLevel === option.id
-                    ? 'border-blue-600 bg-blue-600'
+                    ? 'border-blue-600 bg-[#5d6ad3]'
                     : isDark ? 'border-gray-600' : 'border-gray-300'
                   }
                 `}>
@@ -178,7 +178,7 @@ const ShareModal = ({ open, onClose, onSave, dashboard }) => {
           {accessLevel !== 'private' && (
             <div className={`
               mt-4 p-3 rounded-lg
-              ${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-gray-50 border border-gray-200'}
+              ${isDark ? 'bg-[#1c1d1f] border border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200'}
             `}>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex-1 min-w-0">
@@ -241,7 +241,7 @@ const ShareModal = ({ open, onClose, onSave, dashboard }) => {
         {/* Footer */}
         <div className={`
           flex items-center justify-end gap-3 px-5 py-4 border-t
-          ${isDark ? 'border-gray-700' : 'border-gray-200'}
+          ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}
         `}>
           <button
             onClick={onClose}
@@ -257,7 +257,7 @@ const ShareModal = ({ open, onClose, onSave, dashboard }) => {
           </button>
           <button
             onClick={handleSave}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm"
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-[#5d6ad3] text-white hover:bg-[#4f5bc4] transition-colors shadow-sm"
           >
             Save
           </button>

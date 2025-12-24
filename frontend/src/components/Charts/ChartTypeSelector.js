@@ -291,7 +291,7 @@ const ChartTypeSelector = ({
       {/* Main Bar - Selected Chart + Quick Options + Expand */}
       <div className={`
         flex items-center gap-1 p-1 rounded-lg
-        ${isDark ? 'bg-gray-800/50' : 'bg-gray-100/50'}
+        ${isDark ? 'bg-[#1c1d1f]/50' : 'bg-gray-100/50'}
       `}>
         {/* Currently Selected (always visible) */}
         <div className="relative group">
@@ -309,7 +309,7 @@ const ChartTypeSelector = ({
             transition-all duration-150 pointer-events-none z-50
             ${isDark 
               ? 'bg-gray-900 text-gray-300 shadow-lg border border-gray-700' 
-              : 'bg-gray-800 text-white shadow-lg'}
+              : 'bg-[#1c1d1f] text-white shadow-lg'}
           `}>
             {selectedChartInfo.description}
             <div className={`
@@ -353,7 +353,7 @@ const ChartTypeSelector = ({
                   transition-all duration-150 pointer-events-none z-50
                   ${isDark 
                     ? 'bg-gray-900 text-gray-200 shadow-lg border border-gray-700' 
-                    : 'bg-gray-800 text-white shadow-lg'}
+                    : 'bg-[#1c1d1f] text-white shadow-lg'}
                 `}>
                   {chartType.label}
                   <div className={`
@@ -414,7 +414,7 @@ const ChartTypeSelector = ({
               absolute top-full left-0 mt-2 z-50 rounded-xl shadow-2xl overflow-hidden
               min-w-[480px] max-w-[600px]
               ${isDark 
-                ? 'bg-gray-800 border border-gray-700' 
+                ? 'bg-[#1c1d1f] border border-gray-700' 
                 : 'bg-white border border-gray-200'}
             `}
           >

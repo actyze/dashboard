@@ -38,7 +38,7 @@ const TextArea = forwardRef(({
   
   const variantClasses = {
     outline: `
-      bg-white dark:bg-gray-800 
+      bg-white dark:bg-[#1c1d1f] 
       border-gray-300 dark:border-gray-600
       text-gray-900 dark:text-white
       placeholder-gray-500 dark:placeholder-gray-400
@@ -50,7 +50,7 @@ const TextArea = forwardRef(({
       border-transparent
       text-gray-900 dark:text-white
       placeholder-gray-500 dark:placeholder-gray-400
-      focus:bg-white dark:focus:bg-gray-800
+      focus:bg-white dark:focus:bg-[#1c1d1f]
       focus:border-primary-500 focus:ring-primary-500/20
       ${error ? 'bg-red-50 dark:bg-red-900/20 focus:border-red-500 focus:ring-red-500/20' : ''}
     `,
@@ -59,8 +59,8 @@ const TextArea = forwardRef(({
       border-transparent
       text-gray-900 dark:text-white
       placeholder-gray-500 dark:placeholder-gray-400
-      hover:bg-gray-100 dark:hover:bg-gray-800
-      focus:bg-white dark:focus:bg-gray-800
+      hover:bg-gray-100 dark:hover:bg-[#1c1d1f]
+      focus:bg-white dark:focus:bg-[#1c1d1f]
       focus:border-primary-500 focus:ring-primary-500/20
       ${error ? 'focus:border-red-500 focus:ring-red-500/20' : ''}
     `

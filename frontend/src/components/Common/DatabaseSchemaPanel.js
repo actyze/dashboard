@@ -138,7 +138,7 @@ const DatabaseSchemaPanel = ({
 
 
   return (
-    <div className={`${isCollapsed ? 'w-0' : 'w-72'} transition-all duration-300 overflow-hidden flex flex-col h-full ${isDark ? 'bg-gray-900/50 border-gray-700/50' : 'bg-gray-50/50 border-gray-200/50'} border-r`}>
+    <div className={`${isCollapsed ? 'w-0' : 'w-72'} transition-all duration-300 overflow-hidden flex flex-col h-full ${isDark ? 'bg-[#090909] border-gray-800/50' : 'bg-gray-50/50 border-gray-200/50'} border-r`}>
 
       <div className={`${isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'} transition-opacity duration-300 flex-1 flex flex-col min-h-0`}>
         
@@ -162,13 +162,13 @@ const DatabaseSchemaPanel = ({
           </div>
           
           {/* Search */}
-          <div className={`relative ${isDark ? 'bg-gray-800/60' : 'bg-white/60'} rounded border ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+          <div className={`relative ${isDark ? 'bg-[#1c1d1f]' : 'bg-white/60'} rounded border ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
             <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
               <SearchIcon />
             </div>
             <input
               type="text"
-              className={`block w-full pl-8 pr-2 py-1.5 text-xs rounded border-0 ${isDark ? 'bg-gray-800/60 text-white placeholder-gray-400' : 'bg-white/60 text-gray-900 placeholder-gray-500'} focus:ring-1 focus:ring-blue-500 focus:outline-none`}
+              className={`block w-full pl-8 pr-2 py-1.5 text-xs rounded border-0 ${isDark ? 'bg-[#1c1d1f] text-white placeholder-gray-400' : 'bg-white/60 text-gray-900 placeholder-gray-500'} focus:ring-1 focus:ring-blue-500 focus:outline-none`}
               placeholder="Search objects"
             />
           </div>
@@ -198,7 +198,7 @@ const DatabaseSchemaPanel = ({
                 {/* Database Level */}
                 <button
                   onClick={() => toggleDatabase(database.name)}
-                  className={`w-full flex items-center space-x-1.5 p-1.5 text-left rounded transition-colors ${isDark ? 'hover:bg-gray-800/60 text-gray-200' : 'hover:bg-gray-100/60 text-gray-800'}`}
+                  className={`w-full flex items-center space-x-1.5 p-1.5 text-left rounded transition-colors ${isDark ? 'hover:bg-[#1c1d1f] text-gray-200' : 'hover:bg-gray-100/60 text-gray-800'}`}
                 >
                   <ChevronIcon isExpanded={expandedDatabases.has(database.name)} />
                   <DatabaseIcon />
@@ -218,7 +218,7 @@ const DatabaseSchemaPanel = ({
                           <div key={schema.name} className="mb-1">
                             <button
                               onClick={() => toggleSchema(database.name, schema.name)}
-                              className={`w-full flex items-center space-x-1.5 p-1.5 text-left rounded transition-colors ${isDark ? 'hover:bg-gray-800/60 text-gray-300' : 'hover:bg-gray-100/60 text-gray-700'}`}
+                              className={`w-full flex items-center space-x-1.5 p-1.5 text-left rounded transition-colors ${isDark ? 'hover:bg-[#1c1d1f] text-gray-300' : 'hover:bg-gray-100/60 text-gray-700'}`}
                             >
                               <ChevronIcon isExpanded={expandedSchemas.has(schemaKey)} />
                               <SchemaIcon />
@@ -236,7 +236,7 @@ const DatabaseSchemaPanel = ({
                                     {/* Tables Section */}
                                     {objectsCache[schemaKey].tables && objectsCache[schemaKey].tables.length > 0 && (
                                       <>
-                                        <div className={`mb-1.5 px-1 py-0.5 rounded text-xs ${isDark ? 'bg-gray-800/40 text-gray-400' : 'bg-gray-100/40 text-gray-600'} font-medium uppercase tracking-wide`}>
+                                        <div className={`mb-1.5 px-1 py-0.5 rounded text-xs ${isDark ? 'bg-[#1c1d1f] text-gray-400' : 'bg-gray-100/40 text-gray-600'} font-medium uppercase tracking-wide`}>
                                           Tables
                                         </div>
                                         {objectsCache[schemaKey].tables.map((table) => (
@@ -245,8 +245,8 @@ const DatabaseSchemaPanel = ({
                                             onClick={() => handleTableClick(database.name, schema.name, table.name)}
                                             className={`w-full flex items-center space-x-1.5 p-1.5 text-left rounded transition-colors mb-0.5
                                               ${selectedTable === table.name 
-                                                ? (isDark ? 'bg-blue-600/80 text-white' : 'bg-blue-500/80 text-white')
-                                                : (isDark ? 'hover:bg-gray-800/60 text-gray-300' : 'hover:bg-gray-100/60 text-gray-700')
+                                                ? (isDark ? 'bg-[#5d6ad3] text-white' : 'bg-[#5d6ad3] text-white')
+                                                : (isDark ? 'hover:bg-[#1c1d1f] text-gray-300' : 'hover:bg-gray-100/60 text-gray-700')
                                               }
                                             `}
                                           >
@@ -263,7 +263,7 @@ const DatabaseSchemaPanel = ({
                                     {/* Views Section */}
                                     {objectsCache[schemaKey].views && objectsCache[schemaKey].views.length > 0 && (
                                       <>
-                                        <div className={`mb-1.5 mt-2 px-1 py-0.5 rounded text-xs ${isDark ? 'bg-gray-800/40 text-gray-400' : 'bg-gray-100/40 text-gray-600'} font-medium uppercase tracking-wide`}>
+                                        <div className={`mb-1.5 mt-2 px-1 py-0.5 rounded text-xs ${isDark ? 'bg-[#1c1d1f] text-gray-400' : 'bg-gray-100/40 text-gray-600'} font-medium uppercase tracking-wide`}>
                                           Views
                                         </div>
                                         {objectsCache[schemaKey].views.map((view) => (
@@ -272,8 +272,8 @@ const DatabaseSchemaPanel = ({
                                             onClick={() => handleTableClick(database.name, schema.name, view.name)}
                                             className={`w-full flex items-center space-x-1.5 p-1.5 text-left rounded transition-colors mb-0.5
                                               ${selectedTable === view.name 
-                                                ? (isDark ? 'bg-blue-600/80 text-white' : 'bg-blue-500/80 text-white')
-                                                : (isDark ? 'hover:bg-gray-800/60 text-gray-300' : 'hover:bg-gray-100/60 text-gray-700')
+                                                ? (isDark ? 'bg-[#5d6ad3] text-white' : 'bg-[#5d6ad3] text-white')
+                                                : (isDark ? 'hover:bg-[#1c1d1f] text-gray-300' : 'hover:bg-gray-100/60 text-gray-700')
                                               }
                                             `}
                                           >
@@ -309,7 +309,7 @@ const DatabaseSchemaPanel = ({
           </div>
 
           {/* Table Schema at Bottom - Fixed Height when visible */}
-          <div className={`${selectedTable ? 'flex-shrink-0' : 'hidden'} border-t border-gray-200/50 dark:border-gray-700/50 h-48 overflow-y-auto bg-gray-800/30`}>
+          <div className={`${selectedTable ? 'flex-shrink-0' : 'hidden'} border-t border-gray-200/50 dark:border-gray-700/50 h-48 overflow-y-auto bg-[#0d0d0f]`}>
             {selectedTable && selectedTableInfo && (
               <TableSchema 
                 tableName={selectedTable} 

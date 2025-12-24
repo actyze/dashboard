@@ -118,8 +118,8 @@ export const generateTitleFromSQL = (sql) => {
 
 /**
  * Get display title for a query
- * Priority: custom query_name > SQL-derived > "Unnamed Query"
- * @param {object} query - Query object with query_name, generated_sql
+ * Priority: custom query_name > created_at timestamp > "Query"
+ * @param {object} query - Query object with query_name, created_at
  * @returns {string} - Display title
  */
 export const getQueryDisplayTitle = (query) => {
@@ -128,10 +128,9 @@ export const getQueryDisplayTitle = (query) => {
     return query.query_name;
   }
   
-  // 2. Generate from SQL
-  if (query.generated_sql) {
-    const sqlTitle = generateTitleFromSQL(query.generated_sql);
-    if (sqlTitle) return sqlTitle;
+  // 2. Use created_at timestamp as-is
+  if (query.created_at) {
+    return query.created_at;
   }
   
   // 3. Fallback

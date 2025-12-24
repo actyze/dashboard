@@ -48,12 +48,12 @@ const Button = forwardRef(({
     outline: `
       bg-transparent border border-gray-300 dark:border-gray-600
       text-gray-700 dark:text-gray-300
-      hover:bg-gray-50 dark:hover:bg-gray-800
+      hover:bg-gray-50 dark:hover:bg-[#1c1d1f]
       focus:ring-gray-500 dark:focus:ring-offset-gray-900
     `,
     ghost: `
       bg-transparent text-gray-700 dark:text-gray-300
-      hover:bg-gray-100 dark:hover:bg-gray-800
+      hover:bg-gray-100 dark:hover:bg-[#1c1d1f]
       focus:ring-gray-500 dark:focus:ring-offset-gray-900
     `,
     danger: `

@@ -22,7 +22,7 @@ const ViewToggle = ({ activeView, onViewChange }) => {
       className={`
         flex items-center space-x-1.5 px-3 py-1.5 rounded-md font-medium text-xs transition-all duration-200
         ${isActive 
-          ? 'bg-blue-600 text-white shadow-sm' 
+          ? 'bg-[#5d6ad3] text-white shadow-sm' 
           : isDark
             ? 'text-gray-400 hover:text-white hover:bg-gray-700/50'
             : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
@@ -38,7 +38,7 @@ const ViewToggle = ({ activeView, onViewChange }) => {
     <div className={`
       flex items-center space-x-1 p-0.5 rounded-lg border
       ${isDark 
-        ? 'bg-gray-800/50 border-gray-700/50' 
+        ? 'bg-[#1c1d1f]/50 border-gray-700/50' 
         : 'bg-gray-50/80 border-gray-200/50'
       }
     `}>

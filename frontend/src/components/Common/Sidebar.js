@@ -106,7 +106,7 @@ const Sidebar = ({ isCollapsed, onToggle }) => {
     <div className={`
       h-full flex flex-col transition-all duration-200 ease-out
       ${isCollapsed ? 'w-14' : 'w-52'}
-      ${isDark ? 'bg-[#0a0a0a]' : 'bg-white'}
+      ${isDark ? 'bg-[#0a0a0a]' : 'bg-gray-50'}
       border-r ${isDark ? 'border-[#1c1d1f]' : 'border-gray-200'}
     `}>
       {/* Header */}

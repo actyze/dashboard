@@ -839,6 +839,66 @@ async def revert_dashboard_version(
         raise HTTPException(status_code=500, detail=str(e))
 
 # =============================================================================
+# Internal Service Endpoints (Schema Service to Nexus)
+# =============================================================================
+
+from fastapi import Header
+from app.config import settings
+
+@router.get("/internal/quality-metrics")
+async def get_quality_metrics_for_schema_service(
+    x_service_token: str = Header(..., alias="X-Service-Token")
+):
+    """
+    Internal API: Schema service fetches quality metrics.
+    
+    Only accessible by schema service with valid service token.
+    Fetches aggregated quality metrics for FAISS quality-aware weighting.
+    
+    Returns:
+        {
+            "success": true,
+            "metrics": {
+                "tables": {
+                    "catalog.schema.table": {
+                        "times_used": int,
+                        "success_rate": float,
+                        "avg_rows": float,
+                        "avg_time_ms": float,
+                        "last_used": datetime
+                    },
+                    ...
+                },
+                "join_pairs": {
+                    "catalog.schema.table_a|catalog.schema.table_b": {
+                        "times_joined": int,
+                        "success_rate": float,
+                        "avg_rows": float
+                    },
+                    ...
+                }
+            },
+            "generated_at": "2024-01-01T00:00:00"
+        }
+    """
+    # Verify service token
+    if x_service_token != settings.service_to_service_token:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid service token"
+        )
+    
+    # Fetch aggregated metrics
+    metrics = await analytics_service.get_quality_metrics_summary()
+    
+    from datetime import datetime
+    return {
+        "success": True,
+        "metrics": metrics,
+        "generated_at": datetime.utcnow().isoformat()
+    }
+
+# =============================================================================
 # Public Endpoints (No Authentication Required)
 # =============================================================================
 

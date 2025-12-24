@@ -79,12 +79,23 @@ class SchemaService:
         )
         logger.info("IntentDetector initialized successfully")
         
-        self.scheduler.add_job(self.refresh_schemas, "interval", hours=self.refresh_hours, id="schema_refresh")
+        # Schedule regular schema refresh (fetches new tables/columns from Trino)
+        self.scheduler.add_job(
+            self.refresh_schemas, 
+            "interval", 
+            hours=self.refresh_hours, 
+            id="schema_refresh"
+        )
+        
         self.scheduler.start()
-        logger.info(f"Scheduled schema refresh every {self.refresh_hours} hour(s)")
+        logger.info(f"Scheduler started: schema refresh every {self.refresh_hours} hours")
 
     async def refresh_schemas(self):
-        logger.info("Refreshing schemas…")
+        """
+        Fetch schemas from Trino and rebuild FAISS index.
+        Scheduled every N hours (configured by SCHEMA_REFRESH_HOURS).
+        """
+        logger.info("Refreshing schemas from Trino...")
         schemas = await self.trino_service.get_all_schemas()
         await self.embedder.build_embeddings(schemas)
         logger.info(f"Refresh complete: {len(schemas)} schemas embedded")

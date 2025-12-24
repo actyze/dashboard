@@ -1,16 +1,26 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request, Response
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import db_manager, User
-from app.auth.utils import SECRET_KEY, ALGORITHM, decode_access_token
+from app.auth.utils import SECRET_KEY, ALGORITHM, decode_access_token, create_access_token, should_refresh_token
 from app.services.user_service import UserService
 import uuid
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 user_service = UserService()
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    request: Request = None,
+    response: Response = None
+):
+    """
+    Get current user from JWT token with sliding session support.
+    
+    If token is valid but near expiry (< 15 minutes), automatically issue
+    a new token to extend the session (sliding session behavior).
+    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -41,14 +51,35 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         user_uuid = uuid.UUID(user_id)
         roles = await user_service.get_user_roles(user_uuid, session)
         groups = await user_service.get_user_groups(user_uuid, session)
-        
-    return {
+    
+    user_info = {
         "id": user_id,
         "username": user_data["username"],
         "email": user_data["email"],
         "roles": roles,
         "groups": groups
     }
+    
+    # ═══════════════════════════════════════════════
+    # SLIDING SESSION: Refresh token if near expiry
+    # ═══════════════════════════════════════════════
+    if response and should_refresh_token(payload):
+        # Issue new token with fresh expiration
+        new_token_data = {
+            "sub": str(user_id),
+            "username": user_data["username"],
+            "roles": roles,
+            "groups": groups
+        }
+        new_token = create_access_token(new_token_data)
+        
+        # Return new token in response header (frontend will intercept)
+        response.headers["X-New-Token"] = new_token
+        
+        # Also set a flag so frontend knows to update
+        response.headers["X-Token-Refreshed"] = "true"
+    
+    return user_info
 
 class RoleChecker:
     def __init__(self, allowed_roles: list[str]):

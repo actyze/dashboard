@@ -143,7 +143,7 @@ const QueriesList = () => {
             : 'text-gray-500 border-gray-200 bg-gray-50'
         }`}>
           <div className="col-span-6">Name</div>
-          <div className="col-span-2">Last run</div>
+          <div className="col-span-2">Last updated</div>
           <div className="col-span-2">Created</div>
           <div className="col-span-2 text-right"></div>
         </div>
@@ -212,10 +212,10 @@ const QueriesList = () => {
                     )}
                   </div>
                   
-                {/* Last Run */}
+                {/* Last Updated */}
                 <div className="col-span-2 flex items-center">
                   <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                      {formatDate(query.last_executed_at || query.created_at)}
+                      {formatDate(query.updated_at || query.created_at)}
                     </span>
                   </div>
                   

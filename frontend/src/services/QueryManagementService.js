@@ -88,26 +88,51 @@ class QueryManagementService {
   }
   
   /**
-   * Execute manual SQL and save to history
-   * @param {string} sql - SQL query to execute
-   * @param {number} maxResults - Max results to return
+   * Save a new query - EXPLICIT user action (Save As New button)
+   * @param {Object} queryData - Query data to save
+   * @param {string} queryData.generated_sql - SQL query
+   * @param {string} queryData.query_name - Query name
+   * @param {string} queryData.natural_language_query - NL query (optional)
+   * @param {Object} queryData.chart_recommendation - Chart config (optional)
+   * @param {string} queryData.execution_status - Status (default: SUCCESS)
+   * @param {number} queryData.execution_time_ms - Execution time (optional)
+   * @param {number} queryData.row_count - Row count (optional)
    */
-  static async executeAndSaveManualQuery(sql, maxResults = 500) {
+  static async saveQuery(queryData) {
     try {
-      const response = await apiInstance.post('/api/query-history/manual', {
-        sql,
-        max_results: maxResults
-      });
+      const response = await apiInstance.post('/api/query-history/save', queryData);
       
       return {
         success: true,
-        data: response.data
+        query_id: response.data.query_id
       };
     } catch (error) {
-      console.error('Failed to execute manual query:', error);
+      console.error('Failed to save query:', error);
       return {
         success: false,
-        error: error.response?.data?.detail || error.message || 'Failed to execute query'
+        error: error.response?.data?.detail || error.message || 'Failed to save query'
+      };
+    }
+  }
+  
+  /**
+   * Update an existing query - EXPLICIT user action (Save button)
+   * @param {number} queryId - Query ID to update
+   * @param {Object} queryData - Query data to update (same fields as saveQuery)
+   */
+  static async updateQuery(queryId, queryData) {
+    try {
+      const response = await apiInstance.patch(`/api/query-history/${queryId}`, queryData);
+      
+      return {
+        success: true,
+        query_id: response.data.query_id
+      };
+    } catch (error) {
+      console.error('Failed to update query:', error);
+      return {
+        success: false,
+        error: error.response?.data?.detail || error.message || 'Failed to update query'
       };
     }
   }

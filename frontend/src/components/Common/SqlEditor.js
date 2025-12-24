@@ -20,14 +20,14 @@ const SqlEditor = ({
   const customDarkTheme = useMemo(() => createTheme({
     theme: 'dark',
     settings: {
-      background: '#1f2937', // gray-800
-      foreground: '#e5e7eb', // gray-200
-      caret: '#60a5fa', // blue-400
-      selection: 'rgba(56, 139, 253, 0.4)', // blue with 40% opacity - matches VS Code style
-      selectionMatch: 'rgba(56, 139, 253, 0.2)', // lighter for matches
-      lineHighlight: 'rgba(55, 65, 81, 0.5)', // gray-700 with opacity
-      gutterBackground: '#1f2937',
-      gutterForeground: '#6b7280', // gray-500
+      background: '#17181a',
+      foreground: '#e5e7eb',
+      caret: '#5d6ad3',
+      selection: 'rgba(93, 106, 211, 0.4)',
+      selectionMatch: 'rgba(93, 106, 211, 0.2)',
+      lineHighlight: 'rgba(28, 29, 31, 0.8)',
+      gutterBackground: '#17181a',
+      gutterForeground: '#6b7280',
     },
     styles: [
       { tag: t.keyword, color: '#c084fc' }, // purple-400
@@ -70,7 +70,7 @@ const SqlEditor = ({
     <div className="w-full">
       <div className={`
         rounded-lg overflow-hidden border
-        ${isDark ? 'border-gray-700' : 'border-gray-200'}
+        ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}
       `}>
         <CodeMirror
           value={value}

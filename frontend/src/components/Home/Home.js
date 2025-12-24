@@ -1,0 +1,293 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router';
+import { useTheme } from '../../contexts/ThemeContext';
+import { QueryManagementService, DashboardService } from '../../services';
+import { getQueryDisplayTitle } from '../../utils/queryTitleGenerator';
+
+const Home = () => {
+  const { isDark } = useTheme();
+  const navigate = useNavigate();
+  
+  const [recentQueries, setRecentQueries] = useState([]);
+  const [recentDashboards, setRecentDashboards] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('queries');
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    setLoading(true);
+    
+    try {
+      const [queriesRes, dashboardsRes] = await Promise.all([
+        QueryManagementService.getQueryHistory({ limit: 10 }),
+        DashboardService.getDashboards()
+      ]);
+      
+      if (queriesRes.success) {
+        setRecentQueries(queriesRes.queries || []);
+      }
+      
+      if (dashboardsRes.success) {
+        const sorted = (dashboardsRes.dashboards || [])
+          .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
+          .slice(0, 10);
+        setRecentDashboards(sorted);
+      }
+    } catch (err) {
+      console.error('Error loading home data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    const utcDateString = dateString.includes('Z') ? dateString : dateString + 'Z';
+    const date = new Date(utcDateString);
+    
+    if (isNaN(date.getTime()) || date.getFullYear() < 2000) return '-';
+    
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  };
+
+  if (loading) {
+    return (
+      <div className={`h-full flex items-center justify-center ${isDark ? 'bg-[#101012]' : 'bg-gray-50'}`}>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#5d6ad3] mx-auto"></div>
+          <p className={`mt-3 text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`h-full overflow-auto ${isDark ? 'bg-[#101012]' : 'bg-gray-50'}`}>
+      <div className="max-w-3xl mx-auto px-6 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className={`text-xl font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            {getGreeting()}
+          </h1>
+          <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+            Here's what's happening with your data
+          </p>
+        </div>
+
+        {/* Quick Action Cards */}
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <button
+            onClick={() => navigate('/query/new')}
+            className={`group relative p-5 rounded-xl text-left transition-all duration-200 overflow-hidden ${
+              isDark 
+                ? 'bg-gradient-to-br from-[#5d6ad3]/20 to-[#5d6ad3]/5 border border-[#5d6ad3]/30 hover:border-[#5d6ad3]/50' 
+                : 'bg-gradient-to-br from-[#5d6ad3]/10 to-[#5d6ad3]/5 border border-[#5d6ad3]/20 hover:border-[#5d6ad3]/40'
+            }`}
+          >
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${
+              isDark ? 'bg-[#5d6ad3]/20' : 'bg-[#5d6ad3]/10'
+            }`}>
+              <svg className="w-5 h-5 text-[#5d6ad3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div className={`text-sm font-medium mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              New Query
+            </div>
+            <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+              Write SQL or ask in natural language
+            </p>
+            <div className="absolute top-4 right-4">
+              <svg className={`w-4 h-4 transition-transform group-hover:translate-x-0.5 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </button>
+          
+          <button
+            onClick={() => navigate('/dashboard/new')}
+            className={`group relative p-5 rounded-xl text-left transition-all duration-200 overflow-hidden ${
+              isDark 
+                ? 'bg-[#1c1d1f] border border-[#2a2b2e] hover:border-[#3a3b3e]' 
+                : 'bg-white border border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${
+              isDark ? 'bg-[#2a2b2e]' : 'bg-gray-100'
+            }`}>
+              <svg className={`w-5 h-5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 12a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1v-7z" />
+              </svg>
+            </div>
+            <div className={`text-sm font-medium mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              New Dashboard
+            </div>
+            <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+              Create visualizations and charts
+            </p>
+            <div className="absolute top-4 right-4">
+              <svg className={`w-4 h-4 transition-transform group-hover:translate-x-0.5 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className={`border-b mb-4 ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
+          <nav className="flex space-x-6">
+            <button 
+              onClick={() => setActiveTab('queries')}
+              className={`
+                pb-3 text-sm font-medium transition-colors relative
+                ${activeTab === 'queries' 
+                  ? isDark ? 'text-[#5d6ad3]' : 'text-[#5d6ad3]'
+                  : isDark ? 'text-gray-500 hover:text-gray-400' : 'text-gray-500 hover:text-gray-600'
+                }
+              `}
+            >
+              Recent Queries
+              {activeTab === 'queries' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#5d6ad3]" />
+              )}
+            </button>
+            <button 
+              onClick={() => setActiveTab('dashboards')}
+              className={`
+                pb-3 text-sm font-medium transition-colors relative
+                ${activeTab === 'dashboards' 
+                  ? isDark ? 'text-[#5d6ad3]' : 'text-[#5d6ad3]'
+                  : isDark ? 'text-gray-500 hover:text-gray-400' : 'text-gray-500 hover:text-gray-600'
+                }
+              `}
+            >
+              Recent Dashboards
+              {activeTab === 'dashboards' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#5d6ad3]" />
+              )}
+            </button>
+          </nav>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'queries' ? (
+          <div>
+            {recentQueries.length === 0 ? (
+              <div className={`text-center py-12 rounded-lg border ${
+                isDark ? 'border-[#2a2b2e] bg-[#1c1d1f]' : 'border-gray-200 bg-white'
+              }`}>
+                <svg className={`w-8 h-8 mx-auto mb-2 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <p className={`text-sm mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  No queries yet
+                </p>
+                <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                  Create your first query to get started
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {recentQueries.map((query) => (
+                  <button
+                    key={query.id}
+                    onClick={() => navigate(`/query/${query.id}`, { state: { query } })}
+                    className={`
+                      w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors
+                      ${isDark 
+                        ? 'hover:bg-[#1c1d1f]' 
+                        : 'hover:bg-gray-100'
+                      }
+                    `}
+                  >
+                    <span className={`text-sm truncate ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
+                      {getQueryDisplayTitle(query)}
+                    </span>
+                    <span className={`text-xs flex-shrink-0 ml-4 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                      {formatDate(query.last_executed_at || query.created_at)}
+                    </span>
+                  </button>
+                ))}
+                <button
+                  onClick={() => navigate('/queries')}
+                  className={`w-full text-center py-2 text-xs ${isDark ? 'text-gray-500 hover:text-gray-400' : 'text-gray-500 hover:text-gray-600'}`}
+                >
+                  View all queries →
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div>
+            {recentDashboards.length === 0 ? (
+              <div className={`text-center py-12 rounded-lg border ${
+                isDark ? 'border-[#2a2b2e] bg-[#1c1d1f]' : 'border-gray-200 bg-white'
+              }`}>
+                <svg className={`w-8 h-8 mx-auto mb-2 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 12a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1v-7z" />
+                </svg>
+                <p className={`text-sm mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                  No dashboards yet
+                </p>
+                <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                  Create your first dashboard to get started
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {recentDashboards.map((dashboard) => (
+                  <button
+                    key={dashboard.id}
+                    onClick={() => navigate(`/dashboard/${dashboard.id}`)}
+                    className={`
+                      w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors
+                      ${isDark 
+                        ? 'hover:bg-[#1c1d1f]' 
+                        : 'hover:bg-gray-100'
+                      }
+                    `}
+                  >
+                    <span className={`text-sm truncate ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
+                      {dashboard.title}
+                    </span>
+                    <span className={`text-xs flex-shrink-0 ml-4 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                      {formatDate(dashboard.updated_at)}
+                    </span>
+                  </button>
+                ))}
+                <button
+                  onClick={() => navigate('/dashboards')}
+                  className={`w-full text-center py-2 text-xs ${isDark ? 'text-gray-500 hover:text-gray-400' : 'text-gray-500 hover:text-gray-600'}`}
+                >
+                  View all dashboards →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Home;

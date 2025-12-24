@@ -18,7 +18,7 @@ const ResizablePanel = ({ children, isFullScreen, onToggleFullScreen }) => {
             className={`
               p-1.5 rounded-md transition-all duration-200
               ${isDark 
-                ? 'bg-gray-800/80 hover:bg-gray-700 text-gray-300 border border-gray-600/50' 
+                ? 'bg-[#1c1d1f]/80 hover:bg-gray-700 text-gray-300 border border-gray-600/50' 
                 : 'bg-white/80 hover:bg-gray-50 text-gray-600 border border-gray-200/50 shadow-sm'
               }
               hover:shadow-md backdrop-blur-sm

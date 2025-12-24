@@ -72,7 +72,7 @@ const Home = () => {
 
   if (loading) {
     return (
-      <div className={`h-full flex items-center justify-center ${isDark ? 'bg-[#101012]' : 'bg-gray-50'}`}>
+      <div className={`h-full flex items-center justify-center ${isDark ? 'bg-[#101012]' : 'bg-white'}`}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#5d6ad3] mx-auto"></div>
           <p className={`mt-3 text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Loading...</p>
@@ -82,7 +82,7 @@ const Home = () => {
   }
 
   return (
-    <div className={`h-full overflow-auto ${isDark ? 'bg-[#101012]' : 'bg-gray-50'}`}>
+    <div className={`h-full overflow-auto ${isDark ? 'bg-[#101012]' : 'bg-white'}`}>
       <div className="max-w-3xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="mb-8">

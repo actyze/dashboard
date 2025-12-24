@@ -132,7 +132,7 @@ const DashboardsList = () => {
   const sortedDashboards = getFilteredAndSortedDashboards();
 
   return (
-    <div className={`h-full flex flex-col ${isDark ? 'bg-[#101012]' : 'bg-gray-50'}`}>
+    <div className={`h-full flex flex-col ${isDark ? 'bg-[#101012]' : 'bg-white'}`}>
       {/* Header */}
       <div className={`px-6 py-4 flex items-center justify-between border-b ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
         <div className="flex items-center gap-4">

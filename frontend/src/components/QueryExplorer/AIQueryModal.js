@@ -69,7 +69,7 @@ const AIQueryModal = ({ isOpen, onClose, onSubmit, loading = false }) => {
         className={`
           relative w-full max-w-2xl mx-4 rounded-xl border shadow-2xl
           ${isDark 
-            ? 'bg-gray-800/95 border-gray-600/50' 
+            ? 'bg-[#1c1d1f]/95 border-gray-600/50' 
             : 'bg-white/95 border-gray-200/50'
           }
           backdrop-blur-md animate-in zoom-in-95 duration-200

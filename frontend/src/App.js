@@ -4,6 +4,7 @@ import { Layout } from './components/Common';
 import { LoginPage, Signup } from './components/Auth';
 import { QueryPage, QueriesList } from './components/QueryExplorer';
 import { Dashboard, DashboardsList } from './components/Dashboard';
+import { Home } from './components/Home';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 // Private Route Wrapper
@@ -36,7 +37,8 @@ function App() {
           {/* Protected Routes */}
           <Route element={<PrivateRoutes />}>
             <Route element={<Layout />}>
-              <Route path="/" element={<DashboardsList />} />
+              <Route path="/" element={<Home />} />
+              <Route path="/home" element={<Home />} />
               <Route path="/dashboards" element={<DashboardsList />} />
               <Route path="/dashboard/:id" element={<Dashboard />} />
               <Route path="/queries" element={<QueriesList />} />

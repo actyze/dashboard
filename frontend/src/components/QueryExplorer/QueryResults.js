@@ -179,7 +179,7 @@ const QueryResults = ({
             </svg>
           </button>
           {/* Tooltip */}
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 rounded-md text-xs font-medium whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 pointer-events-none z-50 bg-gray-800 text-white dark:bg-gray-900 dark:border dark:border-gray-700 shadow-lg">
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 rounded-md text-xs font-medium whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 pointer-events-none z-50 bg-[#1c1d1f] text-white dark:bg-gray-900 dark:border dark:border-gray-700 shadow-lg">
             Export CSV
             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800 dark:border-t-gray-900" />
           </div>

@@ -41,7 +41,7 @@ const Alert = ({
       text-blue-800 dark:text-blue-200
     `,
     neutral: `
-      bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700
+      bg-gray-50 dark:bg-[#1c1d1f] border-gray-200 dark:border-gray-700
       text-gray-800 dark:text-gray-200
     `,
   };

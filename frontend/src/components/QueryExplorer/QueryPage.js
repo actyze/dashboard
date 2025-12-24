@@ -10,6 +10,7 @@ import { Chart } from '../Charts';
 import { Text } from '../ui';
 import { useProcessNaturalLanguage, useExecuteSql, useConversationHistory } from '../../hooks';
 import { QueryManagementService } from '../../services';
+import SaveQueryDialog from './SaveQueryDialog';
 
 const QueryPage = () => {
   const { id } = useParams();
@@ -32,6 +33,11 @@ const QueryPage = () => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
   const titleInputRef = useRef(null);
+  
+  // Save dialog state
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saveMode, setSaveMode] = useState('new'); // 'new' or 'update'
+  const [isSaving, setIsSaving] = useState(false);
 
   // Conversation history scoped to this query ID (persisted to localStorage)
   const { conversationHistory, addUserMessage, addBotMessage, clearHistory } = useConversationHistory(id);
@@ -87,6 +93,64 @@ const QueryPage = () => {
     } else if (e.key === 'Escape') {
       setIsEditingTitle(false);
     }
+  };
+
+  const handleSaveQuery = async (queryNameInput) => {
+    setIsSaving(true);
+    try {
+      if (saveMode === 'new') {
+        // Save as new query
+        const response = await QueryManagementService.saveQuery({
+          generated_sql: sqlQuery.replace(/^-- Generated from natural language query\n/, '').trim(),
+          query_name: queryNameInput,
+          execution_status: queryResults ? 'SUCCESS' : 'NOT_EXECUTED',
+          row_count: queryResults?.rowCount || queryResults?.data?.length || null
+        });
+        
+        if (response.success) {
+          // Update the query name and navigate to the new query
+          setQueryName(queryNameInput);
+          navigate(`/query/${response.query_id}`, { 
+            replace: true,
+            state: { 
+              query: {
+                id: response.query_id,
+                query_name: queryNameInput,
+                generated_sql: sqlQuery
+              }
+            }
+          });
+          setSaveDialogOpen(false);
+        } else {
+          alert(response.error || 'Failed to save query');
+        }
+      } else {
+        // Update existing query
+        const response = await QueryManagementService.updateQuery(id, {
+          generated_sql: sqlQuery.replace(/^-- Generated from natural language query\n/, '').trim(),
+          query_name: queryNameInput,
+          execution_status: queryResults ? 'SUCCESS' : 'NOT_EXECUTED',
+          row_count: queryResults?.rowCount || queryResults?.data?.length || null
+        });
+        
+        if (response.success) {
+          setQueryName(queryNameInput);
+          setSaveDialogOpen(false);
+        } else {
+          alert(response.error || 'Failed to update query');
+        }
+      }
+    } catch (error) {
+      console.error('Error saving query:', error);
+      alert('An error occurred while saving the query');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const openSaveDialog = (mode) => {
+    setSaveMode(mode);
+    setSaveDialogOpen(true);
   };
 
   const { mutate: processNaturalLanguage, isPending: aiQueryLoading } = useProcessNaturalLanguage({
@@ -288,6 +352,62 @@ const QueryPage = () => {
                 
                 {/* Control Buttons */}
                 <div className="flex items-center space-x-2">
+                  {/* Save Query Button */}
+                  {id && id !== 'new' && (
+                    <div className="relative group">
+                      <button
+                        onClick={() => openSaveDialog('update')}
+                        disabled={isSaving}
+                        className={`
+                          p-2 rounded-md transition-all duration-300 flex items-center justify-center
+                          ${isDark 
+                            ? 'bg-gray-700 hover:bg-gray-600 text-gray-300 border border-gray-600' 
+                            : 'bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 shadow-sm'
+                          }
+                          hover:shadow-md
+                          ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}
+                        `}
+                        title="Save Query"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                        </svg>
+                      </button>
+                      
+                      {/* Hover Tooltip */}
+                      <div className="absolute top-full mt-2 left-1/2 transform -translate-x-1/2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-30">
+                        Save
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Save As New Button */}
+                  <div className="relative group">
+                    <button
+                      onClick={() => openSaveDialog('new')}
+                      disabled={isSaving}
+                      className={`
+                        p-2 rounded-md transition-all duration-300 flex items-center justify-center
+                        ${isDark 
+                          ? 'bg-gray-700 hover:bg-gray-600 text-gray-300 border border-gray-600' 
+                          : 'bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 shadow-sm'
+                        }
+                        hover:shadow-md
+                        ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}
+                      `}
+                      title="Save As New"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                    </button>
+                    
+                    {/* Hover Tooltip */}
+                    <div className="absolute top-full mt-2 left-1/2 transform -translate-x-1/2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-30">
+                      Save As New
+                    </div>
+                  </div>
+
                   {/* Execute Query Button */}
                   <div className="relative group">
                       <button
@@ -531,6 +651,16 @@ const QueryPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Save Query Dialog */}
+      <SaveQueryDialog
+        isOpen={saveDialogOpen}
+        onClose={() => setSaveDialogOpen(false)}
+        onSave={handleSaveQuery}
+        mode={saveMode}
+        currentName={queryName}
+        loading={isSaving}
+      />
     </div>
   );
 };

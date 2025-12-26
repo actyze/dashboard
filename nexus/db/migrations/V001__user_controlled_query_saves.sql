@@ -1,5 +1,5 @@
 -- =====================================================================================
--- User-Controlled Query Saves - Remove Hash-Based Auto-Saves
+-- Flyway Migration V001: User-Controlled Query Saves
 -- =====================================================================================
 -- Changes:
 -- 1. Remove query_hash column (no longer needed)
@@ -16,14 +16,16 @@
 DROP VIEW IF EXISTS nexus.query_history_with_users CASCADE;
 DROP FUNCTION IF EXISTS nexus.upsert_query_history CASCADE;
 
--- Remove hash-based columns
+-- Remove hash-based columns (if they exist from previous migrations)
 ALTER TABLE nexus.query_history 
     DROP COLUMN IF EXISTS query_hash CASCADE,
     DROP COLUMN IF EXISTS execution_count CASCADE,
     DROP COLUMN IF EXISTS last_executed_at CASCADE;
 
--- Ensure updated_at exists and has proper default
+-- Add new columns for user-controlled saves
 ALTER TABLE nexus.query_history 
+    ADD COLUMN IF NOT EXISTS query_name VARCHAR(255),
+    ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN DEFAULT FALSE,
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
 -- Update existing records to have updated_at = created_at if null
@@ -101,7 +103,7 @@ CREATE OR REPLACE FUNCTION nexus.update_existing_query(
     p_error_message TEXT DEFAULT NULL
 ) RETURNS BOOLEAN AS $$
 DECLARE
-    v_updated BOOLEAN := FALSE;
+    v_row_count INTEGER;
 BEGIN
     -- Update query (user-initiated save)
     -- Only update fields that are provided (not NULL)
@@ -117,8 +119,8 @@ BEGIN
     WHERE id = p_query_id 
     AND user_id = p_user_id;
     
-    GET DIAGNOSTICS v_updated = ROW_COUNT;
-    RETURN v_updated > 0;
+    GET DIAGNOSTICS v_row_count = ROW_COUNT;
+    RETURN v_row_count > 0;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -145,7 +147,7 @@ SELECT
     qh.updated_at
 FROM nexus.query_history qh
 LEFT JOIN nexus.users u ON qh.user_id = u.id
-ORDER BY qh.updated_at DESC;  -- Sort by updated_at for user-controlled saves
+ORDER BY qh.updated_at DESC;
 
 GRANT SELECT ON nexus.query_history_with_users TO nexus_service;
 
@@ -159,21 +161,3 @@ COMMENT ON COLUMN nexus.query_history.updated_at IS 'When query was last updated
 COMMENT ON COLUMN nexus.query_history.query_name IS 'User-provided name for the query';
 COMMENT ON COLUMN nexus.query_history.is_favorite IS 'User favorited this query';
 
--- =====================================================
--- Summary
--- =====================================================
--- Removed Columns:
---   - query_hash (no more hash-based deduplication)
---
--- New Functions:
---   - save_new_query(): Explicitly save a new query
---   - update_existing_query(): Explicitly update existing query
---
--- Dropped Functions:
---   - upsert_query_history(): No more automatic saves
---
--- New Behavior:
---   - Queries only saved when user clicks "Save" or "Save As New"
---   - Sorted by updated_at timestamp
---   - Query ID is the identifier (no hash needed)
--- =====================================================

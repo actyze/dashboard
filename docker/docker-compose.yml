@@ -81,36 +81,8 @@ services:
       - local
       - trino-only
 
-  # Database initialization service - runs SQL scripts automatically on startup
-  # Applies all migrations from helm/dashboard/sql/*.sql
-  # Runs once, then exits (doesn't block other services)
-  db-init:
-    image: alpine:latest  # Use latest for better compatibility
-    container_name: dashboard-db-init
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      PGHOST: postgres
-      PGPORT: 5432
-      PGDATABASE: ${POSTGRES_DB:-dashboard}
-      PGUSER: ${POSTGRES_USER:-nexus_service}
-      PGPASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - ../helm/dashboard/sql:/sql:ro
-      - ./migrate.sh:/usr/local/bin/migrate.sh:ro
-    entrypoint: ["/bin/sh", "-c"]
-    command: 
-      - |
-        apk add --no-cache postgresql-client && 
-        sh /usr/local/bin/migrate.sh
-    networks:
-      - dashboard
-    profiles:
-      - local  # Runs automatically on 'docker compose up'
-    restart: "no"
-
   # Schema Service (FAISS-based table recommendations)
+  # Note: Database schema is now managed by Nexus migrations (nexus/db/migrations/)
   schema-service:
     build:
       context: ../models/schema-service
@@ -127,6 +99,8 @@ services:
       TRINO_SCHEMA: ${TRINO_SCHEMA:-demo_ecommerce}
       TRINO_SSL: ${TRINO_SSL:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Include TPC-H for local development (set to false for production)
+      INCLUDE_TPCH: ${INCLUDE_TPCH:-true}
       # PostgreSQL connection for intent examples
       POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
@@ -137,6 +111,7 @@ services:
       trino:
         condition: service_healthy
         required: false  # Optional - can use external Trino
+      # Note: Has fallback intent examples if database table not yet available
     volumes:
       - schema_models:/app/model_cache  # Fixed: match the actual cache directory
     deploy:
@@ -204,8 +179,7 @@ services:
       trino:
         condition: service_healthy
         required: false  # Optional - can use external Trino
-      schema-service:
-        condition: service_healthy
+    # Note: schema-service is called at runtime (no startup dependency needed)
     # Note: db-init runs independently - nexus doesn't wait for it
     deploy:
       resources:

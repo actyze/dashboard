@@ -344,16 +344,6 @@ const DashboardsList = () => {
                   <span className={`truncate text-sm ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
                     {dashboard.title}
                   </span>
-                  {/* Status badge */}
-                  {getStatus(dashboard) !== 'private' && (
-                    <span className={`ml-2 px-1.5 py-0.5 text-[10px] font-medium rounded ${
-                      getStatus(dashboard) === 'public'
-                        ? isDark ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
-                        : isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'
-                    }`}>
-                      {getStatus(dashboard)}
-                    </span>
-                  )}
                 </div>
                 
                 {/* Updated */}

@@ -312,6 +312,7 @@ schemaService:
       # All Trino connection details loaded from values-dev-secrets.yaml
       # host, port, catalog, schema, user, password
     refreshHours: 3
+    includeTpch: true  # Include TPC-H for local development testing
   probes:
     liveness:
       initialDelaySeconds: 900    # 15 minutes buffer for embedding generation

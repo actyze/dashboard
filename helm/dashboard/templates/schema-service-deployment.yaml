@@ -45,6 +45,8 @@ spec:
               key: password
         - name: SCHEMA_REFRESH_HOURS
           value: "{{ .Values.schemaService.env.refreshHours }}"
+        - name: INCLUDE_TPCH
+          value: "{{ .Values.schemaService.env.includeTpch | default false }}"
         - name: TRINO_SSL_ENABLED
           value: "{{ .Values.schemaService.env.trino.ssl | default false }}"
         - name: TRINO_SSL_VERIFICATION

@@ -9,6 +9,7 @@ from app.config import settings
 from app.logging import configure_logging
 from app.services.orchestration_service import orchestration_service
 from app.database import db_manager
+from app.migrations import run_migrations
 from app.api import router as api_router, auth_router, explorer_router, dashboard_router, public_router
 
 # Configure logging
@@ -24,7 +25,17 @@ async def lifespan(app: FastAPI):
     
     # Initialize database
     await db_manager.initialize()
-    # Create tables automatically on startup
+    
+    # Run database migrations
+    logger.info("Running database migrations...")
+    async with db_manager.engine.begin() as conn:
+        migration_success = await run_migrations(conn)
+        if not migration_success:
+            logger.error("Database migrations failed!")
+            raise RuntimeError("Database migrations failed")
+    logger.info("Database migrations completed successfully")
+    
+    # Create tables automatically on startup (for any tables not in migrations)
     await db_manager.create_tables()
     
     # Initialize orchestration service

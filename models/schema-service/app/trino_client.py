@@ -15,11 +15,12 @@ logger = logging.getLogger("trino-client")
 class TrinoSchemaService:
     """Service for fetching schema metadata from Trino."""
     
-    def __init__(self, host: str, port: int = 8080, user: str = "admin", catalog: Optional[str] = None):
+    def __init__(self, host: str, port: int = 8080, user: str = "admin", catalog: Optional[str] = None, include_tpch: bool = False):
         self.host = host
         self.port = port
         self.user = user
         self.catalog = catalog
+        self.include_tpch = include_tpch
         self.connection = None
 
     def connect(self):
@@ -75,7 +76,16 @@ class TrinoSchemaService:
         if not self.connection:
             self.connect()
 
-        query = """
+        # Build excluded catalogs list based on configuration
+        excluded_catalogs = ['system', 'jmx', 'memory', 'tpcds']
+        if not self.include_tpch:
+            excluded_catalogs.append('tpch')
+        
+        # Build the NOT IN clause
+        excluded_catalogs_str = ', '.join(f"'{cat}'" for cat in excluded_catalogs)
+        
+        # For TPC-H, only load sf1 and tiny (exclude large scale factors: sf10, sf100, sf1000, etc.)
+        query = f"""
             SELECT
                 c.table_cat   AS catalog,
                 c.table_schem AS schema,
@@ -88,22 +98,22 @@ class TrinoSchemaService:
                 ON c.table_cat   = t.table_cat
             AND c.table_schem = t.table_schem
             AND c.table_name  = t.table_name
-            WHERE c.table_cat NOT IN (
-                'system',
-                'jmx',
-                'memory',
-                'tpcds',
-                'tpch'
-            )
+            WHERE c.table_cat NOT IN ({excluded_catalogs_str})
             AND c.table_schem <> 'information_schema'
             AND c.table_schem <> 'nexus'
             AND t.table_type IN ('TABLE', 'VIEW', 'MATERIALIZED VIEW')
+            AND (
+                c.table_cat <> 'tpch' 
+                OR c.table_schem IN ('sf1', 'tiny')
+            )
             ORDER BY
                 catalog,
                 schema,
                 table_name,
                 column_name
         """
+        
+        logger.info(f"Loading schemas (include_tpch={self.include_tpch}, excluded={excluded_catalogs})")
 
         attempt = 0
         while True:

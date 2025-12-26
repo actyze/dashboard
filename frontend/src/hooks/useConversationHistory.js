@@ -1,44 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
 
-// Storage key prefix for localStorage
-const STORAGE_PREFIX = 'conversationHistory_';
-
-/**
- * Get the localStorage key for a query ID
- */
-const getStorageKey = (queryId) => `${STORAGE_PREFIX}${queryId || 'new'}`;
-
-/**
- * Load conversation history from localStorage
- */
-const loadFromStorage = (queryId) => {
-  try {
-    const key = getStorageKey(queryId);
-    const stored = localStorage.getItem(key);
-    const parsed = stored ? JSON.parse(stored) : [];
-    return parsed;
-  } catch (e) {
-    console.error('Failed to load conversation history from storage:', e);
-    return [];
-  }
-};
-
-/**
- * Save conversation history to localStorage
- */
-const saveToStorage = (queryId, history) => {
-  try {
-    const key = getStorageKey(queryId);
-    localStorage.setItem(key, JSON.stringify(history));
-  } catch (e) {
-    console.error('Failed to save conversation history to storage:', e);
-  }
-};
-
 /**
  * Hook to manage conversation history per query ID.
- * Uses localStorage for persistence, scoped by query ID.
- * Each query page has its own isolated conversation history.
+ * NO PERSISTENCE - conversation history is cleared when navigating away.
+ * Each query page starts fresh with empty conversation history.
  * 
  * Each message contains:
  * - content: The message content
@@ -49,16 +14,13 @@ const saveToStorage = (queryId, history) => {
  * @returns {object} - { conversationHistory, addUserMessage, addBotMessage, clearHistory }
  */
 export const useConversationHistory = (queryId) => {
-  const safeQueryId = queryId || 'new';
+  // State to hold conversation history - always starts empty
+  const [conversationHistory, setConversationHistory] = useState([]);
   
-  // State to hold conversation history - initialized from localStorage
-  const [conversationHistory, setConversationHistory] = useState(() => loadFromStorage(safeQueryId));
-  
-  // Reload from localStorage when queryId changes
+  // Clear history when queryId changes (navigating to different query)
   useEffect(() => {
-    const history = loadFromStorage(safeQueryId);
-    setConversationHistory(history);
-  }, [safeQueryId]);
+    setConversationHistory([]);
+  }, [queryId]);
   
   // Add a user message to the conversation history
   const addUserMessage = useCallback((message) => {
@@ -90,14 +52,9 @@ export const useConversationHistory = (queryId) => {
       }
       
       // Limit to 40 messages (20 user + 20 bot approximately)
-      updatedHistory = updatedHistory.slice(0, 40);
-      
-      // Persist to storage
-      saveToStorage(safeQueryId, updatedHistory);
-      
-      return updatedHistory;
+      return updatedHistory.slice(0, 40);
     });
-  }, [safeQueryId]);
+  }, []);
   
   // Add a bot/assistant message to the conversation history
   const addBotMessage = useCallback((message) => {
@@ -113,20 +70,14 @@ export const useConversationHistory = (queryId) => {
       ];
       
       // Limit to 40 messages
-      const limitedHistory = updatedHistory.slice(0, 40);
-      
-      // Persist to storage
-      saveToStorage(safeQueryId, limitedHistory);
-      
-      return limitedHistory;
+      return updatedHistory.slice(0, 40);
     });
-  }, [safeQueryId]);
+  }, []);
   
   // Clear all conversation history for this query ID
   const clearHistory = useCallback(() => {
     setConversationHistory([]);
-    saveToStorage(safeQueryId, []);
-  }, [safeQueryId]);
+  }, []);
   
   return {
     conversationHistory,
@@ -137,4 +88,3 @@ export const useConversationHistory = (queryId) => {
 };
 
 export default useConversationHistory;
-

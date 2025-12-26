@@ -10,6 +10,7 @@ Intelligent database schema recommendation service using FAISS vector search and
 - **Auto-Refresh**: Refreshes schema embeddings every 3 hours (configurable)
 - **RESTful API**: FastAPI-based service with comprehensive endpoints
 - **Docker Support**: Containerized deployment with health checks
+- **Configurable Catalogs**: Include/exclude TPC-H for dev vs production
 
 ## Architecture
 
@@ -77,6 +78,9 @@ Environment variables (see `.env.example`):
 - `TRINO_USER`: Trino username (default: admin)
 - `TRINO_CATALOG`: Optional default catalog
 - `SCHEMA_REFRESH_HOURS`: Hours between automatic refreshes (default: 3)
+- `INCLUDE_TPCH`: Include TPC-H in schema loading (default: false)
+  - Set to `true` for local/dev to test with TPC-H sample data
+  - Set to `false` for production to exclude sample data
 - `SENTENCE_TRANSFORMER_MODEL`: Model name (default: all-MiniLM-L6-v2)
 
 ## Installation

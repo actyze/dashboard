@@ -192,6 +192,8 @@ schemaService:
     limits:
       memory: "2Gi"
       cpu: "1000m"
+  env:
+    includeTpch: false  # Exclude TPC-H sample data in production
 
 # Trino database service
 trino:

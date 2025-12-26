@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router';
+import React, { useState, useEffect, useRef, useContext } from 'react';
+import { useParams, useNavigate, useLocation, UNSAFE_NavigationContext } from 'react-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { DatabaseSchemaPanel, ViewToggle } from '../Common';
 import AIQueryInput from './AIQueryInput';
@@ -39,7 +39,7 @@ const QueryPage = () => {
   const [saveMode, setSaveMode] = useState('new'); // 'new' or 'update'
   const [isSaving, setIsSaving] = useState(false);
 
-  // Conversation history scoped to this query ID (persisted to localStorage)
+  // Conversation history scoped to this query ID (NO persistence)
   const { conversationHistory, addUserMessage, addBotMessage, clearHistory } = useConversationHistory(id);
 
   // Query context for intent-aware schema reuse
@@ -48,13 +48,96 @@ const QueryPage = () => {
   // Track when AI is "thinking" (before response arrives)
   const [isAiTyping, setIsAiTyping] = useState(false);
   
+  // Track unsaved changes (conversation or SQL changes)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const originalSqlRef = useRef(queryFromState?.generated_sql || "-- Write your query here");
+  
   const sessionIdRef = useRef(`session-${id || 'new'}-${Date.now()}`);
 
-  // Reset context when query ID changes
+  // Reset context and clear unsaved flag when query ID changes
   useEffect(() => {
     setQueryContext({});
+    setHasUnsavedChanges(false);
     sessionIdRef.current = `session-${id || 'new'}-${Date.now()}`;
-  }, [id]);
+    originalSqlRef.current = queryFromState?.generated_sql || "-- Write your query here";
+  }, [id, queryFromState]);
+
+  // Track unsaved changes: conversation history or SQL changes
+  useEffect(() => {
+    const hasConversation = conversationHistory.length > 0;
+    const hasSqlChanges = sqlQuery !== originalSqlRef.current;
+    setHasUnsavedChanges(hasConversation || hasSqlChanges);
+  }, [conversationHistory, sqlQuery]);
+
+  // Warn before browser close if unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = ''; // Chrome requires returnValue to be set
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  // Store blocked navigation location
+  const blockedNextLocationRef = useRef(null);
+  const navigationContext = useContext(UNSAFE_NavigationContext);
+
+  // Block navigation if unsaved changes
+  useEffect(() => {
+    if (!hasUnsavedChanges || !navigationContext) return;
+
+    const { navigator } = navigationContext;
+    const originalPush = navigator.push;
+    const originalReplace = navigator.replace;
+
+    // Intercept push navigation
+    navigator.push = (...args) => {
+      const confirmed = window.confirm(
+        'You have unsaved work. Do you want to save before leaving?\n\n' +
+        'Click "OK" to save, or "Cancel" to leave without saving.'
+      );
+
+      if (confirmed) {
+        // Store where user wanted to go
+        blockedNextLocationRef.current = typeof args[0] === 'string' ? args[0] : args[0].pathname;
+        // Open save dialog
+        setSaveMode(id && id !== 'new' ? 'update' : 'new');
+        setSaveDialogOpen(true);
+      } else {
+        // Navigate away without saving
+        clearHistory();
+        setHasUnsavedChanges(false);
+        originalPush.apply(navigator, args);
+      }
+    };
+
+    // Intercept replace navigation
+    navigator.replace = (...args) => {
+      const confirmed = window.confirm(
+        'You have unsaved work. Do you want to save before leaving?\n\n' +
+        'Click "OK" to save, or "Cancel" to leave without saving.'
+      );
+
+      if (confirmed) {
+        blockedNextLocationRef.current = typeof args[0] === 'string' ? args[0] : args[0].pathname;
+        setSaveMode(id && id !== 'new' ? 'update' : 'new');
+        setSaveDialogOpen(true);
+      } else {
+        clearHistory();
+        setHasUnsavedChanges(false);
+        originalReplace.apply(navigator, args);
+      }
+    };
+
+    return () => {
+      navigator.push = originalPush;
+      navigator.replace = originalReplace;
+    };
+  }, [hasUnsavedChanges, id, clearHistory, navigationContext]);
 
   useEffect(() => {
     if (isEditingTitle && titleInputRef.current) {
@@ -110,17 +193,32 @@ const QueryPage = () => {
         if (response.success) {
           // Update the query name and navigate to the new query
           setQueryName(queryNameInput);
-          navigate(`/query/${response.query_id}`, { 
-            replace: true,
-            state: { 
-              query: {
-                id: response.query_id,
-                query_name: queryNameInput,
-                generated_sql: sqlQuery
-              }
-            }
-          });
+          
+          // Clear unsaved changes flag and conversation history
+          setHasUnsavedChanges(false);
+          originalSqlRef.current = sqlQuery;
+          clearHistory();
+          
           setSaveDialogOpen(false);
+          
+          // If user was trying to navigate away, go there now
+          if (blockedNextLocationRef.current) {
+            const nextPath = blockedNextLocationRef.current.pathname;
+            blockedNextLocationRef.current = null;
+            navigate(nextPath);
+          } else {
+            // Otherwise navigate to the new query
+            navigate(`/query/${response.query_id}`, { 
+              replace: true,
+              state: { 
+                query: {
+                  id: response.query_id,
+                  query_name: queryNameInput,
+                  generated_sql: sqlQuery
+                }
+              }
+            });
+          }
         } else {
           alert(response.error || 'Failed to save query');
         }
@@ -135,7 +233,20 @@ const QueryPage = () => {
         
         if (response.success) {
           setQueryName(queryNameInput);
+          
+          // Clear unsaved changes flag and conversation history
+          setHasUnsavedChanges(false);
+          originalSqlRef.current = sqlQuery;
+          clearHistory();
+          
           setSaveDialogOpen(false);
+          
+          // If user was trying to navigate away, go there now
+          if (blockedNextLocationRef.current) {
+            const nextPath = blockedNextLocationRef.current.pathname;
+            blockedNextLocationRef.current = null;
+            navigate(nextPath);
+          }
         } else {
           alert(response.error || 'Failed to update query');
         }
@@ -151,6 +262,47 @@ const QueryPage = () => {
   const openSaveDialog = (mode) => {
     setSaveMode(mode);
     setSaveDialogOpen(true);
+  };
+
+  // Quick save for existing queries (no dialog)
+  const handleQuickSave = async () => {
+    if (!id || id === 'new') {
+      // Not saved yet, open dialog
+      openSaveDialog('new');
+      return;
+    }
+
+    // Already saved, update directly
+    setIsSaving(true);
+    try {
+      const response = await QueryManagementService.updateQuery(id, {
+        generated_sql: sqlQuery.replace(/^-- Generated from natural language query\n/, '').trim(),
+        query_name: queryName,
+        execution_status: queryResults ? 'SUCCESS' : 'NOT_EXECUTED',
+        row_count: queryResults?.rowCount || queryResults?.data?.length || null
+      });
+      
+      if (response.success) {
+        // Clear unsaved changes flag and conversation history
+        setHasUnsavedChanges(false);
+        originalSqlRef.current = sqlQuery;
+        clearHistory();
+        
+        // If user was trying to navigate away, go there now
+        if (blockedNextLocationRef.current) {
+          const nextPath = blockedNextLocationRef.current.pathname;
+          blockedNextLocationRef.current = null;
+          navigate(nextPath);
+        }
+      } else {
+        alert(response.error || 'Failed to update query');
+      }
+    } catch (error) {
+      console.error('Error saving query:', error);
+      alert('An error occurred while saving the query');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const { mutate: processNaturalLanguage, isPending: aiQueryLoading } = useProcessNaturalLanguage({
@@ -276,7 +428,23 @@ const QueryPage = () => {
             <div className="flex items-center space-x-3">
               {/* Back Button */}
               <button
-                onClick={() => navigate('/queries')}
+                onClick={() => {
+                  if (hasUnsavedChanges) {
+                    const confirmed = window.confirm(
+                      'You have unsaved work. Do you want to save before leaving?\n\n' +
+                      'Click "OK" to save, or "Cancel" to leave without saving.'
+                    );
+                    if (confirmed) {
+                      // Open save dialog
+                      setSaveMode(id && id !== 'new' ? 'update' : 'new');
+                      setSaveDialogOpen(true);
+                      return; // Don't navigate yet
+                    }
+                  }
+                  // Clear conversation history and navigate
+                  clearHistory();
+                  navigate('/queries');
+                }}
                 className={`
                   p-2 rounded-lg transition-colors
                   ${isDark 
@@ -356,7 +524,7 @@ const QueryPage = () => {
                   {id && id !== 'new' && (
                     <div className="relative group">
                       <button
-                        onClick={() => openSaveDialog('update')}
+                        onClick={handleQuickSave}
                         disabled={isSaving}
                         className={`
                           p-2 rounded-md transition-all duration-300 flex items-center justify-center

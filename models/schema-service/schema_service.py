@@ -54,9 +54,18 @@ class SchemaService:
         self.postgres_db = os.getenv("POSTGRES_DB", "dashboard")
         self.postgres_user = os.getenv("POSTGRES_USER", "dashboard_user")
         self.postgres_password = os.getenv("POSTGRES_PASSWORD", "")
+        
+        # Schema loading configuration
+        # In dev/local: Include TPC-H for testing
+        # In production: Exclude TPC-H (it's just sample data)
+        self.include_tpch = os.getenv("INCLUDE_TPCH", "false").lower() == "true"
 
         self.trino_service = TrinoSchemaService(
-            host=self.trino_host, port=self.trino_port, user=self.trino_user, catalog=self.trino_catalog
+            host=self.trino_host, 
+            port=self.trino_port, 
+            user=self.trino_user, 
+            catalog=self.trino_catalog,
+            include_tpch=self.include_tpch
         )
         self.embedder = FAISSSchemaEmbedder()
         self.labeler = DomainLabeler()  # Initialize domain labeler

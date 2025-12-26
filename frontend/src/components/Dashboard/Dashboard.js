@@ -718,6 +718,17 @@ const Dashboard = ({ isPublic = false }) => {
                 </button>
               )}
               
+              {/* Status badge - show if shared or public */}
+              {(dashboard.is_public || dashboard.is_anonymous_public) && (
+                <span className={`px-2 py-1 text-xs font-medium rounded ${
+                  dashboard.is_anonymous_public
+                    ? isDark ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
+                    : isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'
+                }`}>
+                  {dashboard.is_anonymous_public ? 'public' : 'shared'}
+                </span>
+              )}
+              
               {/* Share Button - Clean icon style */}
               <button
                 onClick={() => setShareModalOpen(true)}

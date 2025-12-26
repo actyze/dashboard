@@ -6,7 +6,7 @@ import { transformQueryResults } from '../../utils/dataTransformers';
 import { ChartTypeSelector } from '../Charts';
 import { extractColumnsFromSQL, isValidSQLQuery } from '../../utils/sqlParser';
 
-const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
+const SqlTileModal = ({ open, onClose, onSave, initialData = null, recentQueries = [] }) => {
   const { isDark } = useTheme();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -176,8 +176,9 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
   };
 
   const handleSelectQuery = (query) => {
-    setTitle(query.query_name || `Query ${query.id}`);
+    setTitle(query.query_name || query.natural_language_query || `Query ${query.id}`);
     setSqlQuery(query.generated_sql || '');
+    setShowSidebar(false);
   };
 
   const handleSave = () => {
@@ -228,6 +229,8 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
     onClose();
   };
 
+  const sidebarVisible = showSidebar && !initialData && recentQueries.length > 0;
+
   if (!open) return null;
 
   return (
@@ -238,34 +241,103 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
         onClick={handleClose}
       />
       
-      {/* Modal */}
-      <div className={`
-        relative w-full max-w-2xl mx-4 rounded-xl shadow-2xl
-        ${isDark ? 'bg-[#17181a] border border-[#2a2b2e]' : 'bg-white border border-gray-200'}
-      `}>
-        {/* Header */}
-        <div className={`
-          flex items-center justify-between px-5 py-4 border-b
-          ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}
-        `}>
-          <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            {initialData ? 'Edit Tile' : 'Create New Tile'}
-          </h2>
-          <button
-            onClick={handleClose}
-            className={`
-              p-1.5 rounded-lg transition-colors
-              ${isDark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}
-            `}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+      {/* Modal with animated width */}
+      <div 
+        className={`
+          relative mx-4 rounded-xl shadow-2xl flex overflow-hidden
+          transition-all duration-300 ease-in-out
+          ${isDark ? 'bg-[#17181a] border border-[#2a2b2e]' : 'bg-white border border-gray-200'}
+        `}
+        style={{ 
+          width: sidebarVisible ? '900px' : '672px',
+          maxWidth: '95vw'
+        }}
+      >
+        {/* Sidebar - Query List */}
+        <div 
+          className={`
+            transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0
+            ${isDark ? 'bg-[#101012] border-r border-[#2a2b2e]' : 'bg-gray-50 border-r border-gray-200'}
+          `}
+          style={{ width: sidebarVisible ? '260px' : '0px' }}
+        >
+          <div className="w-[260px] h-full flex flex-col">
+            <div className={`px-4 py-3 border-b ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
+              <h3 className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                Recent Queries
+              </h3>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {recentQueries.map((query) => (
+                <button
+                  key={query.id}
+                  type="button"
+                  onClick={() => handleSelectQuery(query)}
+                  className={`
+                    w-full text-left px-3 py-2.5 rounded-lg transition-colors
+                    ${isDark 
+                      ? 'hover:bg-[#1c1d1f] text-gray-300' 
+                      : 'hover:bg-white text-gray-700 hover:shadow-sm'
+                    }
+                  `}
+                >
+                  <div className="font-medium truncate text-sm">
+                    {query.query_name || query.natural_language_query || `Query ${query.id}`}
+                  </div>
+                  {query.generated_sql && (
+                    <div className={`text-xs truncate mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                      {query.generated_sql.substring(0, 40)}...
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-        
-        {/* Content */}
-        <div className="px-5 py-4 max-h-[70vh] overflow-y-auto">
+
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Header */}
+          <div className={`
+            flex items-center justify-between px-5 py-4 border-b
+            ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}
+          `}>
+            <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              {initialData ? 'Edit Tile' : 'Create New Tile'}
+            </h2>
+            <div className="flex items-center gap-2">
+              {!initialData && recentQueries.length > 0 && (
+                <button
+                  onClick={() => setShowSidebar(!showSidebar)}
+                  className={`
+                    px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
+                    ${showSidebar
+                      ? 'bg-[#5d6ad3] text-white'
+                      : isDark 
+                        ? 'bg-[#1c1d1f] text-gray-300 hover:bg-[#2a2b2e]' 
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }
+                  `}
+                >
+                  Use saved queries
+                </button>
+              )}
+              <button
+                onClick={handleClose}
+                className={`
+                  p-1.5 rounded-lg transition-colors
+                  ${isDark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}
+                `}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          {/* Content */}
+          <div className="px-5 py-4 max-h-[70vh] overflow-y-auto">
           {error && (
             <div className={`
               mb-4 px-4 py-3 rounded-lg text-sm
@@ -517,29 +589,30 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null }) => {
           </div>
         </div>
 
-        {/* Footer */}
-        <div className={`
-          flex items-center justify-end gap-3 px-5 py-4 border-t
-          ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}
-        `}>
-          <button
-            onClick={handleClose}
-            className={`
-              px-4 py-2 rounded-lg text-sm font-medium transition-colors
-              ${isDark 
-                ? 'text-gray-300 hover:bg-gray-700' 
-                : 'text-gray-700 hover:bg-gray-100'
-              }
-            `}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-[#5d6ad3] text-white hover:bg-[#4f5bc4] transition-colors"
-          >
-            {initialData ? 'Update Tile' : 'Create Tile'}
-          </button>
+          {/* Footer */}
+          <div className={`
+            flex items-center justify-end gap-3 px-5 py-4 border-t
+            ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}
+          `}>
+            <button
+              onClick={handleClose}
+              className={`
+                px-4 py-2 rounded-lg text-sm font-medium transition-colors
+                ${isDark 
+                  ? 'text-gray-300 hover:bg-gray-700' 
+                  : 'text-gray-700 hover:bg-gray-100'
+                }
+              `}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-4 py-2 rounded-lg text-sm font-medium bg-[#5d6ad3] text-white hover:bg-[#4f5bc4] transition-colors"
+            >
+              {initialData ? 'Update Tile' : 'Create Tile'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

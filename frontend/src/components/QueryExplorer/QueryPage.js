@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useContext } from 'react';
+import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import { useParams, useNavigate, useLocation, UNSAFE_NavigationContext } from 'react-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { DatabaseSchemaPanel, ViewToggle } from '../Common';
@@ -25,7 +25,7 @@ const QueryPage = () => {
   const [aiPanelCollapsed, setAiPanelCollapsed] = useState(false);
   const [selectedTable, setSelectedTable] = useState(null);
   const [activeView, setActiveView] = useState('results');
-  const [sqlQuery, setSqlQuery] = useState(queryFromState?.generated_sql || "-- Write your query here");
+  const [sqlQuery, setSqlQuery] = useState(queryFromState?.generated_sql || "");
   const [queryError, setQueryError] = useState(null);
   const [queryResults, setQueryResults] = useState(null);
   const [chartData, setChartData] = useState(null);
@@ -38,6 +38,8 @@ const QueryPage = () => {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveMode, setSaveMode] = useState('new'); // 'new' or 'update'
   const [isSaving, setIsSaving] = useState(false);
+  const saveInProgressRef = useRef(false); // Prevent double-save
+  const allowNavigationRef = useRef(false); // Bypass navigation guard after save
 
   // Conversation history scoped to this query ID (NO persistence)
   const { conversationHistory, addUserMessage, addBotMessage, clearHistory } = useConversationHistory(id);
@@ -50,7 +52,7 @@ const QueryPage = () => {
   
   // Track unsaved changes (conversation or SQL changes)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const originalSqlRef = useRef(queryFromState?.generated_sql || "-- Write your query here");
+  const originalSqlRef = useRef(queryFromState?.generated_sql || "");
   
   const sessionIdRef = useRef(`session-${id || 'new'}-${Date.now()}`);
 
@@ -59,7 +61,7 @@ const QueryPage = () => {
     setQueryContext({});
     setHasUnsavedChanges(false);
     sessionIdRef.current = `session-${id || 'new'}-${Date.now()}`;
-    originalSqlRef.current = queryFromState?.generated_sql || "-- Write your query here";
+    originalSqlRef.current = queryFromState?.generated_sql || "";
   }, [id, queryFromState]);
 
   // Track unsaved changes: conversation history or SQL changes
@@ -86,6 +88,56 @@ const QueryPage = () => {
   const blockedNextLocationRef = useRef(null);
   const navigationContext = useContext(UNSAFE_NavigationContext);
 
+  // Quick save for existing queries (no dialog) - MUST be defined before navigation guard
+  const handleQuickSave = useCallback(async () => {
+    if (!id || id === 'new') {
+      // Not saved yet, open dialog
+      setSaveMode('new');
+      setSaveDialogOpen(true);
+      return;
+    }
+
+    // Prevent double-save
+    if (saveInProgressRef.current || isSaving) {
+      console.log('Save already in progress, ignoring duplicate quick save');
+      return;
+    }
+
+    saveInProgressRef.current = true;
+    setIsSaving(true);
+    try {
+      const response = await QueryManagementService.updateQuery(id, {
+        generated_sql: sqlQuery.replace(/^-- Generated from natural language query\n/, '').trim(),
+        query_name: queryName,
+        execution_status: queryResults ? 'SUCCESS' : 'NOT_EXECUTED',
+        row_count: queryResults?.rowCount || queryResults?.data?.length || null
+      });
+      
+      if (response.success) {
+        // Clear state
+        setHasUnsavedChanges(false);
+        originalSqlRef.current = sqlQuery;
+        clearHistory();
+        
+        // Navigate if user was trying to go somewhere
+        if (blockedNextLocationRef.current) {
+          const nextPath = blockedNextLocationRef.current;
+          blockedNextLocationRef.current = null;
+          allowNavigationRef.current = true; // Bypass guard
+          navigate(nextPath);
+        }
+      } else {
+        alert(response.error || 'Failed to update query');
+      }
+    } catch (error) {
+      console.error('Error saving query:', error);
+      alert('An error occurred while saving the query');
+    } finally {
+      setIsSaving(false);
+      saveInProgressRef.current = false;
+    }
+  }, [id, sqlQuery, queryName, queryResults, clearHistory, navigate]);
+
   // Block navigation if unsaved changes
   useEffect(() => {
     if (!hasUnsavedChanges || !navigationContext) return;
@@ -96,19 +148,33 @@ const QueryPage = () => {
 
     // Intercept push navigation
     navigator.push = (...args) => {
+      // Allow navigation if we just saved
+      if (allowNavigationRef.current) {
+        allowNavigationRef.current = false;
+        originalPush.apply(navigator, args);
+        return;
+      }
+
       const confirmed = window.confirm(
         'You have unsaved work. Do you want to save before leaving?\n\n' +
         'Click "OK" to save, or "Cancel" to leave without saving.'
       );
 
       if (confirmed) {
-        // Store where user wanted to go
+        // Store where user wanted to go (as a string path)
         blockedNextLocationRef.current = typeof args[0] === 'string' ? args[0] : args[0].pathname;
-        // Open save dialog
-        setSaveMode(id && id !== 'new' ? 'update' : 'new');
-        setSaveDialogOpen(true);
+        
+        // If it's an existing query, quick-save without dialog
+        if (id && id !== 'new') {
+          handleQuickSave();
+        } else {
+          // New query - open save dialog
+          setSaveMode('new');
+          setSaveDialogOpen(true);
+        }
       } else {
         // Navigate away without saving
+        allowNavigationRef.current = true;
         clearHistory();
         setHasUnsavedChanges(false);
         originalPush.apply(navigator, args);
@@ -117,16 +183,33 @@ const QueryPage = () => {
 
     // Intercept replace navigation
     navigator.replace = (...args) => {
+      // Allow navigation if we just saved
+      if (allowNavigationRef.current) {
+        allowNavigationRef.current = false;
+        originalReplace.apply(navigator, args);
+        return;
+      }
+
       const confirmed = window.confirm(
         'You have unsaved work. Do you want to save before leaving?\n\n' +
         'Click "OK" to save, or "Cancel" to leave without saving.'
       );
 
       if (confirmed) {
+        // Store where user wanted to go (as a string path)
         blockedNextLocationRef.current = typeof args[0] === 'string' ? args[0] : args[0].pathname;
-        setSaveMode(id && id !== 'new' ? 'update' : 'new');
-        setSaveDialogOpen(true);
+        
+        // If it's an existing query, quick-save without dialog
+        if (id && id !== 'new') {
+          handleQuickSave();
+        } else {
+          // New query - open save dialog
+          setSaveMode('new');
+          setSaveDialogOpen(true);
+        }
       } else {
+        // Navigate away without saving
+        allowNavigationRef.current = true;
         clearHistory();
         setHasUnsavedChanges(false);
         originalReplace.apply(navigator, args);
@@ -137,7 +220,7 @@ const QueryPage = () => {
       navigator.push = originalPush;
       navigator.replace = originalReplace;
     };
-  }, [hasUnsavedChanges, id, clearHistory, navigationContext]);
+  }, [hasUnsavedChanges, id, clearHistory, navigationContext, handleQuickSave]);
 
   useEffect(() => {
     if (isEditingTitle && titleInputRef.current) {
@@ -179,6 +262,13 @@ const QueryPage = () => {
   };
 
   const handleSaveQuery = async (queryNameInput) => {
+    // Prevent double-save
+    if (saveInProgressRef.current || isSaving) {
+      console.log('Save already in progress, ignoring duplicate call');
+      return;
+    }
+    
+    saveInProgressRef.current = true;
     setIsSaving(true);
     try {
       if (saveMode === 'new') {
@@ -191,23 +281,21 @@ const QueryPage = () => {
         });
         
         if (response.success) {
-          // Update the query name and navigate to the new query
+          // Clear state
           setQueryName(queryNameInput);
-          
-          // Clear unsaved changes flag and conversation history
           setHasUnsavedChanges(false);
           originalSqlRef.current = sqlQuery;
           clearHistory();
-          
           setSaveDialogOpen(false);
           
-          // If user was trying to navigate away, go there now
+          // Navigate
+          allowNavigationRef.current = true; // Bypass guard
           if (blockedNextLocationRef.current) {
-            const nextPath = blockedNextLocationRef.current.pathname;
+            const nextPath = blockedNextLocationRef.current;
             blockedNextLocationRef.current = null;
             navigate(nextPath);
           } else {
-            // Otherwise navigate to the new query
+            // Navigate to the new query
             navigate(`/query/${response.query_id}`, { 
               replace: true,
               state: { 
@@ -232,19 +320,18 @@ const QueryPage = () => {
         });
         
         if (response.success) {
+          // Clear state
           setQueryName(queryNameInput);
-          
-          // Clear unsaved changes flag and conversation history
           setHasUnsavedChanges(false);
           originalSqlRef.current = sqlQuery;
           clearHistory();
-          
           setSaveDialogOpen(false);
           
-          // If user was trying to navigate away, go there now
+          // Navigate if user was trying to go somewhere
           if (blockedNextLocationRef.current) {
-            const nextPath = blockedNextLocationRef.current.pathname;
+            const nextPath = blockedNextLocationRef.current;
             blockedNextLocationRef.current = null;
+            allowNavigationRef.current = true; // Bypass guard
             navigate(nextPath);
           }
         } else {
@@ -256,53 +343,13 @@ const QueryPage = () => {
       alert('An error occurred while saving the query');
     } finally {
       setIsSaving(false);
+      saveInProgressRef.current = false;
     }
   };
 
   const openSaveDialog = (mode) => {
     setSaveMode(mode);
     setSaveDialogOpen(true);
-  };
-
-  // Quick save for existing queries (no dialog)
-  const handleQuickSave = async () => {
-    if (!id || id === 'new') {
-      // Not saved yet, open dialog
-      openSaveDialog('new');
-      return;
-    }
-
-    // Already saved, update directly
-    setIsSaving(true);
-    try {
-      const response = await QueryManagementService.updateQuery(id, {
-        generated_sql: sqlQuery.replace(/^-- Generated from natural language query\n/, '').trim(),
-        query_name: queryName,
-        execution_status: queryResults ? 'SUCCESS' : 'NOT_EXECUTED',
-        row_count: queryResults?.rowCount || queryResults?.data?.length || null
-      });
-      
-      if (response.success) {
-        // Clear unsaved changes flag and conversation history
-        setHasUnsavedChanges(false);
-        originalSqlRef.current = sqlQuery;
-        clearHistory();
-        
-        // If user was trying to navigate away, go there now
-        if (blockedNextLocationRef.current) {
-          const nextPath = blockedNextLocationRef.current.pathname;
-          blockedNextLocationRef.current = null;
-          navigate(nextPath);
-        }
-      } else {
-        alert(response.error || 'Failed to update query');
-      }
-    } catch (error) {
-      console.error('Error saving query:', error);
-      alert('An error occurred while saving the query');
-    } finally {
-      setIsSaving(false);
-    }
   };
 
   const { mutate: processNaturalLanguage, isPending: aiQueryLoading } = useProcessNaturalLanguage({
@@ -383,10 +430,9 @@ const QueryPage = () => {
       .map(m => m.content);
     
     // Build context for intent-aware schema reuse
-    // Use SQL from editor if available (excluding placeholder), otherwise fall back to last generated SQL
+    // Use SQL from editor if available, otherwise fall back to last generated SQL
     const hasValidSql = sqlQuery && 
                         sqlQuery.trim() !== "" && 
-                        sqlQuery !== "-- Write your query here" &&
                         sqlQuery.toLowerCase().includes('select');
     const currentSql = hasValidSql ? sqlQuery.replace(/^-- Generated from natural language query\n/, '').trim() : queryContext.lastSql;
     
@@ -435,10 +481,21 @@ const QueryPage = () => {
                       'Click "OK" to save, or "Cancel" to leave without saving.'
                     );
                     if (confirmed) {
-                      // Open save dialog
-                      setSaveMode(id && id !== 'new' ? 'update' : 'new');
-                      setSaveDialogOpen(true);
-                      return; // Don't navigate yet
+                      // Store destination
+                      blockedNextLocationRef.current = '/queries';
+                      
+                      // If it's an existing query, quick-save without dialog
+                      if (id && id !== 'new') {
+                        handleQuickSave();
+                      } else {
+                        // New query - open save dialog
+                        setSaveMode('new');
+                        setSaveDialogOpen(true);
+                      }
+                      return;
+                    } else {
+                      // User chose not to save - allow navigation
+                      allowNavigationRef.current = true;
                     }
                   }
                   // Clear conversation history and navigate

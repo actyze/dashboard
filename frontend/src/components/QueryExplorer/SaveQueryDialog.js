@@ -25,8 +25,9 @@ const SaveQueryDialog = ({
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    e.stopPropagation();
     const trimmedName = queryName.trim();
-    if (trimmedName) {
+    if (trimmedName && !loading) {
       onSave(trimmedName);
     }
   };
@@ -39,10 +40,18 @@ const SaveQueryDialog = ({
 
   if (!isOpen) return null;
 
+  const handleBackdropClick = (e) => {
+    // Only close if clicking directly on the backdrop, not on the dialog
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
   return (
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-      onClick={onClose}
+      onClick={handleBackdropClick}
+      onMouseDown={(e) => e.stopPropagation()}
     >
       <div 
         className={`
@@ -50,6 +59,7 @@ const SaveQueryDialog = ({
           ${isDark ? 'bg-[#1c1d1f] border border-gray-700' : 'bg-white'}
         `}
         onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className={`px-6 py-4 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>

@@ -490,12 +490,30 @@ class AdminService:
     ) -> Dict[str, Any]:
         """
         Check if a user has access to query a specific table.
-        Access is granted through group membership and group_data_access rules.
+        - ADMIN role users have full access (no restrictions)
+        - USER role users get access through group membership and group_data_access rules
         """
         async with db_manager.get_session() as session:
             try:
                 from uuid import UUID
                 user_uuid = UUID(user_id)
+                
+                # Check if user has ADMIN role - admins have full access
+                admin_role_query = select(Role).where(Role.name == 'ADMIN')
+                admin_role_result = await session.execute(admin_role_query)
+                admin_role = admin_role_result.scalar_one_or_none()
+                
+                if admin_role:
+                    user_role_query = select(UserRole).where(
+                        and_(
+                            UserRole.user_id == user_uuid,
+                            UserRole.role_id == admin_role.id
+                        )
+                    )
+                    user_role_result = await session.execute(user_role_query)
+                    if user_role_result.scalar_one_or_none():
+                        # User is an admin - grant full access
+                        return {"has_access": True, "reason": "ADMIN role has full access"}
                 
                 # Get all groups the user belongs to
                 user_groups_query = select(UserGroup.group_id).where(

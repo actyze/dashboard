@@ -477,6 +477,86 @@ class AdminService:
                 return {"success": False, "error": str(e)}
     
     # =========================================================================
+    # ACCESS CONTROL CHECK
+    # =========================================================================
+    
+    async def check_user_access(
+        self,
+        user_id: str,
+        catalog: str,
+        database: str,
+        schema: str,
+        table: str
+    ) -> Dict[str, Any]:
+        """
+        Check if a user has access to query a specific table.
+        Access is granted through group membership and group_data_access rules.
+        """
+        async with db_manager.get_session() as session:
+            try:
+                from uuid import UUID
+                user_uuid = UUID(user_id)
+                
+                # Get all groups the user belongs to
+                user_groups_query = select(UserGroup.group_id).where(
+                    UserGroup.user_id == user_uuid
+                )
+                user_groups_result = await session.execute(user_groups_query)
+                user_group_ids = [row[0] for row in user_groups_result.fetchall()]
+                
+                if not user_group_ids:
+                    # User not in any groups = no access
+                    return {"has_access": False, "reason": "User not in any groups"}
+                
+                # Check if any of the user's groups have access to this table
+                # Rules are hierarchical:
+                # - database_name only = access to entire database
+                # - database_name + schema_name = access to entire schema
+                # - database_name + schema_name + table_name = access to specific table
+                
+                access_query = select(GroupDataAccess).where(
+                    and_(
+                        GroupDataAccess.group_id.in_(user_group_ids),
+                        GroupDataAccess.can_query == True,
+                        # Match database
+                        or_(
+                            GroupDataAccess.database_name == database,
+                            GroupDataAccess.database_name.is_(None)  # NULL = all databases
+                        )
+                    )
+                )
+                
+                access_rules_result = await session.execute(access_query)
+                access_rules = access_rules_result.scalars().all()
+                
+                for rule in access_rules:
+                    # Check hierarchical access
+                    if rule.database_name is None:
+                        # Access to all databases
+                        return {"has_access": True, "rule_id": str(rule.id)}
+                    
+                    if rule.database_name == database:
+                        if rule.schema_name is None:
+                            # Access to entire database
+                            return {"has_access": True, "rule_id": str(rule.id)}
+                        
+                        if rule.schema_name == schema:
+                            if rule.table_name is None:
+                                # Access to entire schema
+                                return {"has_access": True, "rule_id": str(rule.id)}
+                            
+                            if rule.table_name == table:
+                                # Access to specific table
+                                return {"has_access": True, "rule_id": str(rule.id)}
+                
+                # No matching rules found
+                return {"has_access": False, "reason": "No matching access rules"}
+                
+            except Exception as e:
+                self.logger.error("Failed to check user access", error=str(e), user_id=user_id, table=f"{catalog}.{database}.{schema}.{table}")
+                return {"has_access": False, "reason": str(e)}
+    
+    # =========================================================================
     # ROLES
     # =========================================================================
     

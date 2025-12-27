@@ -11,6 +11,7 @@ from app.services.orchestration_service import orchestration_service
 from app.database import db_manager
 from app.migrations import run_migrations
 from app.api import router as api_router, auth_router, explorer_router, dashboard_router, public_router
+from app.admin_api import admin_router
 
 # Configure logging
 configure_logging()
@@ -76,6 +77,7 @@ app.include_router(api_router)
 app.include_router(auth_router)
 app.include_router(explorer_router)
 app.include_router(dashboard_router)
+app.include_router(admin_router)  # Admin endpoints (requires ADMIN role)
 app.include_router(public_router)  # No authentication required
 
 

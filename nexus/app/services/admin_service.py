@@ -1,0 +1,505 @@
+"""Simplified Admin Service - 2 roles (ADMIN/USER), group-level data access only."""
+
+from typing import List, Dict, Any, Optional
+from sqlalchemy import select, update, delete, and_, or_, func, text
+from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
+from datetime import datetime
+import uuid
+
+from app.database import (
+    db_manager, User, Role, Group, UserRole, UserGroup, GroupRole,
+    GroupDataAccess
+)
+from app.auth.utils import get_password_hash
+
+logger = structlog.get_logger()
+
+
+class AdminService:
+    """Simplified admin service: 2 roles (ADMIN/USER), group-level data access."""
+    
+    def __init__(self):
+        self.logger = logger.bind(service="admin-service")
+    
+    # =========================================================================
+    # USER MANAGEMENT
+    # =========================================================================
+    
+    async def list_users(
+        self,
+        page: int = 1,
+        page_size: int = 50,
+        search: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """List users with their roles and groups."""
+        async with db_manager.get_session() as session:
+            try:
+                query = select(User).where(User.is_active == True)
+                
+                if search:
+                    search_pattern = f"%{search}%"
+                    query = query.where(
+                        or_(
+                            User.username.ilike(search_pattern),
+                            User.email.ilike(search_pattern),
+                            User.full_name.ilike(search_pattern)
+                        )
+                    )
+                
+                # Pagination
+                offset = (page - 1) * page_size
+                query = query.offset(offset).limit(page_size)
+                
+                result = await session.execute(query)
+                users = result.scalars().all()
+                
+                users_data = []
+                for user in users:
+                    # Get user's role (should be only 1: ADMIN or USER)
+                    role_result = await session.execute(
+                        select(Role.name).join(UserRole).where(UserRole.user_id == user.id)
+                    )
+                    role = role_result.scalar_one_or_none() or "USER"
+                    
+                    # Get user's groups
+                    groups_result = await session.execute(
+                        select(Group.name).join(UserGroup).where(UserGroup.user_id == user.id)
+                    )
+                    groups = [g for g in groups_result.scalars().all()]
+                    
+                    users_data.append({
+                        "id": str(user.id),
+                        "username": user.username,
+                        "email": user.email,
+                        "full_name": user.full_name,
+                        "is_active": user.is_active,
+                        "role": role,
+                        "groups": groups,
+                        "created_at": user.created_at.isoformat()
+                    })
+                
+                # Get total count
+                count_query = select(func.count()).select_from(User).where(User.is_active == True)
+                if search:
+                    search_pattern = f"%{search}%"
+                    count_query = count_query.where(
+                        or_(
+                            User.username.ilike(search_pattern),
+                            User.email.ilike(search_pattern),
+                            User.full_name.ilike(search_pattern)
+                        )
+                    )
+                total_result = await session.execute(count_query)
+                total = total_result.scalar()
+                
+                return {
+                    "success": True,
+                    "users": users_data,
+                    "total": total,
+                    "page": page,
+                    "page_size": page_size
+                }
+                
+            except Exception as e:
+                self.logger.error("Failed to list users", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    async def create_user(
+        self,
+        username: str,
+        email: str,
+        password: str,
+        full_name: Optional[str] = None,
+        role: str = "USER",
+        admin_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Create a new user with specified role (ADMIN or USER)."""
+        async with db_manager.get_session() as session:
+            try:
+                # Check if user exists
+                existing = await session.execute(
+                    select(User).where(
+                        or_(User.username == username, User.email == email)
+                    )
+                )
+                if existing.scalar_one_or_none():
+                    return {"success": False, "error": "User already exists"}
+                
+                # Create user
+                password_hash = get_password_hash(password)
+                new_user = User(
+                    username=username,
+                    email=email,
+                    password_hash=password_hash,
+                    full_name=full_name,
+                    is_active=True
+                )
+                session.add(new_user)
+                await session.flush()
+                
+                # Assign role (default to USER)
+                role_name = role.upper() if role.upper() in ["ADMIN", "USER"] else "USER"
+                role_result = await session.execute(
+                    select(Role).where(Role.name == role_name)
+                )
+                role_obj = role_result.scalar_one_or_none()
+                
+                if role_obj:
+                    user_role = UserRole(user_id=new_user.id, role_id=role_obj.id)
+                    session.add(user_role)
+                
+                await session.commit()
+                
+                self.logger.info("User created", user_id=str(new_user.id), username=username, role=role_name, created_by=admin_id)
+                
+                return {
+                    "success": True,
+                    "user": {
+                        "id": str(new_user.id),
+                        "username": new_user.username,
+                        "email": new_user.email,
+                        "full_name": new_user.full_name,
+                        "role": role_name
+                    }
+                }
+                
+            except Exception as e:
+                await session.rollback()
+                self.logger.error("Failed to create user", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    async def set_user_role(
+        self,
+        user_id: str,
+        role: str,
+        admin_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Set user's role (ADMIN or USER). Can only have ONE role."""
+        async with db_manager.get_session() as session:
+            try:
+                # Validate role
+                role_name = role.upper() if role.upper() in ["ADMIN", "USER"] else "USER"
+                
+                # Get role ID
+                role_result = await session.execute(
+                    select(Role).where(Role.name == role_name)
+                )
+                role_obj = role_result.scalar_one_or_none()
+                
+                if not role_obj:
+                    return {"success": False, "error": f"Role {role_name} not found"}
+                
+                # Remove all existing roles for this user
+                await session.execute(
+                    delete(UserRole).where(UserRole.user_id == uuid.UUID(user_id))
+                )
+                
+                # Assign new role
+                user_role = UserRole(user_id=uuid.UUID(user_id), role_id=role_obj.id)
+                session.add(user_role)
+                await session.commit()
+                
+                self.logger.info("User role updated", user_id=user_id, new_role=role_name, updated_by=admin_id)
+                
+                return {"success": True, "role": role_name}
+                
+            except Exception as e:
+                await session.rollback()
+                self.logger.error("Failed to set user role", user_id=user_id, error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    async def deactivate_user(
+        self,
+        user_id: str,
+        admin_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Deactivate a user."""
+        async with db_manager.get_session() as session:
+            try:
+                await session.execute(
+                    update(User)
+                    .where(User.id == uuid.UUID(user_id))
+                    .values(is_active=False)
+                )
+                await session.commit()
+                
+                self.logger.info("User deactivated", user_id=user_id, deactivated_by=admin_id)
+                
+                return {"success": True}
+                
+            except Exception as e:
+                await session.rollback()
+                self.logger.error("Failed to deactivate user", user_id=user_id, error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    # =========================================================================
+    # GROUP MANAGEMENT
+    # =========================================================================
+    
+    async def list_groups(self) -> Dict[str, Any]:
+        """List all groups with member counts."""
+        async with db_manager.get_session() as session:
+            try:
+                # Get groups with member counts
+                query = select(
+                    Group,
+                    func.count(UserGroup.user_id).label("member_count")
+                ).outerjoin(UserGroup).group_by(Group.id)
+                
+                result = await session.execute(query)
+                groups_data = []
+                
+                for group, member_count in result.all():
+                    groups_data.append({
+                        "id": str(group.id),
+                        "name": group.name,
+                        "description": group.description,
+                        "member_count": member_count,
+                        "created_at": group.created_at.isoformat()
+                    })
+                
+                return {"success": True, "groups": groups_data}
+                
+            except Exception as e:
+                self.logger.error("Failed to list groups", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    async def create_group(
+        self,
+        name: str,
+        description: Optional[str] = None,
+        admin_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Create a new group."""
+        async with db_manager.get_session() as session:
+            try:
+                # Check if group exists
+                existing = await session.execute(
+                    select(Group).where(Group.name == name)
+                )
+                if existing.scalar_one_or_none():
+                    return {"success": False, "error": "Group already exists"}
+                
+                new_group = Group(name=name, description=description)
+                session.add(new_group)
+                await session.commit()
+                
+                self.logger.info("Group created", group_id=str(new_group.id), name=name, created_by=admin_id)
+                
+                return {
+                    "success": True,
+                    "group": {
+                        "id": str(new_group.id),
+                        "name": new_group.name,
+                        "description": new_group.description
+                    }
+                }
+                
+            except Exception as e:
+                await session.rollback()
+                self.logger.error("Failed to create group", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    async def add_user_to_group(
+        self,
+        group_id: str,
+        user_id: str,
+        admin_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Add a user to a group."""
+        async with db_manager.get_session() as session:
+            try:
+                # Check if already member
+                existing = await session.execute(
+                    select(UserGroup).where(
+                        and_(
+                            UserGroup.group_id == uuid.UUID(group_id),
+                            UserGroup.user_id == uuid.UUID(user_id)
+                        )
+                    )
+                )
+                if existing.scalar_one_or_none():
+                    return {"success": False, "error": "User already in group"}
+                
+                user_group = UserGroup(
+                    group_id=uuid.UUID(group_id),
+                    user_id=uuid.UUID(user_id)
+                )
+                session.add(user_group)
+                await session.commit()
+                
+                self.logger.info("User added to group", group_id=group_id, user_id=user_id, added_by=admin_id)
+                
+                return {"success": True}
+                
+            except Exception as e:
+                await session.rollback()
+                self.logger.error("Failed to add user to group", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    async def remove_user_from_group(
+        self,
+        group_id: str,
+        user_id: str,
+        admin_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Remove a user from a group."""
+        async with db_manager.get_session() as session:
+            try:
+                await session.execute(
+                    delete(UserGroup).where(
+                        and_(
+                            UserGroup.group_id == uuid.UUID(group_id),
+                            UserGroup.user_id == uuid.UUID(user_id)
+                        )
+                    )
+                )
+                await session.commit()
+                
+                self.logger.info("User removed from group", group_id=group_id, user_id=user_id, removed_by=admin_id)
+                
+                return {"success": True}
+                
+            except Exception as e:
+                await session.rollback()
+                self.logger.error("Failed to remove user from group", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    # =========================================================================
+    # DATA ACCESS MANAGEMENT (GROUP-LEVEL)
+    # =========================================================================
+    
+    async def get_group_data_access(
+        self,
+        group_id: str
+    ) -> Dict[str, Any]:
+        """Get all data access rules for a group."""
+        async with db_manager.get_session() as session:
+            try:
+                result = await session.execute(
+                    select(GroupDataAccess).where(GroupDataAccess.group_id == uuid.UUID(group_id))
+                )
+                access_rules = result.scalars().all()
+                
+                rules_data = []
+                for rule in access_rules:
+                    rules_data.append({
+                        "id": str(rule.id),
+                        "catalog": rule.catalog,
+                        "database_name": rule.database_name,
+                        "schema_name": rule.schema_name,
+                        "table_name": rule.table_name,
+                        "allowed_columns": rule.allowed_columns,
+                        "can_query": rule.can_query,
+                        "is_visible": rule.is_visible,
+                        "created_at": rule.created_at.isoformat()
+                    })
+                
+                return {"success": True, "rules": rules_data}
+                
+            except Exception as e:
+                self.logger.error("Failed to get group data access", group_id=group_id, error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    async def set_group_data_access(
+        self,
+        group_id: str,
+        catalog: Optional[str],
+        database_name: Optional[str],
+        schema_name: Optional[str],
+        table_name: Optional[str],
+        allowed_columns: Optional[List[str]] = None,
+        admin_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Set/add data access rule for a group."""
+        async with db_manager.get_session() as session:
+            try:
+                # Check if rule already exists
+                existing = await session.execute(
+                    select(GroupDataAccess).where(
+                        and_(
+                            GroupDataAccess.group_id == uuid.UUID(group_id),
+                            GroupDataAccess.catalog == catalog,
+                            GroupDataAccess.database_name == database_name,
+                            GroupDataAccess.schema_name == schema_name,
+                            GroupDataAccess.table_name == table_name
+                        )
+                    )
+                )
+                
+                if existing.scalar_one_or_none():
+                    return {"success": False, "error": "Access rule already exists"}
+                
+                access_rule = GroupDataAccess(
+                    group_id=uuid.UUID(group_id),
+                    catalog=catalog,
+                    database_name=database_name,
+                    schema_name=schema_name,
+                    table_name=table_name,
+                    allowed_columns=allowed_columns,
+                    can_query=True,
+                    is_visible=True,
+                    created_by=uuid.UUID(admin_id) if admin_id else None
+                )
+                session.add(access_rule)
+                await session.commit()
+                
+                self.logger.info("Group data access added", group_id=group_id, rule_id=str(access_rule.id), added_by=admin_id)
+                
+                return {"success": True, "rule_id": str(access_rule.id)}
+                
+            except Exception as e:
+                await session.rollback()
+                self.logger.error("Failed to set group data access", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    async def remove_group_data_access(
+        self,
+        rule_id: str,
+        admin_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Remove a data access rule."""
+        async with db_manager.get_session() as session:
+            try:
+                await session.execute(
+                    delete(GroupDataAccess).where(GroupDataAccess.id == uuid.UUID(rule_id))
+                )
+                await session.commit()
+                
+                self.logger.info("Group data access removed", rule_id=rule_id, removed_by=admin_id)
+                
+                return {"success": True}
+                
+            except Exception as e:
+                await session.rollback()
+                self.logger.error("Failed to remove group data access", error=str(e))
+                return {"success": False, "error": str(e)}
+    
+    # =========================================================================
+    # ROLES
+    # =========================================================================
+    
+    async def list_roles(self) -> Dict[str, Any]:
+        """List all roles (should be only ADMIN and USER)."""
+        async with db_manager.get_session() as session:
+            try:
+                result = await session.execute(select(Role))
+                roles = result.scalars().all()
+                
+                roles_data = [{
+                    "id": str(r.id),
+                    "name": r.name,
+                    "description": r.description
+                } for r in roles]
+                
+                return {"success": True, "roles": roles_data}
+                
+            except Exception as e:
+                self.logger.error("Failed to list roles", error=str(e))
+                return {"success": False, "error": str(e)}
+
+
+# Global admin service instance
+admin_service = AdminService()
+

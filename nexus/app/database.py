@@ -165,6 +165,31 @@ class QueryHistory(Base):
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # When last updated
 
 
+class GroupDataAccess(Base):
+    """Simplified group-level data access control."""
+    __tablename__ = "group_data_access"
+    __table_args__ = {'schema': 'nexus'}
+    
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    group_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.groups.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Resource hierarchy (all optional for flexibility - NULL = wildcard)
+    catalog: Mapped[Optional[str]] = mapped_column(String(255), index=True)
+    database_name: Mapped[Optional[str]] = mapped_column(String(255), index=True)
+    schema_name: Mapped[Optional[str]] = mapped_column(String(255), index=True)
+    table_name: Mapped[Optional[str]] = mapped_column(String(255))
+    allowed_columns: Mapped[Optional[list]] = mapped_column(ARRAY(String), nullable=True)
+    
+    # Access type (analytics read-only for now)
+    can_query: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_visible: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Audit fields
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("nexus.users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class DatabaseManager:
     """Database connection and session management."""
     

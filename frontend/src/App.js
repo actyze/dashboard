@@ -5,6 +5,7 @@ import { LoginPage, Signup } from './components/Auth';
 import { QueryPage, QueriesList } from './components/QueryExplorer';
 import { Dashboard, DashboardsList } from './components/Dashboard';
 import { Home } from './components/Home';
+import Admin from './components/Admin/Admin';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 // Private Route Wrapper
@@ -43,6 +44,7 @@ function App() {
               <Route path="/dashboard/:id" element={<Dashboard />} />
               <Route path="/queries" element={<QueriesList />} />
               <Route path="/query/:id" element={<QueryPage />} />
+              <Route path="/admin" element={<Admin />} />
             </Route>
           </Route>
 

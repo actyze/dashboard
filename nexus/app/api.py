@@ -105,12 +105,43 @@ async def execute_sql(
     request: ExecuteSQLRequest,
     current_user: dict = Depends(require_viewer)
 ):
-    """Execute raw SQL query directly and save to query history."""
+    """Execute raw SQL query directly with data access control check."""
     from datetime import datetime
     import asyncio
+    from app.utils.sql_parser import extract_tables_from_sql, is_select_query
+    from app.services.admin_service import admin_service
     
     user_id = current_user.get("id")
     session_id = request.session_id if hasattr(request, 'session_id') and request.session_id else f"session-{datetime.utcnow().timestamp()}"
+    
+    # Analytics platform: Only SELECT queries allowed
+    if not is_select_query(request.sql):
+        raise HTTPException(
+            status_code=403,
+            detail="Only SELECT queries are allowed. This is an analytics platform with read-only access."
+        )
+    
+    # Check data access permissions for all tables in the query
+    tables = extract_tables_from_sql(request.sql)
+    access_denied_tables = []
+    
+    for table in tables:
+        access_check = await admin_service.check_user_access(
+            user_id=user_id,
+            catalog=table["catalog"],
+            database=table["database"],
+            schema=table["schema"],
+            table=table["table"]
+        )
+        
+        if not access_check.get("has_access", False):
+            access_denied_tables.append(f"{table['catalog']}.{table['database']}.{table['schema']}.{table['table']}")
+    
+    if access_denied_tables:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Access denied to the following tables: {', '.join(access_denied_tables)}"
+        )
     
     # Track execution time and timestamps
     generated_at = datetime.utcnow()

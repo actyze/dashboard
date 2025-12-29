@@ -179,12 +179,20 @@ class MigrationRunner:
         filename: str,
         checksum: int
     ) -> bool:
-        """Run a single migration file.
+        """Run a single migration file using psql subprocess for reliability.
+        
+        Using psql ensures proper handling of:
+        - Multi-statement SQL files
+        - Dollar-quoted PL/pgSQL functions
+        - Complex DDL with CASCADE
+        - Comments and whitespace
         
         Returns:
             True if successful, False otherwise
         """
         import time
+        import subprocess
+        import os
         
         logger.info("Running migration", 
                    version=version, 
@@ -192,17 +200,44 @@ class MigrationRunner:
                    filename=filename)
         
         file_path = self.migrations_dir / filename
-        sql_content = file_path.read_text()
         
         start_time = time.time()
         success = False
         
         try:
-            # Execute the SQL - use exec_driver_sql for multi-statement SQL files
-            # asyncpg requires using the raw connection for multi-statement execution
-            raw_conn = await conn.get_raw_connection()
-            await raw_conn.driver_connection.execute(sql_content)
-            # No explicit commit - managed by context manager
+            # Get database connection parameters from settings
+            from app.config import settings
+            
+            # Use psql subprocess (most reliable for complex SQL)
+            # This is what real Flyway does under the hood
+            env = os.environ.copy()
+            env['PGPASSWORD'] = settings.postgres_password
+            
+            psql_command = [
+                'psql',
+                '-h', settings.postgres_host,
+                '-p', str(settings.postgres_port),
+                '-U', settings.postgres_user,
+                '-d', settings.postgres_db,
+                '-f', str(file_path),
+                '--single-transaction',  # Run in a transaction
+                '--set', 'ON_ERROR_STOP=on',  # Stop on first error
+                '-v', 'ON_ERROR_ROLLBACK=on',  # Rollback on error
+                '-q'  # Quiet mode
+            ]
+            
+            logger.debug("Executing psql", command=' '.join(psql_command[:-1] + ['<password hidden>']))
+            
+            result = subprocess.run(
+                psql_command,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minute timeout
+            )
+            
+            if result.returncode != 0:
+                raise Exception(f"psql failed with exit code {result.returncode}: {result.stderr}")
             
             execution_time_ms = int((time.time() - start_time) * 1000)
             success = True
@@ -217,7 +252,16 @@ class MigrationRunner:
                        version=version,
                        execution_time_ms=execution_time_ms)
             
+            if result.stdout:
+                logger.debug("Migration output", output=result.stdout)
+            
             return True
+            
+        except subprocess.TimeoutExpired:
+            execution_time_ms = int((time.time() - start_time) * 1000)
+            logger.error("Migration timed out",
+                        version=version,
+                        execution_time_ms=execution_time_ms)
             
         except Exception as e:
             execution_time_ms = int((time.time() - start_time) * 1000)

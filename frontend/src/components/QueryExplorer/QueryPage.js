@@ -11,6 +11,7 @@ import { Text } from '../ui';
 import { useProcessNaturalLanguage, useExecuteSql, useConversationHistory } from '../../hooks';
 import { QueryManagementService } from '../../services';
 import SaveQueryDialog from './SaveQueryDialog';
+import UnsavedChangesDialog from './UnsavedChangesDialog';
 
 const QueryPage = () => {
   const { id } = useParams();
@@ -40,6 +41,14 @@ const QueryPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const saveInProgressRef = useRef(false); // Prevent double-save
   const allowNavigationRef = useRef(false); // Bypass navigation guard after save
+
+  // Unsaved changes dialog state
+  const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
+  const pendingNavigationRef = useRef(null); // Store pending navigation action
+  
+  // Save dropdown state
+  const [saveDropdownOpen, setSaveDropdownOpen] = useState(false);
+  const saveDropdownRef = useRef(null);
 
   // Conversation history scoped to this query ID (NO persistence)
   const { conversationHistory, addUserMessage, addBotMessage, clearHistory } = useConversationHistory(id);
@@ -138,6 +147,35 @@ const QueryPage = () => {
     }
   }, [id, sqlQuery, queryName, queryResults, clearHistory, navigate]);
 
+  // Handle unsaved changes dialog actions
+  const handleUnsavedSave = useCallback(() => {
+    if (id && id !== 'new') {
+      handleQuickSave();
+    } else {
+      setSaveMode('new');
+      setSaveDialogOpen(true);
+    }
+    setUnsavedDialogOpen(false);
+  }, [id, handleQuickSave]);
+
+  const handleUnsavedDiscard = useCallback(() => {
+    setUnsavedDialogOpen(false);
+    allowNavigationRef.current = true;
+    clearHistory();
+    setHasUnsavedChanges(false);
+    
+    if (pendingNavigationRef.current) {
+      const action = pendingNavigationRef.current;
+      pendingNavigationRef.current = null;
+      action();
+    }
+  }, [clearHistory]);
+
+  const handleUnsavedCancel = useCallback(() => {
+    setUnsavedDialogOpen(false);
+    pendingNavigationRef.current = null;
+  }, []);
+
   // Block navigation if unsaved changes
   useEffect(() => {
     if (!hasUnsavedChanges || !navigationContext) return;
@@ -155,30 +193,16 @@ const QueryPage = () => {
         return;
       }
 
-      const confirmed = window.confirm(
-        'You have unsaved work. Do you want to save before leaving?\n\n' +
-        'Click "OK" to save, or "Cancel" to leave without saving.'
-      );
-
-      if (confirmed) {
-        // Store where user wanted to go (as a string path)
+      // Store where user wanted to go
         blockedNextLocationRef.current = typeof args[0] === 'string' ? args[0] : args[0].pathname;
         
-        // If it's an existing query, quick-save without dialog
-        if (id && id !== 'new') {
-          handleQuickSave();
-        } else {
-          // New query - open save dialog
-          setSaveMode('new');
-          setSaveDialogOpen(true);
-        }
-      } else {
-        // Navigate away without saving
-        allowNavigationRef.current = true;
-        clearHistory();
-        setHasUnsavedChanges(false);
+      // Store the navigation action
+      pendingNavigationRef.current = () => {
         originalPush.apply(navigator, args);
-      }
+      };
+      
+      // Open the unsaved changes dialog
+      setUnsavedDialogOpen(true);
     };
 
     // Intercept replace navigation
@@ -190,30 +214,16 @@ const QueryPage = () => {
         return;
       }
 
-      const confirmed = window.confirm(
-        'You have unsaved work. Do you want to save before leaving?\n\n' +
-        'Click "OK" to save, or "Cancel" to leave without saving.'
-      );
-
-      if (confirmed) {
-        // Store where user wanted to go (as a string path)
+      // Store where user wanted to go
         blockedNextLocationRef.current = typeof args[0] === 'string' ? args[0] : args[0].pathname;
         
-        // If it's an existing query, quick-save without dialog
-        if (id && id !== 'new') {
-          handleQuickSave();
-        } else {
-          // New query - open save dialog
-          setSaveMode('new');
-          setSaveDialogOpen(true);
-        }
-      } else {
-        // Navigate away without saving
-        allowNavigationRef.current = true;
-        clearHistory();
-        setHasUnsavedChanges(false);
+      // Store the navigation action
+      pendingNavigationRef.current = () => {
         originalReplace.apply(navigator, args);
-      }
+      };
+      
+      // Open the unsaved changes dialog
+      setUnsavedDialogOpen(true);
     };
 
     return () => {
@@ -228,6 +238,17 @@ const QueryPage = () => {
       titleInputRef.current.select();
     }
   }, [isEditingTitle]);
+
+  // Close save dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (saveDropdownRef.current && !saveDropdownRef.current.contains(event.target)) {
+        setSaveDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   
   const handleTitleClick = () => {
     setEditedTitle(queryName);
@@ -468,7 +489,7 @@ const QueryPage = () => {
   return (
     <div className={`h-full flex flex-col ${isDark ? 'bg-[#101012]' : 'bg-gradient-to-br from-gray-50 via-white to-gray-100'}`}>
       {/* Header */}
-      <div className={`${isDark ? 'bg-[#101012] border-gray-800/60' : 'bg-white/95 border-gray-200/60'} border-b px-4 py-2 backdrop-blur-sm`}>
+      <div className={`${isDark ? 'bg-[#101012] border-gray-800/60' : 'bg-white/95 border-gray-200/60'} border-b px-4 py-2 backdrop-blur-sm relative z-20`}>
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center space-x-3">
@@ -476,27 +497,14 @@ const QueryPage = () => {
               <button
                 onClick={() => {
                   if (hasUnsavedChanges) {
-                    const confirmed = window.confirm(
-                      'You have unsaved work. Do you want to save before leaving?\n\n' +
-                      'Click "OK" to save, or "Cancel" to leave without saving.'
-                    );
-                    if (confirmed) {
-                      // Store destination
+                    // Store destination and action
                       blockedNextLocationRef.current = '/queries';
-                      
-                      // If it's an existing query, quick-save without dialog
-                      if (id && id !== 'new') {
-                        handleQuickSave();
-                      } else {
-                        // New query - open save dialog
-                        setSaveMode('new');
-                        setSaveDialogOpen(true);
-                      }
+                    pendingNavigationRef.current = () => {
+                      clearHistory();
+                      navigate('/queries');
+                    };
+                    setUnsavedDialogOpen(true);
                       return;
-                    } else {
-                      // User chose not to save - allow navigation
-                      allowNavigationRef.current = true;
-                    }
                   }
                   // Clear conversation history and navigate
                   clearHistory();
@@ -552,6 +560,93 @@ const QueryPage = () => {
               </div>
             </div>
           </div>
+          
+          {/* Save Button(s) in Header */}
+          <div className="flex items-center">
+            {id && id !== 'new' ? (
+              /* Existing query - Split button with dropdown */
+              <div className="relative" ref={saveDropdownRef}>
+                <div className="flex">
+                  {/* Main Save Button */}
+                  <button
+                    onClick={handleQuickSave}
+                    disabled={isSaving}
+                    className={`
+                      px-2.5 py-1.5 text-xs font-medium rounded-l-md transition-all flex items-center gap-1.5
+                      bg-[#5d6ad3] text-white
+                      ${!isSaving ? 'hover:bg-[#4f5bc4]' : 'opacity-50 cursor-not-allowed'}
+                    `}
+                  >
+                    {isSaving && (
+                      <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                      </svg>
+                    )}
+                    Save
+                  </button>
+                  
+                  {/* Dropdown Arrow */}
+                  <button
+                    onClick={() => setSaveDropdownOpen(!saveDropdownOpen)}
+                    disabled={isSaving}
+                    className={`
+                      px-1.5 py-1.5 rounded-r-md border-l border-[#4f5bc4] transition-all
+                      bg-[#5d6ad3] text-white
+                      ${!isSaving ? 'hover:bg-[#4f5bc4]' : 'opacity-50 cursor-not-allowed'}
+                    `}
+                  >
+                    <svg className={`w-3 h-3 transition-transform ${saveDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                </div>
+                
+                {/* Dropdown Menu */}
+                {saveDropdownOpen && (
+                  <div className={`
+                    absolute right-0 mt-1 w-32 rounded-md shadow-xl border
+                    ${isDark ? 'bg-[#1c1d1f] border-gray-700' : 'bg-white border-gray-200'}
+                  `}>
+                    <button
+                      onClick={() => {
+                        setSaveDropdownOpen(false);
+                        openSaveDialog('new');
+                      }}
+                      className={`
+                        w-full px-2.5 py-1.5 text-xs text-left rounded-md transition-colors
+                        ${isDark 
+                          ? 'text-gray-300 hover:bg-gray-700' 
+                          : 'text-gray-700 hover:bg-gray-100'
+                        }
+                      `}
+                    >
+                      Save as new
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* New query - Single "Save as new" button */
+              <button
+                onClick={() => openSaveDialog('new')}
+                disabled={isSaving}
+                className={`
+                  px-2.5 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5
+                  bg-[#5d6ad3] text-white
+                  ${!isSaving ? 'hover:bg-[#4f5bc4]' : 'opacity-50 cursor-not-allowed'}
+                `}
+              >
+                {isSaving && (
+                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                  </svg>
+                )}
+                Save as new
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -577,62 +672,6 @@ const QueryPage = () => {
                 
                 {/* Control Buttons */}
                 <div className="flex items-center space-x-2">
-                  {/* Save Query Button */}
-                  {id && id !== 'new' && (
-                    <div className="relative group">
-                      <button
-                        onClick={handleQuickSave}
-                        disabled={isSaving}
-                        className={`
-                          p-2 rounded-md transition-all duration-300 flex items-center justify-center
-                          ${isDark 
-                            ? 'bg-gray-700 hover:bg-gray-600 text-gray-300 border border-gray-600' 
-                            : 'bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 shadow-sm'
-                          }
-                          hover:shadow-md
-                          ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}
-                        `}
-                        title="Save Query"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                        </svg>
-                      </button>
-                      
-                      {/* Hover Tooltip */}
-                      <div className="absolute top-full mt-2 left-1/2 transform -translate-x-1/2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-30">
-                        Save
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Save As New Button */}
-                  <div className="relative group">
-                    <button
-                      onClick={() => openSaveDialog('new')}
-                      disabled={isSaving}
-                      className={`
-                        p-2 rounded-md transition-all duration-300 flex items-center justify-center
-                        ${isDark 
-                          ? 'bg-gray-700 hover:bg-gray-600 text-gray-300 border border-gray-600' 
-                          : 'bg-white hover:bg-gray-50 text-gray-600 border border-gray-200 shadow-sm'
-                        }
-                        hover:shadow-md
-                        ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}
-                      `}
-                      title="Save As New"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                    </button>
-                    
-                    {/* Hover Tooltip */}
-                    <div className="absolute top-full mt-2 left-1/2 transform -translate-x-1/2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-30">
-                      Save As New
-                    </div>
-                  </div>
-
                   {/* Execute Query Button */}
                   <div className="relative group">
                       <button
@@ -884,6 +923,15 @@ const QueryPage = () => {
         onSave={handleSaveQuery}
         mode={saveMode}
         currentName={queryName}
+        loading={isSaving}
+      />
+
+      {/* Unsaved Changes Dialog */}
+      <UnsavedChangesDialog
+        isOpen={unsavedDialogOpen}
+        onSave={handleUnsavedSave}
+        onDiscard={handleUnsavedDiscard}
+        onCancel={handleUnsavedCancel}
         loading={isSaving}
       />
     </div>

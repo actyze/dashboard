@@ -9,7 +9,11 @@ RUN npm ci --prefer-offline --no-audit
 # Copy source code
 COPY . .
 
-# Build the application
+# Build with reduced memory usage
+# - Disable source maps (major memory saver)
+# - Limit Node.js heap to 1.5GB
+ENV GENERATE_SOURCEMAP=false
+ENV NODE_OPTIONS="--max-old-space-size=1536"
 RUN npm run build
 
 # Production stage

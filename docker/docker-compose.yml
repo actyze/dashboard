@@ -66,9 +66,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G     # Trino needs more for query processing
+          memory: 1G     # Reduced for local dev - light queries only
         reservations:
-          memory: 1G
+          memory: 512M   # 0.5GB minimum for local development
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/v1/info || exit 1"]
       interval: 30s

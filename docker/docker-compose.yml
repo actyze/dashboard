@@ -117,9 +117,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2.5G  # Hard limit: prevent OOM crashes (extra safety for large schemas)
+          memory: 2G  # Hard limit: prevent OOM crashes (extra safety for large schemas)
         reservations:
-          memory: 1.5G  # Soft limit: guarantee this amount on startup
+          memory: 1G  # Soft limit: guarantee this amount on startup
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s

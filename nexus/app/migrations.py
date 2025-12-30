@@ -136,15 +136,47 @@ class MigrationRunner:
         
         # No explicit commit - managed by context manager
     
-    async def _get_applied_migrations(self, conn: AsyncConnection) -> set:
-        """Get set of already applied migration versions."""
-        result = await conn.execute(text("""
-            SELECT version FROM nexus.flyway_schema_history 
-            WHERE success = true
-        """))
-        applied = {row[0] for row in result.fetchall()}
-        logger.info("Applied migrations", count=len(applied), versions=sorted(applied))
-        return applied
+    async def _get_applied_migrations_via_psql(self) -> set:
+        """Get set of already applied migration versions using psql to avoid connection locks."""
+        import subprocess
+        import os
+        from app.config import settings
+        
+        try:
+            env = os.environ.copy()
+            env['PGPASSWORD'] = settings.postgres_password
+            
+            psql_command = [
+                'psql',
+                '-h', settings.postgres_host,
+                '-p', str(settings.postgres_port),
+                '-U', settings.postgres_user,
+                '-d', settings.postgres_database,
+                '-t',  # Tuple only (no headers)
+                '-c', "SELECT version FROM nexus.flyway_schema_history WHERE success = true"
+            ]
+            
+            result = subprocess.run(
+                psql_command,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode != 0:
+                # Table might not exist yet, return empty set
+                logger.info("No applied migrations found")
+                return set()
+            
+            applied = {line.strip() for line in result.stdout.strip().split('\n') if line.strip()}
+            logger.info("Applied migrations", count=len(applied), versions=sorted(applied))
+            return applied
+            
+        except Exception as e:
+            logger.warning("Could not query applied migrations", error=str(e))
+            return set()
     
     async def _record_migration(
         self,
@@ -156,20 +188,44 @@ class MigrationRunner:
         execution_time_ms: int,
         success: bool
     ):
-        """Record migration execution in history table."""
-        await conn.execute(text("""
-            INSERT INTO nexus.flyway_schema_history 
-            (version, description, type, script, checksum, installed_by, execution_time, success)
-            VALUES (:version, :description, 'SQL', :script, :checksum, 'nexus_service', :execution_time, :success)
-        """), {
-            "version": version,
-            "description": description,
-            "script": script,
-            "checksum": checksum,
-            "execution_time": execution_time_ms,
-            "success": success
-        })
-        # No explicit commit - managed by context manager
+        """Record migration execution in history table using psql to avoid transaction locks."""
+        import subprocess
+        import os
+        from app.config import settings
+        
+        try:
+            env = os.environ.copy()
+            env['PGPASSWORD'] = settings.postgres_password
+            
+            success_str = 'true' if success else 'false'
+            
+            psql_command = [
+                'psql',
+                '-h', settings.postgres_host,
+                '-p', str(settings.postgres_port),
+                '-U', settings.postgres_user,
+                '-d', settings.postgres_database,
+                '-c', f"""
+                    INSERT INTO nexus.flyway_schema_history 
+                    (version, description, type, script, checksum, installed_by, execution_time, success)
+                    VALUES ('{version}', '{description}', 'SQL', '{script}', {checksum}, 'nexus_service', {execution_time_ms}, {success_str})
+                """
+            ]
+            
+            result = subprocess.run(
+                psql_command,
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode != 0:
+                logger.error("Failed to record migration", error=result.stderr)
+                
+        except Exception as e:
+            logger.error("Failed to record migration", error=str(e))
     
     async def _run_migration(
         self,
@@ -218,7 +274,7 @@ class MigrationRunner:
                 '-h', settings.postgres_host,
                 '-p', str(settings.postgres_port),
                 '-U', settings.postgres_user,
-                '-d', settings.postgres_db,
+                '-d', settings.postgres_database,
                 '-f', str(file_path),
                 '--single-transaction',  # Run in a transaction
                 '--set', 'ON_ERROR_STOP=on',  # Stop on first error
@@ -231,7 +287,8 @@ class MigrationRunner:
             result = subprocess.run(
                 psql_command,
                 env=env,
-                capture_output=True,
+                stdout=subprocess.DEVNULL,  # Discard stdout to avoid buffering issues
+                stderr=subprocess.PIPE,
                 text=True,
                 timeout=300  # 5 minute timeout
             )
@@ -251,9 +308,6 @@ class MigrationRunner:
             logger.info("Migration completed successfully",
                        version=version,
                        execution_time_ms=execution_time_ms)
-            
-            if result.stdout:
-                logger.debug("Migration output", output=result.stdout)
             
             return True
             
@@ -297,9 +351,11 @@ class MigrationRunner:
         try:
             # Ensure migration table exists
             await self._ensure_migration_table(conn)
+            # Commit to release any implicit transaction locks before running psql subprocess
+            await conn.commit()
             
-            # Get applied and pending migrations
-            applied = await self._get_applied_migrations(conn)
+            # Get applied migrations using psql (avoid holding Python connection with transaction lock)
+            applied = await self._get_applied_migrations_via_psql()
             all_migrations = self._get_pending_migrations()
             
             # Filter to only pending migrations

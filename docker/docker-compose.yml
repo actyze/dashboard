@@ -144,7 +144,7 @@ services:
       # Database Configuration (can be local or external)
       POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}
-      POSTGRES_DATABASE: ${POSTGRES_DATABASE:-dashboard}
+      POSTGRES_DATABASE: ${POSTGRES_DB:-dashboard}
       POSTGRES_USER: ${POSTGRES_USER:-nexus_service}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       # Trino Configuration (can be local or external)

@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
     
     # Run database migrations
     logger.info("Running database migrations...")
-    async with db_manager.engine.begin() as conn:
+    async with db_manager.engine.connect() as conn:
         migration_success = await run_migrations(conn)
         if not migration_success:
             logger.error("Database migrations failed!")

@@ -3,20 +3,31 @@
 -- Tables are automatically created by SQLAlchemy models on startup
 
 -- =====================================================
--- CLEAN SLATE: Drop and recreate nexus schema
+-- Create nexus schema if it doesn't exist
 -- =====================================================
--- This ensures a fresh start for the base migration
--- WARNING: This will delete all data in nexus schema
-DROP SCHEMA IF EXISTS nexus CASCADE;
-
--- Create dedicated schema for Nexus service
-CREATE SCHEMA nexus;
+-- This ensures the schema exists without destroying existing data
+CREATE SCHEMA IF NOT EXISTS nexus;
 
 -- Set search path to include nexus schema
 SET search_path TO nexus, public;
 
 -- Enable UUID extension for robust ID generation
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- Create flyway migration history table (needed for tracking migrations)
+CREATE TABLE IF NOT EXISTS nexus.flyway_schema_history (
+    installed_rank SERIAL PRIMARY KEY,
+    version VARCHAR(50),
+    description VARCHAR(200) NOT NULL,
+    type VARCHAR(20) NOT NULL,
+    script VARCHAR(1000) NOT NULL,
+    checksum BIGINT,
+    installed_by VARCHAR(100) NOT NULL,
+    installed_on TIMESTAMP NOT NULL DEFAULT NOW(),
+    execution_time INTEGER NOT NULL,
+    success BOOLEAN NOT NULL
+);
+CREATE INDEX IF NOT EXISTS flyway_schema_history_s_idx ON nexus.flyway_schema_history (success);
 
 -- Function to auto-update updated_at timestamp
 CREATE OR REPLACE FUNCTION nexus.trigger_set_timestamp()

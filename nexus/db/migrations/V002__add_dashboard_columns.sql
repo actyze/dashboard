@@ -1,4 +1,4 @@
-Y-- Migration: Add missing columns to dashboards table
+-- Migration: Add missing columns to dashboards table
 -- Version: V002
 -- Description: Add layout_config, tags, is_anonymous_public, is_favorite, status, and version columns
 

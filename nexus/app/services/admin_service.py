@@ -1,15 +1,14 @@
-"""Simplified Admin Service - 2 roles (ADMIN/USER), group-level data access only."""
+"""Simplified Admin Service - 2 roles (ADMIN/USER), direct user-level data access."""
 
 from typing import List, Dict, Any, Optional
-from sqlalchemy import select, update, delete, and_, or_, func, text
+from sqlalchemy import select, update, delete, and_, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 from datetime import datetime
 import uuid
 
 from app.database import (
-    db_manager, User, Role, Group, UserRole, UserGroup, GroupRole,
-    GroupDataAccess
+    db_manager, User, Role, UserRole, UserDataAccess
 )
 from app.auth.utils import get_password_hash
 
@@ -17,7 +16,7 @@ logger = structlog.get_logger()
 
 
 class AdminService:
-    """Simplified admin service: 2 roles (ADMIN/USER), group-level data access."""
+    """Simplified admin service: 2 roles (ADMIN/USER), direct user-level data access."""
     
     def __init__(self):
         self.logger = logger.bind(service="admin-service")
@@ -32,7 +31,7 @@ class AdminService:
         page_size: int = 50,
         search: Optional[str] = None
     ) -> Dict[str, Any]:
-        """List users with their roles and groups."""
+        """List users with their roles."""
         async with db_manager.get_session() as session:
             try:
                 query = select(User).where(User.is_active == True)
@@ -62,11 +61,13 @@ class AdminService:
                     )
                     role = role_result.scalar_one_or_none() or "USER"
                     
-                    # Get user's groups
-                    groups_result = await session.execute(
-                        select(Group.name).join(UserGroup).where(UserGroup.user_id == user.id)
+                    # Count user's data access rules
+                    access_count_result = await session.execute(
+                        select(func.count()).select_from(UserDataAccess).where(
+                            UserDataAccess.user_id == user.id
+                        )
                     )
-                    groups = [g for g in groups_result.scalars().all()]
+                    access_rule_count = access_count_result.scalar() or 0
                     
                     users_data.append({
                         "id": str(user.id),
@@ -75,7 +76,7 @@ class AdminService:
                         "full_name": user.full_name,
                         "is_active": user.is_active,
                         "role": role,
-                        "groups": groups,
+                        "access_rule_count": access_rule_count,
                         "created_at": user.created_at.isoformat()
                     })
                 
@@ -234,151 +235,18 @@ class AdminService:
                 return {"success": False, "error": str(e)}
     
     # =========================================================================
-    # GROUP MANAGEMENT
+    # USER DATA ACCESS MANAGEMENT (DIRECT USER-LEVEL)
     # =========================================================================
     
-    async def list_groups(self) -> Dict[str, Any]:
-        """List all groups with member counts."""
-        async with db_manager.get_session() as session:
-            try:
-                # Get groups with member counts
-                query = select(
-                    Group,
-                    func.count(UserGroup.user_id).label("member_count")
-                ).outerjoin(UserGroup).group_by(Group.id)
-                
-                result = await session.execute(query)
-                groups_data = []
-                
-                for group, member_count in result.all():
-                    groups_data.append({
-                        "id": str(group.id),
-                        "name": group.name,
-                        "description": group.description,
-                        "member_count": member_count,
-                        "created_at": group.created_at.isoformat()
-                    })
-                
-                return {"success": True, "groups": groups_data}
-                
-            except Exception as e:
-                self.logger.error("Failed to list groups", error=str(e))
-                return {"success": False, "error": str(e)}
-    
-    async def create_group(
+    async def get_user_data_access(
         self,
-        name: str,
-        description: Optional[str] = None,
-        admin_id: Optional[str] = None
+        user_id: str
     ) -> Dict[str, Any]:
-        """Create a new group."""
-        async with db_manager.get_session() as session:
-            try:
-                # Check if group exists
-                existing = await session.execute(
-                    select(Group).where(Group.name == name)
-                )
-                if existing.scalar_one_or_none():
-                    return {"success": False, "error": "Group already exists"}
-                
-                new_group = Group(name=name, description=description)
-                session.add(new_group)
-                await session.commit()
-                
-                self.logger.info("Group created", group_id=str(new_group.id), name=name, created_by=admin_id)
-                
-                return {
-                    "success": True,
-                    "group": {
-                        "id": str(new_group.id),
-                        "name": new_group.name,
-                        "description": new_group.description
-                    }
-                }
-                
-            except Exception as e:
-                await session.rollback()
-                self.logger.error("Failed to create group", error=str(e))
-                return {"success": False, "error": str(e)}
-    
-    async def add_user_to_group(
-        self,
-        group_id: str,
-        user_id: str,
-        admin_id: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """Add a user to a group."""
-        async with db_manager.get_session() as session:
-            try:
-                # Check if already member
-                existing = await session.execute(
-                    select(UserGroup).where(
-                        and_(
-                            UserGroup.group_id == uuid.UUID(group_id),
-                            UserGroup.user_id == uuid.UUID(user_id)
-                        )
-                    )
-                )
-                if existing.scalar_one_or_none():
-                    return {"success": False, "error": "User already in group"}
-                
-                user_group = UserGroup(
-                    group_id=uuid.UUID(group_id),
-                    user_id=uuid.UUID(user_id)
-                )
-                session.add(user_group)
-                await session.commit()
-                
-                self.logger.info("User added to group", group_id=group_id, user_id=user_id, added_by=admin_id)
-                
-                return {"success": True}
-                
-            except Exception as e:
-                await session.rollback()
-                self.logger.error("Failed to add user to group", error=str(e))
-                return {"success": False, "error": str(e)}
-    
-    async def remove_user_from_group(
-        self,
-        group_id: str,
-        user_id: str,
-        admin_id: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """Remove a user from a group."""
-        async with db_manager.get_session() as session:
-            try:
-                await session.execute(
-                    delete(UserGroup).where(
-                        and_(
-                            UserGroup.group_id == uuid.UUID(group_id),
-                            UserGroup.user_id == uuid.UUID(user_id)
-                        )
-                    )
-                )
-                await session.commit()
-                
-                self.logger.info("User removed from group", group_id=group_id, user_id=user_id, removed_by=admin_id)
-                
-                return {"success": True}
-                
-            except Exception as e:
-                await session.rollback()
-                self.logger.error("Failed to remove user from group", error=str(e))
-                return {"success": False, "error": str(e)}
-    
-    # =========================================================================
-    # DATA ACCESS MANAGEMENT (GROUP-LEVEL)
-    # =========================================================================
-    
-    async def get_group_data_access(
-        self,
-        group_id: str
-    ) -> Dict[str, Any]:
-        """Get all data access rules for a group."""
+        """Get all data access rules for a user."""
         async with db_manager.get_session() as session:
             try:
                 result = await session.execute(
-                    select(GroupDataAccess).where(GroupDataAccess.group_id == uuid.UUID(group_id))
+                    select(UserDataAccess).where(UserDataAccess.user_id == uuid.UUID(user_id))
                 )
                 access_rules = result.scalars().all()
                 
@@ -399,12 +267,12 @@ class AdminService:
                 return {"success": True, "rules": rules_data}
                 
             except Exception as e:
-                self.logger.error("Failed to get group data access", group_id=group_id, error=str(e))
+                self.logger.error("Failed to get user data access", user_id=user_id, error=str(e))
                 return {"success": False, "error": str(e)}
     
-    async def set_group_data_access(
+    async def add_user_data_access(
         self,
-        group_id: str,
+        user_id: str,
         catalog: Optional[str],
         database_name: Optional[str],
         schema_name: Optional[str],
@@ -412,18 +280,18 @@ class AdminService:
         allowed_columns: Optional[List[str]] = None,
         admin_id: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Set/add data access rule for a group."""
+        """Add a data access rule for a user."""
         async with db_manager.get_session() as session:
             try:
                 # Check if rule already exists
                 existing = await session.execute(
-                    select(GroupDataAccess).where(
+                    select(UserDataAccess).where(
                         and_(
-                            GroupDataAccess.group_id == uuid.UUID(group_id),
-                            GroupDataAccess.catalog == catalog,
-                            GroupDataAccess.database_name == database_name,
-                            GroupDataAccess.schema_name == schema_name,
-                            GroupDataAccess.table_name == table_name
+                            UserDataAccess.user_id == uuid.UUID(user_id),
+                            UserDataAccess.catalog == catalog,
+                            UserDataAccess.database_name == database_name,
+                            UserDataAccess.schema_name == schema_name,
+                            UserDataAccess.table_name == table_name
                         )
                     )
                 )
@@ -431,8 +299,8 @@ class AdminService:
                 if existing.scalar_one_or_none():
                     return {"success": False, "error": "Access rule already exists"}
                 
-                access_rule = GroupDataAccess(
-                    group_id=uuid.UUID(group_id),
+                access_rule = UserDataAccess(
+                    user_id=uuid.UUID(user_id),
                     catalog=catalog,
                     database_name=database_name,
                     schema_name=schema_name,
@@ -445,16 +313,16 @@ class AdminService:
                 session.add(access_rule)
                 await session.commit()
                 
-                self.logger.info("Group data access added", group_id=group_id, rule_id=str(access_rule.id), added_by=admin_id)
+                self.logger.info("User data access added", user_id=user_id, rule_id=str(access_rule.id), added_by=admin_id)
                 
                 return {"success": True, "rule_id": str(access_rule.id)}
                 
             except Exception as e:
                 await session.rollback()
-                self.logger.error("Failed to set group data access", error=str(e))
+                self.logger.error("Failed to add user data access", error=str(e))
                 return {"success": False, "error": str(e)}
     
-    async def remove_group_data_access(
+    async def remove_user_data_access(
         self,
         rule_id: str,
         admin_id: Optional[str] = None
@@ -463,17 +331,17 @@ class AdminService:
         async with db_manager.get_session() as session:
             try:
                 await session.execute(
-                    delete(GroupDataAccess).where(GroupDataAccess.id == uuid.UUID(rule_id))
+                    delete(UserDataAccess).where(UserDataAccess.id == uuid.UUID(rule_id))
                 )
                 await session.commit()
                 
-                self.logger.info("Group data access removed", rule_id=rule_id, removed_by=admin_id)
+                self.logger.info("User data access removed", rule_id=rule_id, removed_by=admin_id)
                 
                 return {"success": True}
                 
             except Exception as e:
                 await session.rollback()
-                self.logger.error("Failed to remove group data access", error=str(e))
+                self.logger.error("Failed to remove user data access", error=str(e))
                 return {"success": False, "error": str(e)}
     
     # =========================================================================
@@ -491,7 +359,7 @@ class AdminService:
         """
         Check if a user has access to query a specific table.
         - ADMIN role users have full access (no restrictions)
-        - USER role users get access through group membership and group_data_access rules
+        - USER role users get access through direct user_data_access rules
         """
         async with db_manager.get_session() as session:
             try:
@@ -515,31 +383,21 @@ class AdminService:
                         # User is an admin - grant full access
                         return {"has_access": True, "reason": "ADMIN role has full access"}
                 
-                # Get all groups the user belongs to
-                user_groups_query = select(UserGroup.group_id).where(
-                    UserGroup.user_id == user_uuid
-                )
-                user_groups_result = await session.execute(user_groups_query)
-                user_group_ids = [row[0] for row in user_groups_result.fetchall()]
-                
-                if not user_group_ids:
-                    # User not in any groups = no access
-                    return {"has_access": False, "reason": "User not in any groups"}
-                
-                # Check if any of the user's groups have access to this table
+                # Check direct user data access rules
                 # Rules are hierarchical:
-                # - database_name only = access to entire database
-                # - database_name + schema_name = access to entire schema
+                # - NULL database_name = access to all databases
+                # - database_name + NULL schema_name = access to entire database
+                # - database_name + schema_name + NULL table_name = access to entire schema
                 # - database_name + schema_name + table_name = access to specific table
                 
-                access_query = select(GroupDataAccess).where(
+                access_query = select(UserDataAccess).where(
                     and_(
-                        GroupDataAccess.group_id.in_(user_group_ids),
-                        GroupDataAccess.can_query == True,
-                        # Match database
+                        UserDataAccess.user_id == user_uuid,
+                        UserDataAccess.can_query == True,
+                        # Match database (NULL = all databases)
                         or_(
-                            GroupDataAccess.database_name == database,
-                            GroupDataAccess.database_name.is_(None)  # NULL = all databases
+                            UserDataAccess.database_name == database,
+                            UserDataAccess.database_name.is_(None)
                         )
                     )
                 )
@@ -600,4 +458,3 @@ class AdminService:
 
 # Global admin service instance
 admin_service = AdminService()
-

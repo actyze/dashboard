@@ -34,7 +34,7 @@ class User(Base):
 
 
 class Role(Base):
-    """Role definitions (ADMIN, EDITOR, VIEWER)."""
+    """Role definitions (ADMIN, USER)."""
     __tablename__ = "roles"
     
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -43,40 +43,11 @@ class Role(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class Group(Base):
-    """Group/Team definitions."""
-    __tablename__ = "groups"
-    
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-
 class UserRole(Base):
     """Direct mapping of Users to Roles."""
     __tablename__ = "user_roles"
     
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), primary_key=True)
-    role_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.roles.id", ondelete="CASCADE"), primary_key=True)
-    assigned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
-class UserGroup(Base):
-    """Mapping of Users to Groups."""
-    __tablename__ = "user_groups"
-    
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), primary_key=True)
-    group_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.groups.id", ondelete="CASCADE"), primary_key=True)
-    joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
-class GroupRole(Base):
-    """Mapping of Groups to Roles (Inheritance)."""
-    __tablename__ = "group_roles"
-    
-    group_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.groups.id", ondelete="CASCADE"), primary_key=True)
     role_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.roles.id", ondelete="CASCADE"), primary_key=True)
     assigned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -102,7 +73,6 @@ class Dashboard(Base):
     description: Mapped[Optional[str]] = mapped_column(Text)
     configuration: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
     owner_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("nexus.users.id", ondelete="SET NULL"))
-    owner_group_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("nexus.groups.id", ondelete="SET NULL"))
     is_public: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -165,13 +135,13 @@ class QueryHistory(Base):
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # When last updated
 
 
-class GroupDataAccess(Base):
-    """Simplified group-level data access control."""
-    __tablename__ = "group_data_access"
+class UserDataAccess(Base):
+    """Direct user-level data access control (no groups)."""
+    __tablename__ = "user_data_access"
     __table_args__ = {'schema': 'nexus'}
     
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    group_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.groups.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # Resource hierarchy (all optional for flexibility - NULL = wildcard)
     catalog: Mapped[Optional[str]] = mapped_column(String(255), index=True)

@@ -9,8 +9,7 @@ import uuid
 
 from app.database import (
     db_manager, User, UserPreferences, ConversationHistory, 
-    QueryHistory, 
-    Role, UserRole, Group, UserGroup, GroupRole, RefreshToken
+    QueryHistory, Role, UserRole, RefreshToken
 )
 from app.auth.utils import get_password_hash, verify_password, create_access_token
 
@@ -99,14 +98,12 @@ class UserService:
                 
                 # Get Roles
                 roles = await self.get_user_roles(user.id, session)
-                groups = await self.get_user_groups(user.id, session)
                 
                 # Create Tokens
                 access_token_data = {
                     "sub": str(user.id),
                     "username": user.username,
-                    "roles": roles,
-                    "groups": groups
+                    "roles": roles
                 }
                 access_token = create_access_token(access_token_data)
                 
@@ -119,8 +116,7 @@ class UserService:
                         "username": user.username,
                         "email": user.email,
                         "full_name": user.full_name,
-                        "roles": roles,
-                        "groups": groups
+                        "roles": roles
                     }
                 }
                 
@@ -129,26 +125,10 @@ class UserService:
                 return {"success": False, "error": str(e)}
 
     async def get_user_roles(self, user_id: uuid.UUID, session: AsyncSession) -> List[str]:
-        """Get all roles for a user (direct + inherited from groups)."""
-        # Direct roles
+        """Get all roles for a user (direct assignment only - no groups)."""
         direct_roles_query = select(Role.name).join(UserRole).where(UserRole.user_id == user_id)
         direct_roles = (await session.execute(direct_roles_query)).scalars().all()
-        
-        # Group roles
-        group_roles_query = (
-            select(Role.name)
-            .join(GroupRole)
-            .join(UserGroup, UserGroup.group_id == GroupRole.group_id)
-            .where(UserGroup.user_id == user_id)
-        )
-        group_roles = (await session.execute(group_roles_query)).scalars().all()
-        
-        return list(set(direct_roles + group_roles))
-
-    async def get_user_groups(self, user_id: uuid.UUID, session: AsyncSession) -> List[str]:
-        """Get all groups a user belongs to."""
-        query = select(Group.name).join(UserGroup).where(UserGroup.user_id == user_id)
-        return list((await session.execute(query)).scalars().all())
+        return list(direct_roles)
 
     async def get_service_token(self, service_name: str) -> str:
         """

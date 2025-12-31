@@ -381,7 +381,6 @@ class CreateDashboardRequest(BaseModel):
     layout_config: Optional[Dict[str, Any]] = None
     tags: Optional[List[str]] = None
     is_public: bool = False
-    owner_group_id: Optional[str] = None
 
 class UpdateDashboardRequest(BaseModel):
     title: Optional[str] = None
@@ -420,8 +419,7 @@ class UpdateTileRequest(BaseModel):
     refresh_interval_seconds: Optional[int] = None
 
 class GrantPermissionRequest(BaseModel):
-    target_user_id: Optional[str] = None
-    target_group_id: Optional[str] = None
+    target_user_id: str  # Required - user to grant permission to
     can_view: bool = True
     can_edit: bool = False
     can_delete: bool = False
@@ -513,8 +511,7 @@ async def create_dashboard(
             configuration=request.configuration,
             layout_config=request.layout_config,
             tags=request.tags,
-            is_public=request.is_public,
-            owner_group_id=request.owner_group_id
+            is_public=request.is_public
         )
         
         return {
@@ -748,7 +745,7 @@ async def grant_permission(
     request: GrantPermissionRequest,
     current_user: dict = Depends(require_viewer)
 ):
-    """Grant permissions to user or group (requires share permission)."""
+    """Grant permissions to a user (requires share permission)."""
     try:
         user_id = current_user.get("id")
         
@@ -761,7 +758,6 @@ async def grant_permission(
             dashboard_id=dashboard_id,
             granter_user_id=user_id,
             target_user_id=request.target_user_id,
-            target_group_id=request.target_group_id,
             can_view=request.can_view,
             can_edit=request.can_edit,
             can_delete=request.can_delete,
@@ -784,18 +780,16 @@ async def grant_permission(
 @dashboard_router.delete("/{dashboard_id}/permissions")
 async def revoke_permission(
     dashboard_id: str,
-    target_user_id: Optional[str] = None,
-    target_group_id: Optional[str] = None,
+    target_user_id: str,
     current_user: dict = Depends(require_viewer)
 ):
-    """Revoke permissions from user or group (requires share permission)."""
+    """Revoke permissions from a user (requires share permission)."""
     try:
         user_id = current_user.get("id")
         success = await dashboard_service.revoke_permission(
             dashboard_id=dashboard_id,
             revoker_user_id=user_id,
-            target_user_id=target_user_id,
-            target_group_id=target_group_id
+            target_user_id=target_user_id
         )
         
         if not success:

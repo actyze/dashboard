@@ -1,6 +1,6 @@
 /**
  * Simplified Admin Service - matches new backend API
- * 2 roles (ADMIN/USER), group-level data access only
+ * 2 roles (ADMIN/USER), direct user-level data access (no groups)
  */
 
 import { apiInstance } from './network';
@@ -53,79 +53,35 @@ const AdminService = {
   },
   
   // ============================================================================
-  // GROUP MANAGEMENT
+  // USER DATA ACCESS MANAGEMENT (DIRECT USER-LEVEL)
   // ============================================================================
   
-  async listGroups() {
+  async getUserDataAccess(userId) {
     try {
-      const response = await apiInstance.get(`/api/admin/groups`);
+      const response = await apiInstance.get(`/api/admin/users/${userId}/access`);
       return response.data;
     } catch (error) {
-      console.error('Failed to list groups:', error);
+      console.error('Failed to get user data access:', error);
       throw error;
     }
   },
   
-  async createGroup(groupData) {
+  async addUserDataAccess(userId, accessRule) {
     try {
-      const response = await apiInstance.post(`/api/admin/groups`, groupData);
+      const response = await apiInstance.post(`/api/admin/users/${userId}/access`, accessRule);
       return response.data;
     } catch (error) {
-      console.error('Failed to create group:', error);
+      console.error('Failed to add user data access:', error);
       throw error;
     }
   },
   
-  async addGroupMember(groupId, userId) {
+  async removeUserDataAccess(userId, ruleId) {
     try {
-      const response = await apiInstance.post(`/api/admin/groups/${groupId}/members`, { user_id: userId });
+      const response = await apiInstance.delete(`/api/admin/users/${userId}/access/${ruleId}`);
       return response.data;
     } catch (error) {
-      console.error('Failed to add group member:', error);
-      throw error;
-    }
-  },
-  
-  async removeGroupMember(groupId, userId) {
-    try {
-      const response = await apiInstance.delete(`/api/admin/groups/${groupId}/members/${userId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to remove group member:', error);
-      throw error;
-    }
-  },
-  
-  // ============================================================================
-  // DATA ACCESS MANAGEMENT (GROUP-LEVEL)
-  // ============================================================================
-  
-  async getGroupDataAccess(groupId) {
-    try {
-      const response = await apiInstance.get(`/api/admin/groups/${groupId}/access`);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to get group data access:', error);
-      throw error;
-    }
-  },
-  
-  async addGroupDataAccess(groupId, accessRule) {
-    try {
-      const response = await apiInstance.post(`/api/admin/groups/${groupId}/access`, accessRule);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to add group data access:', error);
-      throw error;
-    }
-  },
-  
-  async removeGroupDataAccess(ruleId) {
-    try {
-      const response = await apiInstance.delete(`/api/admin/groups/access/${ruleId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to remove group data access:', error);
+      console.error('Failed to remove user data access:', error);
       throw error;
     }
   },
@@ -146,4 +102,3 @@ const AdminService = {
 };
 
 export default AdminService;
-

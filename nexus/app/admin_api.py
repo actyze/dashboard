@@ -1,4 +1,4 @@
-"""Simplified Admin API - 2 roles (ADMIN/USER), group-level data access."""
+"""Simplified Admin API - 2 roles (ADMIN/USER), direct user-level data access."""
 
 import structlog
 from fastapi import APIRouter, HTTPException, Depends, Query
@@ -25,14 +25,8 @@ class UserCreate(BaseModel):
 class UserRoleUpdate(BaseModel):
     role: str  # "ADMIN" or "USER"
 
-class GroupCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-
-class GroupMemberAdd(BaseModel):
-    user_id: str
-
-class GroupDataAccessCreate(BaseModel):
+class UserDataAccessCreate(BaseModel):
+    """Create a data access rule for a user."""
     catalog: Optional[str] = None
     database_name: Optional[str] = None
     schema_name: Optional[str] = None
@@ -51,7 +45,7 @@ async def list_users(
     current_user: dict = Depends(require_admin)
 ):
     """
-    List all users with their roles and groups.
+    List all users with their roles.
     
     **Requires:** ADMIN role
     """
@@ -138,125 +132,48 @@ async def deactivate_user(
     return result
 
 # ============================================================================
-# GROUP MANAGEMENT ENDPOINTS
+# USER DATA ACCESS MANAGEMENT ENDPOINTS
 # ============================================================================
 
-@admin_router.get("/groups")
-async def list_groups(current_user: dict = Depends(require_admin)):
-    """
-    List all groups with member counts.
-    
-    **Requires:** ADMIN role
-    """
-    result = await admin_service.list_groups()
-    
-    if not result["success"]:
-        raise HTTPException(status_code=400, detail=result["error"])
-    
-    return result
-
-@admin_router.post("/groups")
-async def create_group(
-    data: GroupCreate,
-    current_user: dict = Depends(require_admin)
-):
-    """
-    Create a new group.
-    
-    **Requires:** ADMIN role
-    """
-    result = await admin_service.create_group(
-        name=data.name,
-        description=data.description,
-        admin_id=current_user["id"]
-    )
-    
-    if not result["success"]:
-        raise HTTPException(status_code=400, detail=result["error"])
-    
-    return result
-
-@admin_router.post("/groups/{group_id}/members")
-async def add_group_member(
-    group_id: str,
-    data: GroupMemberAdd,
-    current_user: dict = Depends(require_admin)
-):
-    """
-    Add a user to a group.
-    
-    **Requires:** ADMIN role
-    """
-    result = await admin_service.add_user_to_group(
-        group_id=group_id,
-        user_id=data.user_id,
-        admin_id=current_user["id"]
-    )
-    
-    if not result["success"]:
-        raise HTTPException(status_code=400, detail=result["error"])
-    
-    return result
-
-@admin_router.delete("/groups/{group_id}/members/{user_id}")
-async def remove_group_member(
-    group_id: str,
+@admin_router.get("/users/{user_id}/access")
+async def get_user_data_access(
     user_id: str,
     current_user: dict = Depends(require_admin)
 ):
     """
-    Remove a user from a group.
+    Get all data access rules for a user.
     
     **Requires:** ADMIN role
     """
-    result = await admin_service.remove_user_from_group(
-        group_id=group_id,
-        user_id=user_id,
-        admin_id=current_user["id"]
-    )
+    result = await admin_service.get_user_data_access(user_id=user_id)
     
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["error"])
     
     return result
 
-# ============================================================================
-# DATA ACCESS MANAGEMENT ENDPOINTS (GROUP-LEVEL)
-# ============================================================================
-
-@admin_router.get("/groups/{group_id}/access")
-async def get_group_data_access(
-    group_id: str,
+@admin_router.post("/users/{user_id}/access")
+async def add_user_data_access(
+    user_id: str,
+    data: UserDataAccessCreate,
     current_user: dict = Depends(require_admin)
 ):
     """
-    Get all data access rules for a group.
-    
-    **Requires:** ADMIN role
-    """
-    result = await admin_service.get_group_data_access(group_id=group_id)
-    
-    if not result["success"]:
-        raise HTTPException(status_code=400, detail=result["error"])
-    
-    return result
-
-@admin_router.post("/groups/{group_id}/access")
-async def add_group_data_access(
-    group_id: str,
-    data: GroupDataAccessCreate,
-    current_user: dict = Depends(require_admin)
-):
-    """
-    Add a data access rule for a group.
+    Add a data access rule for a user.
     
     Admin selects: catalog, database, schema, table, columns (optional)
     NULL values mean "all" (wildcard).
     
+    Examples:
+    - {catalog: null, database_name: null} → Full access to everything
+    - {database_name: "tpch"} → Access to entire tpch database
+    - {database_name: "tpch", schema_name: "sf1"} → Access to tpch.sf1 schema
+    - {database_name: "tpch", schema_name: "sf1", table_name: "orders"} → Access to specific table
+    
     **Requires:** ADMIN role
     """
-    result = await admin_service.set_group_data_access(
-        group_id=group_id,
+    result = await admin_service.add_user_data_access(
+        user_id=user_id,
         catalog=data.catalog,
         database_name=data.database_name,
         schema_name=data.schema_name,
@@ -270,17 +187,18 @@ async def add_group_data_access(
     
     return result
 
-@admin_router.delete("/groups/access/{rule_id}")
-async def remove_group_data_access(
+@admin_router.delete("/users/{user_id}/access/{rule_id}")
+async def remove_user_data_access(
+    user_id: str,
     rule_id: str,
     current_user: dict = Depends(require_admin)
 ):
     """
-    Remove a data access rule.
+    Remove a data access rule from a user.
     
     **Requires:** ADMIN role
     """
-    result = await admin_service.remove_group_data_access(
+    result = await admin_service.remove_user_data_access(
         rule_id=rule_id,
         admin_id=current_user["id"]
     )
@@ -307,4 +225,3 @@ async def list_roles(current_user: dict = Depends(require_admin)):
         raise HTTPException(status_code=400, detail=result["error"])
     
     return result
-

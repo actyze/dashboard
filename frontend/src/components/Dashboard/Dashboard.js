@@ -495,32 +495,6 @@ const Dashboard = ({ isPublic = false }) => {
     setLoadingDashboard(false);
   };
 
-  const handlePublish = async () => {
-    if (!dashboard?.id) return;
-    
-    const confirmed = window.confirm(
-      'Are you sure you want to publish this dashboard? This will create a new version and make it visible to others with access.'
-    );
-    
-    if (!confirmed) return;
-    
-    setLoadingDashboard(true);
-    try {
-      const response = await DashboardService.publishDashboard(dashboard.id);
-      if (response.success) {
-        // Reload dashboard to get updated status
-        await loadDashboard();
-        alert(`Dashboard published successfully! Version ${response.version}`);
-      } else {
-        alert(response.error || 'Failed to publish dashboard');
-      }
-    } catch (error) {
-      alert('Failed to publish dashboard: ' + error.message);
-    } finally {
-      setLoadingDashboard(false);
-    }
-  };
-
   const handleRefreshTile = (tile) => {
     executeTileQuery(tile);
     handleMenuClose();
@@ -707,17 +681,6 @@ const Dashboard = ({ isPublic = false }) => {
           {/* Action Buttons - Only for authenticated users */}
           {!isPublic && dashboard && (
             <div className="flex items-center gap-3">
-              {/* Publish Button - Only show for drafts with at least one tile */}
-              {dashboard.status === 'draft' && tiles.length > 0 && (
-                <button
-                  onClick={handlePublish}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${isDark ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`}
-                  title="Publish Dashboard"
-                >
-                  Publish
-                </button>
-              )}
-              
               {/* Status badge - show if shared or public */}
               {(dashboard.is_public || dashboard.is_anonymous_public) && (
                 <span className={`px-2 py-1 text-xs font-medium rounded ${

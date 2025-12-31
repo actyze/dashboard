@@ -260,7 +260,6 @@ class DashboardService:
                     "layout_config": row.layout_config,
                     "owner_user_id": str(row.owner_user_id) if row.owner_user_id else None,
                     "owner_username": row.owner_username,
-                    "owner_group_id": str(row.owner_group_id) if row.owner_group_id else None,
                     "is_public": row.is_public,
                     "is_anonymous_public": getattr(row, 'is_anonymous_public', False),
                     "is_favorite": row.is_favorite,
@@ -288,8 +287,7 @@ class DashboardService:
         configuration: Optional[Dict[str, Any]] = None,
         layout_config: Optional[Dict[str, Any]] = None,
         tags: Optional[List[str]] = None,
-        is_public: bool = False,
-        owner_group_id: Optional[str] = None
+        is_public: bool = False
     ) -> Dict[str, Any]:
         """Create new dashboard"""
         try:
@@ -297,11 +295,11 @@ class DashboardService:
                 query = text("""
                     INSERT INTO nexus.dashboards (
                         title, description, configuration, layout_config, 
-                        owner_user_id, owner_group_id, is_public, tags
+                        owner_user_id, is_public, tags
                     )
                     VALUES (
                         :title, :description, CAST(:configuration AS jsonb), CAST(:layout_config AS jsonb),
-                        :owner_user_id, :owner_group_id, :is_public, CAST(:tags AS jsonb)
+                        :owner_user_id, :is_public, CAST(:tags AS jsonb)
                     )
                     RETURNING id, status, version, created_at, updated_at
                 """)
@@ -316,7 +314,6 @@ class DashboardService:
                         "compactType": "vertical"
                     }),
                     "owner_user_id": user_id,
-                    "owner_group_id": owner_group_id,
                     "is_public": is_public,
                     "tags": json.dumps(tags or [])
                 })
@@ -791,8 +788,7 @@ class DashboardService:
         self,
         dashboard_id: str,
         granter_user_id: str,
-        target_user_id: Optional[str] = None,
-        target_group_id: Optional[str] = None,
+        target_user_id: str,
         can_view: bool = True,
         can_edit: bool = False,
         can_delete: bool = False,
@@ -800,7 +796,7 @@ class DashboardService:
         expires_at: Optional[datetime] = None
     ) -> bool:
         """
-        Grant permissions to user or group (requires share permission)
+        Grant permissions to a user (requires share permission)
         """
         try:
             # Check if granter has share permission
@@ -809,81 +805,46 @@ class DashboardService:
                 logger.warning(f"User {granter_user_id} lacks share permission for dashboard {dashboard_id}")
                 return False
             
-            if not target_user_id and not target_group_id:
-                raise ValueError("Must specify either target_user_id or target_group_id")
+            if not target_user_id:
+                raise ValueError("Must specify target_user_id")
             
             async with db_manager.get_session() as session:
-                # Separate queries for user vs group to avoid multiple commands
-                if target_user_id:
-                    # Grant to user
-                    query = text("""
-                        INSERT INTO nexus.dashboard_permissions (
-                            dashboard_id, user_id, group_id, 
-                            can_view, can_edit, can_delete, can_share,
-                            granted_by, expires_at
-                        )
-                        VALUES (
-                            :dashboard_id, :user_id, NULL,
-                            :can_view, :can_edit, :can_delete, :can_share,
-                            :granted_by, :expires_at
-                        )
-                        ON CONFLICT (dashboard_id, user_id) 
-                        DO UPDATE SET
-                            can_view = EXCLUDED.can_view,
-                            can_edit = EXCLUDED.can_edit,
-                            can_delete = EXCLUDED.can_delete,
-                            can_share = EXCLUDED.can_share,
-                            expires_at = EXCLUDED.expires_at,
-                            granted_at = CURRENT_TIMESTAMP
-                    """)
-                    
-                    await session.execute(query, {
-                        "dashboard_id": dashboard_id,
-                        "user_id": target_user_id,
-                        "can_view": can_view,
-                        "can_edit": can_edit,
-                        "can_delete": can_delete,
-                        "can_share": can_share,
-                        "granted_by": granter_user_id,
-                        "expires_at": expires_at
-                    })
-                else:
-                    # Grant to group
-                    query = text("""
-                        INSERT INTO nexus.dashboard_permissions (
-                            dashboard_id, user_id, group_id, 
-                            can_view, can_edit, can_delete, can_share,
-                            granted_by, expires_at
-                        )
-                        VALUES (
-                            :dashboard_id, NULL, :group_id,
-                            :can_view, :can_edit, :can_delete, :can_share,
-                            :granted_by, :expires_at
-                        )
-                        ON CONFLICT (dashboard_id, group_id) 
-                        DO UPDATE SET
-                            can_view = EXCLUDED.can_view,
-                            can_edit = EXCLUDED.can_edit,
-                            can_delete = EXCLUDED.can_delete,
-                            can_share = EXCLUDED.can_share,
-                            expires_at = EXCLUDED.expires_at,
-                            granted_at = CURRENT_TIMESTAMP
-                    """)
-                    
-                    await session.execute(query, {
-                        "dashboard_id": dashboard_id,
-                        "group_id": target_group_id,
-                        "can_view": can_view,
-                        "can_edit": can_edit,
-                        "can_delete": can_delete,
-                        "can_share": can_share,
-                        "granted_by": granter_user_id,
-                        "expires_at": expires_at
-                    })
+                # Grant to user
+                query = text("""
+                    INSERT INTO nexus.dashboard_permissions (
+                        dashboard_id, user_id, 
+                        can_view, can_edit, can_delete, can_share,
+                        granted_by, expires_at
+                    )
+                    VALUES (
+                        :dashboard_id, :user_id,
+                        :can_view, :can_edit, :can_delete, :can_share,
+                        :granted_by, :expires_at
+                    )
+                    ON CONFLICT (dashboard_id, user_id) 
+                    DO UPDATE SET
+                        can_view = EXCLUDED.can_view,
+                        can_edit = EXCLUDED.can_edit,
+                        can_delete = EXCLUDED.can_delete,
+                        can_share = EXCLUDED.can_share,
+                        expires_at = EXCLUDED.expires_at,
+                        granted_at = CURRENT_TIMESTAMP
+                """)
+                
+                await session.execute(query, {
+                    "dashboard_id": dashboard_id,
+                    "user_id": target_user_id,
+                    "can_view": can_view,
+                    "can_edit": can_edit,
+                    "can_delete": can_delete,
+                    "can_share": can_share,
+                    "granted_by": granter_user_id,
+                    "expires_at": expires_at
+                })
                 
                 await session.commit()
                 
-                logger.info(f"Granted permissions on dashboard {dashboard_id} to user={target_user_id} group={target_group_id}")
+                logger.info(f"Granted permissions on dashboard {dashboard_id} to user={target_user_id}")
                 return True
                 
         except Exception as e:
@@ -894,34 +855,27 @@ class DashboardService:
         self,
         dashboard_id: str,
         revoker_user_id: str,
-        target_user_id: Optional[str] = None,
-        target_group_id: Optional[str] = None
+        target_user_id: str
     ) -> bool:
-        """Revoke permissions from user or group (requires share permission)"""
+        """Revoke permissions from a user (requires share permission)"""
         try:
             # Check if revoker has share permission
             has_share_permission = await self.check_permission(revoker_user_id, dashboard_id, "share")
             if not has_share_permission:
                 return False
             
+            if not target_user_id:
+                return False
+            
             async with db_manager.get_session() as session:
-                if target_user_id:
-                    query = text("""
-                        DELETE FROM nexus.dashboard_permissions
-                        WHERE dashboard_id = :dashboard_id AND user_id = :user_id
-                    """)
-                    await session.execute(query, {"dashboard_id": dashboard_id, "user_id": target_user_id})
-                elif target_group_id:
-                    query = text("""
-                        DELETE FROM nexus.dashboard_permissions
-                        WHERE dashboard_id = :dashboard_id AND group_id = :group_id
-                    """)
-                    await session.execute(query, {"dashboard_id": dashboard_id, "group_id": target_group_id})
-                else:
-                    return False
+                query = text("""
+                    DELETE FROM nexus.dashboard_permissions
+                    WHERE dashboard_id = :dashboard_id AND user_id = :user_id
+                """)
+                await session.execute(query, {"dashboard_id": dashboard_id, "user_id": target_user_id})
                 
                 await session.commit()
-                logger.info(f"Revoked permissions on dashboard {dashboard_id}")
+                logger.info(f"Revoked permissions on dashboard {dashboard_id} from user {target_user_id}")
                 return True
                 
         except Exception as e:

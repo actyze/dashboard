@@ -45,19 +45,16 @@ async def get_current_user(
     if not user_data.get("is_active"):
         raise HTTPException(status_code=400, detail="Inactive user")
         
-    # Inject roles/groups from payload or fetch fresh?
-    # Fetching fresh ensures immediate revocation effect
+    # Fetch fresh roles to ensure immediate revocation effect
     async with db_manager.get_session() as session:
         user_uuid = uuid.UUID(user_id)
         roles = await user_service.get_user_roles(user_uuid, session)
-        groups = await user_service.get_user_groups(user_uuid, session)
     
     user_info = {
         "id": user_id,
         "username": user_data["username"],
         "email": user_data["email"],
-        "roles": roles,
-        "groups": groups
+        "roles": roles
     }
     
     # ═══════════════════════════════════════════════
@@ -68,8 +65,7 @@ async def get_current_user(
         new_token_data = {
             "sub": str(user_id),
             "username": user_data["username"],
-            "roles": roles,
-            "groups": groups
+            "roles": roles
         }
         new_token = create_access_token(new_token_data)
         

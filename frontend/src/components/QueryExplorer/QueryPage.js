@@ -59,6 +59,9 @@ const QueryPage = () => {
   // Track when AI is "thinking" (before response arrives)
   const [isAiTyping, setIsAiTyping] = useState(false);
   
+  // Prevent duplicate AI query calls (React StrictMode protection)
+  const aiQueryInProgressRef = useRef(false);
+  
   // Track unsaved changes (conversation or SQL changes)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const originalSqlRef = useRef(queryFromState?.generated_sql || "");
@@ -379,8 +382,9 @@ const QueryPage = () => {
       setSqlQuery(commentPrefix + sql);
       setQueryError(null);
       
-      // AI has responded - stop typing indicator immediately
+      // AI has responded - stop typing indicator and reset in-progress flag
       setIsAiTyping(false);
+      aiQueryInProgressRef.current = false;
       
       // Save the model's reasoning as a bot message
       if (reasoning) {
@@ -419,6 +423,7 @@ const QueryPage = () => {
       console.error('AI Query failed:', error);
       setQueryError(error.message || 'Failed to process natural language query');
       setIsAiTyping(false); // Stop typing indicator on error
+      aiQueryInProgressRef.current = false; // Reset in-progress flag on error
     }
   });
 
@@ -439,6 +444,13 @@ const QueryPage = () => {
   });
 
   const handleAIQuery = (naturalLanguageQuery) => {
+    // Prevent duplicate calls (React StrictMode protection)
+    if (aiQueryInProgressRef.current) {
+      console.log('AI query already in progress, ignoring duplicate call');
+      return;
+    }
+    
+    aiQueryInProgressRef.current = true;
     setQueryError(null);
     setIsAiTyping(true); // Start typing indicator
     

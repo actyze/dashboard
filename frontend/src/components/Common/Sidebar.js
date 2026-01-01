@@ -67,7 +67,7 @@ const Sidebar = ({ isCollapsed, onToggle }) => {
   ];
 
   const manageItems = [
-    { id: 'settings', label: 'Preferences', icon: <SettingsIcon />, path: '/settings' },
+    { id: 'preferences', label: 'Preferences', icon: <SettingsIcon />, path: '/preferences' },
     { id: 'admin', label: 'Admin', icon: <AdminIcon />, path: '/admin' }
   ];
 

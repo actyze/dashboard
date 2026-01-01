@@ -16,7 +16,7 @@ function UserPreferences() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [openBrowserDialog, setOpenBrowserDialog] = useState(false);
-  const [showHelp, setShowHelp] = useState(true);
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, path } of preference to delete
 
   useEffect(() => {
     loadPreferences();
@@ -64,15 +64,17 @@ function UserPreferences() {
     }
   };
 
-  const handleDeletePreference = async (preferenceId) => {
-    if (!window.confirm('Remove this preference?')) return;
+  const handleDeletePreference = async () => {
+    if (!deleteConfirm) return;
 
     try {
-      await PreferencesService.deleteUserPreference(preferenceId);
+      await PreferencesService.deleteUserPreference(deleteConfirm.id);
       setSuccess('Preference removed');
+      setDeleteConfirm(null);
       loadPreferences();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to remove preference');
+      setDeleteConfirm(null);
     }
   };
 
@@ -138,65 +140,28 @@ function UserPreferences() {
 
       {/* Header */}
       <div className="px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div>
-            <h2 className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              Schema Preferences ({preferences.length})
-            </h2>
-            <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-              Boost preferred schemas in AI recommendations
-            </p>
-          </div>
-          {/* Help Toggle */}
-          <button
-            onClick={() => setShowHelp(!showHelp)}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs transition-colors ${
-              showHelp 
-                ? isDark ? 'bg-[#5d6ad3]/20 text-[#5d6ad3] border border-[#5d6ad3]/30' : 'bg-[#5d6ad3]/10 text-[#5d6ad3] border border-[#5d6ad3]/20'
-                : isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-[#1c1d1f]' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>How it works</span>
-            <svg className={`w-3 h-3 transition-transform ${showHelp ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
+        <div>
+          <h2 className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+            Schema Preferences
+          </h2>
+          <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+            Boost preferred schemas in AI recommendations
+          </p>
         </div>
         <button
           onClick={() => setOpenBrowserDialog(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-[#5d6ad3] text-white hover:bg-[#4f5bc4] transition-colors"
+          className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+            isDark 
+              ? 'text-gray-300 hover:bg-[#1c1d1f]' 
+              : 'text-gray-700 hover:bg-gray-100'
+          }`}
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           Add Preference
         </button>
       </div>
-
-      {/* Help Panel - Collapsible */}
-      {showHelp && (
-        <div className={`mx-6 mb-4 px-4 py-3 rounded-lg text-xs ${
-          isDark ? 'bg-[#1c1d1f] border border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200'
-        }`}>
-          <div className={`flex items-start gap-3 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-            <svg className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isDark ? 'text-[#5d6ad3]' : 'text-[#5d6ad3]'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
-            <div className="space-y-1">
-              <p><span className={isDark ? 'text-gray-300' : 'text-gray-700'}>Schema-level:</span> Boosts all tables in that schema</p>
-              <p><span className={isDark ? 'text-gray-300' : 'text-gray-700'}>Table-level:</span> Boosts a specific table</p>
-              <p><span className={isDark ? 'text-gray-300' : 'text-gray-700'}>Boost weights:</span> 
-                <span className={`ml-1 px-1.5 py-0.5 rounded ${isDark ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'}`}>1.5x</span>
-                <span className={`ml-1 px-1.5 py-0.5 rounded ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>2.0x</span>
-                <span className={`ml-1 px-1.5 py-0.5 rounded ${isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'}`}>2.5x+</span>
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* List */}
       <div className="flex-1 overflow-auto px-6">
@@ -279,7 +244,7 @@ function UserPreferences() {
                 {/* Actions */}
                 <div className="col-span-1 flex items-center justify-end">
                   <button
-                    onClick={() => handleDeletePreference(pref.id)}
+                    onClick={() => setDeleteConfirm({ id: pref.id, path: formatResourcePath(pref) })}
                     className={`p-1 rounded transition-colors ${
                       isDark 
                         ? 'text-gray-600 hover:text-red-400 hover:bg-[#2a2b2e]' 
@@ -308,6 +273,66 @@ function UserPreferences() {
         confirmButtonText="Add Preference"
         showBoostWeight={true}
       />
+
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirm && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={(e) => e.target === e.currentTarget && setDeleteConfirm(null)}
+        >
+          <div 
+            className={`w-full max-w-sm mx-4 rounded-xl shadow-2xl ${
+              isDark ? 'bg-[#17181a] border border-[#2a2b2e]' : 'bg-white border border-gray-200'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className={`flex items-center gap-3 px-5 py-4 border-b ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
+              <div className={`p-2 rounded-full ${isDark ? 'bg-red-900/20' : 'bg-red-50'}`}>
+                <svg className={`w-5 h-5 ${isDark ? 'text-red-400' : 'text-red-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <div>
+                <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  Remove Preference
+                </h3>
+                <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  This action cannot be undone
+                </p>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-5 py-4">
+              <p className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                Are you sure you want to remove the preference for{' '}
+                <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                  {deleteConfirm.path}
+                </span>?
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className={`flex items-center justify-end gap-3 px-5 py-4 border-t ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  isDark ? 'text-gray-300 hover:bg-[#2a2b2e]' : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeletePreference}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

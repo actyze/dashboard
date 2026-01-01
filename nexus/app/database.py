@@ -2,7 +2,7 @@
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import String, Text, DateTime, JSON, Integer, Boolean, ForeignKey
+from sqlalchemy import String, Text, DateTime, JSON, Integer, Boolean, ForeignKey, Numeric
 from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
 from datetime import datetime
 import uuid
@@ -156,6 +156,29 @@ class UserDataAccess(Base):
     
     # Audit fields
     created_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("nexus.users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class UserSchemaPreference(Base):
+    """User-specific schema/table/column preferences for boosting recommendations."""
+    __tablename__ = "user_schema_preferences"
+    __table_args__ = {'schema': 'nexus'}
+    
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    # Resource hierarchy (matching user_data_access structure)
+    catalog: Mapped[Optional[str]] = mapped_column(String(255), index=True)
+    database_name: Mapped[Optional[str]] = mapped_column(String(255), index=True)
+    schema_name: Mapped[Optional[str]] = mapped_column(String(255), index=True)
+    table_name: Mapped[Optional[str]] = mapped_column(String(255))
+    preferred_columns: Mapped[Optional[list]] = mapped_column(ARRAY(String), nullable=True)
+    
+    # Preference-specific field
+    boost_weight: Mapped[float] = mapped_column(Numeric(3, 2), default=1.5)
+    
+    # Audit fields
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

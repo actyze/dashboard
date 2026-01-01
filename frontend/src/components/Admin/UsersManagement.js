@@ -3,13 +3,13 @@
  * Create users, set role (ADMIN/USER), click Edit to manage data access
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import AdminService from '../../services/AdminService';
 import { RestService } from '../../services/RestService';
 import { useGetDatabases } from '../../hooks/useRestAPI';
 
-function UsersManagement() {
+const UsersManagement = forwardRef((props, ref) => {
   const { isDark } = useTheme();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -53,6 +53,11 @@ function UsersManagement() {
     isLoading: isDatabasesLoading, 
     error: databasesError 
   } = useGetDatabases();
+
+  // Expose openCreateDialog to parent via ref
+  useImperativeHandle(ref, () => ({
+    openCreateDialog: handleOpenCreateDialog
+  }));
 
   useEffect(() => {
     loadUsers();
@@ -494,22 +499,6 @@ function UsersManagement() {
           )}
         </div>
       )}
-
-      {/* Header */}
-      <div className={`px-6 py-4 flex items-center justify-between`}>
-        <h2 className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-          Users ({users.length})
-        </h2>
-        <button
-          onClick={handleOpenCreateDialog}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-[#5d6ad3] text-white hover:bg-[#4f5bc4] transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Create User
-        </button>
-      </div>
 
       {/* Table */}
       <div className="flex-1 overflow-auto px-6">
@@ -1312,6 +1301,6 @@ function UsersManagement() {
       )}
     </div>
   );
-}
+});
 
 export default UsersManagement;

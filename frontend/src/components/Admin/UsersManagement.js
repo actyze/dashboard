@@ -5,16 +5,16 @@
 
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useToast } from '../../contexts/ToastContext';
 import AdminService from '../../services/AdminService';
 import { RestService } from '../../services/RestService';
 import { useGetDatabases } from '../../hooks/useRestAPI';
 
 const UsersManagement = forwardRef((props, ref) => {
   const { isDark } = useTheme();
+  const { showSuccess, showError } = useToast();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
   
   // Create user dialog state
   const [openCreateDialog, setOpenCreateDialog] = useState(false);
@@ -76,20 +76,6 @@ const UsersManagement = forwardRef((props, ref) => {
     }
   }, [editingUser]);
 
-  // Auto-dismiss alerts
-  useEffect(() => {
-    if (success) {
-      const timer = setTimeout(() => setSuccess(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [success]);
-
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => setError(null), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
 
   const loadUsers = async () => {
     try {
@@ -99,7 +85,7 @@ const UsersManagement = forwardRef((props, ref) => {
         setUsers(response.users);
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load users');
+      showError(err.response?.data?.detail || 'Failed to load users');
     } finally {
       setLoading(false);
     }
@@ -113,7 +99,7 @@ const UsersManagement = forwardRef((props, ref) => {
         setAccessRules(response.rules || []);
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load access rules');
+      showError(err.response?.data?.detail || 'Failed to load access rules');
     } finally {
       setLoadingRules(false);
     }
@@ -139,7 +125,7 @@ const UsersManagement = forwardRef((props, ref) => {
     try {
       const response = await AdminService.createUser(formData);
       if (response.success) {
-        setSuccess(`User ${formData.username} created successfully`);
+        showSuccess(`User ${formData.username} created successfully`);
         handleCloseCreateDialog();
         await loadUsers();
         
@@ -155,7 +141,7 @@ const UsersManagement = forwardRef((props, ref) => {
         }
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to create user');
+      showError(err.response?.data?.detail || 'Failed to create user');
     }
   };
 
@@ -163,11 +149,11 @@ const UsersManagement = forwardRef((props, ref) => {
     try {
       const response = await AdminService.setUserRole(userId, newRole);
       if (response.success) {
-        setSuccess(`User role updated to ${newRole}`);
+        showSuccess(`User role updated to ${newRole}`);
         loadUsers();
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to update role');
+      showError(err.response?.data?.detail || 'Failed to update role');
     }
   };
 
@@ -176,11 +162,11 @@ const UsersManagement = forwardRef((props, ref) => {
       try {
         const response = await AdminService.deactivateUser(userId);
         if (response.success) {
-          setSuccess(`User ${username} deactivated`);
+          showSuccess(`User ${username} deactivated`);
           loadUsers();
         }
       } catch (err) {
-        setError(err.response?.data?.detail || 'Failed to deactivate user');
+        showError(err.response?.data?.detail || 'Failed to deactivate user');
       }
     }
   };
@@ -401,20 +387,20 @@ const UsersManagement = forwardRef((props, ref) => {
 
   const handleAddAccessRule = async () => {
     if (!selectedAccess.database_name || !editingUser) {
-      setError('Please select at least a database');
+      showError('Please select at least a database');
       return;
     }
 
     try {
       const response = await AdminService.addUserDataAccess(editingUser.id, selectedAccess);
       if (response.success) {
-        setSuccess('Access rule added successfully');
+        showSuccess('Access rule added successfully');
         handleCloseBrowser();
         loadAccessRules(editingUser.id);
         loadUsers(); // Refresh user list to update access_rule_count
       }
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to add access rule');
+      showError(err.response?.data?.detail || 'Failed to add access rule');
     }
   };
 
@@ -423,12 +409,12 @@ const UsersManagement = forwardRef((props, ref) => {
       try {
         const response = await AdminService.removeUserDataAccess(ruleId);
         if (response.success) {
-          setSuccess('Access rule removed');
+          showSuccess('Access rule removed');
           loadAccessRules(editingUser.id);
           loadUsers(); // Refresh user list to update access_rule_count
         }
       } catch (err) {
-        setError(err.response?.data?.detail || 'Failed to remove access rule');
+        showError(err.response?.data?.detail || 'Failed to remove access rule');
       }
     }
   };
@@ -464,42 +450,6 @@ const UsersManagement = forwardRef((props, ref) => {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Alerts */}
-      {(error || success) && (
-        <div className="px-6 pt-4">
-          {error && (
-            <div className={`flex items-center gap-2 px-4 py-3 rounded-lg mb-2 ${
-              isDark ? 'bg-red-900/20 border border-red-800 text-red-300' : 'bg-red-50 border border-red-200 text-red-700'
-            }`}>
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="text-sm flex-1">{error}</span>
-              <button onClick={() => setError(null)} className="hover:opacity-70">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          )}
-          {success && (
-            <div className={`flex items-center gap-2 px-4 py-3 rounded-lg mb-2 ${
-              isDark ? 'bg-green-900/20 border border-green-800 text-green-300' : 'bg-green-50 border border-green-200 text-green-700'
-            }`}>
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="text-sm flex-1">{success}</span>
-              <button onClick={() => setSuccess(null)} className="hover:opacity-70">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Table */}
       <div className="flex-1 overflow-auto px-6">
         {/* Table Header */}

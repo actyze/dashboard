@@ -1,7 +1,7 @@
 /**
  * User Preferences Component
- * Allows users to set preferred schemas/tables/columns for recommendation boosting
- * Follows the same structure as Data Access Management
+ * Allows users to set preferred schemas/tables for recommendation boosting
+ * Clean, minimal UI matching Admin panel styling
  */
 
 import React, { useState, useEffect } from 'react';
@@ -16,6 +16,7 @@ function UserPreferences() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [openBrowserDialog, setOpenBrowserDialog] = useState(false);
+  const [showHelp, setShowHelp] = useState(true);
 
   useEffect(() => {
     loadPreferences();
@@ -39,8 +40,8 @@ function UserPreferences() {
   const loadPreferences = async () => {
     try {
       setLoading(true);
-      const preferences = await PreferencesService.getUserPreferences();
-      setPreferences(preferences || []);
+      const prefs = await PreferencesService.getUserPreferences();
+      setPreferences(prefs || []);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to load preferences');
     } finally {
@@ -49,28 +50,17 @@ function UserPreferences() {
   };
 
   const handleAddPreference = async (resources) => {
-    console.log('handleAddPreference called with:', resources);
-    
-    // Handle batch addition of preferences (all with same boost weight)
     const resourcesArray = Array.isArray(resources) ? resources : [resources];
     
-    console.log('Resources array:', resourcesArray);
-    
     try {
-      // Add all preferences
-      const promises = resourcesArray.map(resource => {
-        console.log('Adding preference:', resource);
-        return PreferencesService.addUserPreference(resource);
-      });
-      
-      const results = await Promise.all(promises);
-      console.log('All preferences added:', results);
-      
-      setSuccess(`${resourcesArray.length} preference${resourcesArray.length > 1 ? 's' : ''} added successfully`);
+      const promises = resourcesArray.map(resource => 
+        PreferencesService.addUserPreference(resource)
+      );
+      await Promise.all(promises);
+      setSuccess(`${resourcesArray.length} preference${resourcesArray.length > 1 ? 's' : ''} added`);
       loadPreferences();
     } catch (err) {
-      console.error('Error adding preferences:', err);
-      setError(err.response?.data?.detail || err.message || 'Failed to add preference(s)');
+      setError(err.response?.data?.detail || err.message || 'Failed to add preference');
     }
   };
 
@@ -79,7 +69,7 @@ function UserPreferences() {
 
     try {
       await PreferencesService.deleteUserPreference(preferenceId);
-      setSuccess('Preference removed successfully');
+      setSuccess('Preference removed');
       loadPreferences();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to remove preference');
@@ -87,150 +77,225 @@ function UserPreferences() {
   };
 
   const formatResourcePath = (pref) => {
-    let path = [];
-    if (pref.catalog) path.push(pref.catalog);
-    if (pref.database_name) path.push(pref.database_name);
-    if (pref.schema_name) path.push(pref.schema_name);
-    if (pref.table_name) path.push(pref.table_name);
-    return path.join('.');
-  };
-
-  const getBoostColor = (weight) => {
-    if (weight >= 2.5) return 'bg-purple-500/20 text-purple-400';
-    if (weight >= 2.0) return 'bg-blue-500/20 text-blue-400';
-    if (weight >= 1.5) return 'bg-green-500/20 text-green-400';
-    return 'bg-gray-500/20 text-gray-400';
+    const parts = [];
+    if (pref.catalog) parts.push(pref.catalog);
+    if (pref.database_name) parts.push(pref.database_name);
+    if (pref.schema_name) parts.push(pref.schema_name);
+    if (pref.table_name) parts.push(pref.table_name);
+    return parts.length > 0 ? parts.join('.') : 'All';
   };
 
   if (loading) {
     return (
-      <div className={`flex items-center justify-center h-64 ${
-        isDark ? 'text-gray-400' : 'text-gray-600'
-      }`}>
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        <span className="ml-3">Loading preferences...</span>
+      <div className="flex items-center justify-center py-16">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#5d6ad3] mx-auto"></div>
+          <p className={`mt-3 text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+            Loading preferences...
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className={`h-full ${isDark ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'}`}>
-      <div className="max-w-7xl mx-auto p-6">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold mb-2">Schema Preferences</h1>
-          <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-            Mark your preferred schemas, tables, and columns to boost their relevance in AI recommendations
-          </p>
-        </div>
-
-        {/* Alerts */}
-        {error && (
-          <div className={`mb-4 p-4 rounded-lg border ${
-            isDark 
-              ? 'bg-red-900/20 border-red-800 text-red-400' 
-              : 'bg-red-100 border-red-400 text-red-700'
-          }`}>
-            {error}
-          </div>
-        )}
-        
-        {success && (
-          <div className={`mb-4 p-4 rounded-lg border ${
-            isDark 
-              ? 'bg-green-900/20 border-green-800 text-green-400' 
-              : 'bg-green-100 border-green-400 text-green-700'
-          }`}>
-            {success}
-          </div>
-        )}
-
-        {/* Action Button */}
-        <div className="mb-6">
-          <button
-            onClick={() => setOpenBrowserDialog(true)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
-          >
-            + Add Preference
-          </button>
-        </div>
-
-        {/* Preferences List */}
-        <div className={`rounded-lg border ${
-          isDark ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
-        }`}>
-          <div className={`p-4 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-            <h2 className="text-lg font-semibold">Your Preferred Schemas & Tables</h2>
-          </div>
-          
-          {preferences.length === 0 ? (
-            <div className={`p-8 text-center ${isDark ? 'text-gray-500' : 'text-gray-600'}`}>
-              <p>No preferences set yet.</p>
-              <p className="text-sm mt-2">Add preferences to boost schema recommendations for your queries.</p>
+    <div className="h-full flex flex-col">
+      {/* Alerts */}
+      {(error || success) && (
+        <div className="px-6 pt-4">
+          {error && (
+            <div className={`flex items-center gap-2 px-4 py-3 rounded-lg mb-2 ${
+              isDark ? 'bg-red-900/20 border border-red-800 text-red-300' : 'bg-red-50 border border-red-200 text-red-700'
+            }`}>
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-sm flex-1">{error}</span>
+              <button onClick={() => setError(null)} className="hover:opacity-70">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
-          ) : (
-            <div className={`divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-200'}`}>
-              {preferences.map((pref) => (
-                <div 
-                  key={pref.id} 
-                  className={`p-4 ${
-                    isDark ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50'
-                  } transition-colors`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="font-mono text-sm font-semibold text-blue-400">
-                          {formatResourcePath(pref)}
-                        </span>
-                        <span className={`px-2 py-0.5 text-xs rounded font-medium ${
-                          getBoostColor(pref.boost_weight)
-                        }`}>
-                          {pref.boost_weight.toFixed(1)}x boost
-                        </span>
-                      </div>
-                      
-                      {pref.preferred_columns && pref.preferred_columns.length > 0 && (
-                        <div className={`mt-2 text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                          <span className="font-medium">Columns:</span>{' '}
-                          {pref.preferred_columns.join(', ')}
-                        </div>
-                      )}
-                      
-                      <div className={`mt-1 text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                        Added {new Date(pref.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                    
-                    <button
-                      onClick={() => handleDeletePreference(pref.id)}
-                      className={`ml-4 px-3 py-1 text-sm rounded transition-colors ${
-                        isDark 
-                          ? 'text-red-400 hover:text-red-300 hover:bg-red-900/20' 
-                          : 'text-red-600 hover:text-red-700 hover:bg-red-50'
-                      }`}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ))}
+          )}
+          {success && (
+            <div className={`flex items-center gap-2 px-4 py-3 rounded-lg mb-2 ${
+              isDark ? 'bg-green-900/20 border border-green-800 text-green-300' : 'bg-green-50 border border-green-200 text-green-700'
+            }`}>
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-sm flex-1">{success}</span>
+              <button onClick={() => setSuccess(null)} className="hover:opacity-70">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
           )}
         </div>
+      )}
 
-        {/* Info Panel */}
-        <div className={`mt-6 p-4 rounded-lg ${
-          isDark ? 'bg-blue-900/10 border border-blue-800/30' : 'bg-blue-50 border border-blue-200'
-        }`}>
-          <h3 className="font-semibold mb-2 text-blue-400">How Preferences Work</h3>
-          <ul className={`text-sm space-y-1 ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>
-            <li>• <strong>Schema-level</strong>: Boost all tables in that schema</li>
-            <li>• <strong>Table-level</strong>: Boost a specific table</li>
-            <li>• <strong>Boost weight</strong>: 1.5x (default), 2.0x (medium), 2.5x+ (high priority)</li>
-            <li>• Preferences help the AI recommend more relevant schemas for your queries</li>
-          </ul>
+      {/* Header */}
+      <div className="px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div>
+            <h2 className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Schema Preferences ({preferences.length})
+            </h2>
+            <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+              Boost preferred schemas in AI recommendations
+            </p>
+          </div>
+          {/* Help Toggle */}
+          <button
+            onClick={() => setShowHelp(!showHelp)}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs transition-colors ${
+              showHelp 
+                ? isDark ? 'bg-[#5d6ad3]/20 text-[#5d6ad3] border border-[#5d6ad3]/30' : 'bg-[#5d6ad3]/10 text-[#5d6ad3] border border-[#5d6ad3]/20'
+                : isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-[#1c1d1f]' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>How it works</span>
+            <svg className={`w-3 h-3 transition-transform ${showHelp ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
         </div>
+        <button
+          onClick={() => setOpenBrowserDialog(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-[#5d6ad3] text-white hover:bg-[#4f5bc4] transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Add Preference
+        </button>
+      </div>
+
+      {/* Help Panel - Collapsible */}
+      {showHelp && (
+        <div className={`mx-6 mb-4 px-4 py-3 rounded-lg text-xs ${
+          isDark ? 'bg-[#1c1d1f] border border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200'
+        }`}>
+          <div className={`flex items-start gap-3 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+            <svg className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isDark ? 'text-[#5d6ad3]' : 'text-[#5d6ad3]'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            <div className="space-y-1">
+              <p><span className={isDark ? 'text-gray-300' : 'text-gray-700'}>Schema-level:</span> Boosts all tables in that schema</p>
+              <p><span className={isDark ? 'text-gray-300' : 'text-gray-700'}>Table-level:</span> Boosts a specific table</p>
+              <p><span className={isDark ? 'text-gray-300' : 'text-gray-700'}>Boost weights:</span> 
+                <span className={`ml-1 px-1.5 py-0.5 rounded ${isDark ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'}`}>1.5x</span>
+                <span className={`ml-1 px-1.5 py-0.5 rounded ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>2.0x</span>
+                <span className={`ml-1 px-1.5 py-0.5 rounded ${isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'}`}>2.5x+</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* List */}
+      <div className="flex-1 overflow-auto px-6">
+        {/* Table Header */}
+        <div className={`grid grid-cols-12 gap-4 py-2 text-xs font-medium border-b sticky top-0 ${
+          isDark 
+            ? 'text-gray-500 border-[#2a2b2e] bg-[#101012]' 
+            : 'text-gray-500 border-gray-200 bg-gray-50'
+        }`}>
+          <div className="col-span-5">Resource</div>
+          <div className="col-span-2">Database</div>
+          <div className="col-span-2">Schema</div>
+          <div className="col-span-2">Boost</div>
+          <div className="col-span-1 text-right">Actions</div>
+        </div>
+
+        {/* Table Body */}
+        {preferences.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <svg className={`w-8 h-8 mb-2 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+            </svg>
+            <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+              No preferences set
+            </p>
+            <p className={`text-xs mt-1 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+              Add schemas to boost in AI recommendations
+            </p>
+          </div>
+        ) : (
+          <div>
+            {preferences.map((pref) => (
+              <div 
+                key={pref.id}
+                className={`grid grid-cols-12 gap-4 py-3 border-b ${
+                  isDark ? 'border-[#1c1d1f]' : 'border-gray-100'
+                }`}
+              >
+                {/* Resource Path */}
+                <div className="col-span-5 flex items-center">
+                  <span className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
+                    {formatResourcePath(pref)}
+                  </span>
+                  {pref.preferred_columns && pref.preferred_columns.length > 0 && (
+                    <span className={`ml-2 px-1.5 py-0.5 text-xs rounded ${
+                      isDark ? 'bg-[#2a2b2e] text-gray-400' : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      {pref.preferred_columns.length} cols
+                    </span>
+                  )}
+                </div>
+                
+                {/* Database */}
+                <div className="col-span-2 flex items-center">
+                  <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                    {pref.database_name || '-'}
+                  </span>
+                </div>
+                
+                {/* Schema */}
+                <div className="col-span-2 flex items-center">
+                  <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                    {pref.schema_name || '-'}
+                  </span>
+                </div>
+                
+                {/* Boost Weight */}
+                <div className="col-span-2 flex items-center">
+                  <span className={`px-2 py-0.5 text-xs rounded ${
+                    pref.boost_weight >= 2.5
+                      ? isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'
+                      : pref.boost_weight >= 2.0
+                        ? isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'
+                        : isDark ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
+                  }`}>
+                    {pref.boost_weight?.toFixed(1) || '1.5'}x
+                  </span>
+                </div>
+                
+                {/* Actions */}
+                <div className="col-span-1 flex items-center justify-end">
+                  <button
+                    onClick={() => handleDeletePreference(pref.id)}
+                    className={`p-1 rounded transition-colors ${
+                      isDark 
+                        ? 'text-gray-600 hover:text-red-400 hover:bg-[#2a2b2e]' 
+                        : 'text-gray-400 hover:text-red-500 hover:bg-gray-100'
+                    }`}
+                    title="Remove preference"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Schema Browser Dialog */}
@@ -238,8 +303,8 @@ function UserPreferences() {
         isOpen={openBrowserDialog}
         onClose={() => setOpenBrowserDialog(false)}
         onConfirm={handleAddPreference}
-        title="Select Schema or Table to Prefer"
-        description="Choose a schema (entire schema) or specific table to boost in recommendations"
+        title="Add Schema Preference"
+        description="Select schemas or tables to boost in recommendations"
         confirmButtonText="Add Preference"
         showBoostWeight={true}
       />
@@ -248,4 +313,3 @@ function UserPreferences() {
 }
 
 export default UserPreferences;
-

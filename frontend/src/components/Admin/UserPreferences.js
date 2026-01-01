@@ -6,15 +6,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useToast } from '../../contexts/ToastContext';
 import PreferencesService from '../../services/PreferencesService';
 import SchemaBrowserDialog from '../Common/SchemaBrowserDialog';
 
 function UserPreferences() {
   const { isDark } = useTheme();
+  const { showSuccess, showError } = useToast();
   const [preferences, setPreferences] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
   const [openBrowserDialog, setOpenBrowserDialog] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, path } of preference to delete
 
@@ -22,28 +22,13 @@ function UserPreferences() {
     loadPreferences();
   }, []);
 
-  // Auto-dismiss alerts
-  useEffect(() => {
-    if (success) {
-      const timer = setTimeout(() => setSuccess(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [success]);
-
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => setError(null), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
-
   const loadPreferences = async () => {
     try {
       setLoading(true);
       const prefs = await PreferencesService.getUserPreferences();
       setPreferences(prefs || []);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load preferences');
+      showError(err.response?.data?.detail || 'Failed to load preferences');
     } finally {
       setLoading(false);
     }
@@ -57,10 +42,10 @@ function UserPreferences() {
         PreferencesService.addUserPreference(resource)
       );
       await Promise.all(promises);
-      setSuccess(`${resourcesArray.length} preference${resourcesArray.length > 1 ? 's' : ''} added`);
+      showSuccess(`${resourcesArray.length} preference${resourcesArray.length > 1 ? 's' : ''} added`);
       loadPreferences();
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || 'Failed to add preference');
+      showError(err.response?.data?.detail || err.message || 'Failed to add preference');
     }
   };
 
@@ -69,11 +54,11 @@ function UserPreferences() {
 
     try {
       await PreferencesService.deleteUserPreference(deleteConfirm.id);
-      setSuccess('Preference removed');
+      showSuccess('Preference removed');
       setDeleteConfirm(null);
       loadPreferences();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to remove preference');
+      showError(err.response?.data?.detail || 'Failed to remove preference');
       setDeleteConfirm(null);
     }
   };
@@ -102,42 +87,6 @@ function UserPreferences() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Alerts */}
-      {(error || success) && (
-        <div className="px-6 pt-4">
-          {error && (
-            <div className={`flex items-center gap-2 px-4 py-3 rounded-lg mb-2 ${
-              isDark ? 'bg-red-900/20 border border-red-800 text-red-300' : 'bg-red-50 border border-red-200 text-red-700'
-            }`}>
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="text-sm flex-1">{error}</span>
-              <button onClick={() => setError(null)} className="hover:opacity-70">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          )}
-          {success && (
-            <div className={`flex items-center gap-2 px-4 py-3 rounded-lg mb-2 ${
-              isDark ? 'bg-green-900/20 border border-green-800 text-green-300' : 'bg-green-50 border border-green-200 text-green-700'
-            }`}>
-              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="text-sm flex-1">{success}</span>
-              <button onClick={() => setSuccess(null)} className="hover:opacity-70">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Header */}
       <div className="px-6 py-4 flex items-center justify-between">
         <div>

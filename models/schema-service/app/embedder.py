@@ -187,6 +187,120 @@ class FAISSSchemaEmbedder:
 
         return results, embed_time, search_time
 
+    async def add_table(self, table_metadata: Dict[str, Any]) -> bool:
+        """
+        Add a single table to the existing FAISS index.
+        
+        This is much faster than full refresh as it:
+        - Only encodes 1 table (~50-100ms)
+        - Adds 1 vector to FAISS index
+        - No Trino queries needed
+        
+        Args:
+            table_metadata: Dict with keys: catalog, schema, table, full_name, columns, type
+        
+        Returns:
+            bool: True if successful
+        """
+        if self.index is None:
+            logger.error("Cannot add table: FAISS index not initialized")
+            return False
+        
+        try:
+            logger.info(f"Adding table to index: {table_metadata.get('full_name', 'unknown')}")
+            
+            # Convert table to text and encode
+            text = self._schema_to_text(table_metadata)
+            
+            loop = asyncio.get_event_loop()
+            embedding = await loop.run_in_executor(None, self.model.encode, [text])
+            
+            embedding = np.asarray(embedding, dtype=np.float32)
+            faiss.normalize_L2(embedding)
+            
+            # Add to FAISS index
+            self.index.add(embedding)
+            
+            # Add to metadata
+            self.schema_metadata.append(table_metadata)
+            
+            # Add to raw cache
+            raw_cache_entry = self._build_raw_schema_cache([table_metadata])
+            if raw_cache_entry:
+                self.raw_schema_cache.append(raw_cache_entry[0])
+            
+            logger.info(f"Successfully added table. Index size: {self.index.ntotal}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to add table: {e}")
+            return False
+
+    async def remove_table(self, full_table_name: str) -> bool:
+        """
+        Remove a table from the FAISS index.
+        
+        Note: FAISS IndexFlatIP doesn't support efficient removal of individual vectors,
+        so we need to rebuild the index. However, this is still much faster than a full
+        refresh because:
+        - No Trino queries
+        - Only re-encodes existing in-memory metadata
+        - Typically completes in 1-5 seconds
+        
+        Args:
+            full_table_name: Full table name (catalog.schema.table)
+        
+        Returns:
+            bool: True if table was found and removed
+        """
+        if self.index is None:
+            logger.error("Cannot remove table: FAISS index not initialized")
+            return False
+        
+        try:
+            logger.info(f"Removing table from index: {full_table_name}")
+            
+            # Find and remove from metadata
+            found_idx = -1
+            for idx, meta in enumerate(self.schema_metadata):
+                if meta.get('full_name') == full_table_name:
+                    found_idx = idx
+                    break
+            
+            if found_idx == -1:
+                logger.warning(f"Table not found in index: {full_table_name}")
+                return False
+            
+            # Remove from all caches
+            self.schema_metadata.pop(found_idx)
+            if found_idx < len(self.raw_schema_cache):
+                self.raw_schema_cache.pop(found_idx)
+            
+            # Rebuild index with remaining tables (no Trino query needed)
+            logger.info(f"Rebuilding index with {len(self.schema_metadata)} remaining tables")
+            
+            texts = [self._schema_to_text(s) for s in self.schema_metadata]
+            
+            loop = asyncio.get_event_loop()
+            embeddings = await loop.run_in_executor(None, self.model.encode, texts)
+            
+            embeddings = np.asarray(embeddings, dtype=np.float32)
+            faiss.normalize_L2(embeddings)
+            
+            # Create new index
+            new_index = faiss.IndexFlatIP(self.dimension)
+            new_index.add(embeddings)
+            
+            # Atomic swap
+            self.index = new_index
+            
+            logger.info(f"Successfully removed table. Index size: {self.index.ntotal}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to remove table: {e}")
+            return False
+
     def _build_enhanced_query(self, query: str, prior_context: List[str]) -> str:
         """
         Combine current query with recent context.

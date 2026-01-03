@@ -77,6 +77,22 @@ async def get_current_user(
     
     return user_info
 
+async def get_current_user_id(user: dict = Depends(get_current_user)) -> str:
+    """
+    Helper dependency to extract just the user ID (UUID) from the current user.
+    
+    Used by endpoints that only need the user ID (e.g., file uploads).
+    
+    Note: Returns UUID string as stored in the database.
+    """
+    user_id = user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User ID not found in token"
+        )
+    return user_id
+
 class RoleChecker:
     def __init__(self, allowed_roles: list[str]):
         self.allowed_roles = allowed_roles

@@ -32,7 +32,8 @@ from app.explorer import (
     get_table_detail,
     search_database_objects_list
 )
-from app.auth import require_auth, verify_service_token
+# Simple service key authentication for internal service-to-service communication
+from fastapi import Header
 
 # -------- Setup --------
 load_dotenv()
@@ -262,6 +263,23 @@ class SchemaService:
         return recommendations
 
 
+# -------- Authentication --------
+# Simple service key for internal service-to-service auth
+SERVICE_KEY = os.getenv("SCHEMA_SERVICE_KEY", "")
+
+def verify_service_auth(x_service_key: str = Header(None, alias="X-Service-Key")):
+    """
+    Simple service key authentication for internal services.
+    
+    Services must provide X-Service-Key header matching SCHEMA_SERVICE_KEY env var.
+    This is simpler than JWT for internal service-to-service communication.
+    """
+    if SERVICE_KEY and x_service_key != SERVICE_KEY:
+        key_len = len(x_service_key) if x_service_key else 0
+        logger.warning(f"Unauthorized access attempt - provided key length: {key_len}")
+        raise HTTPException(status_code=401, detail="Unauthorized - Invalid service key")
+    return {"authenticated": True}
+
 # -------- FastAPI App --------
 schema_service = SchemaService()
 app = FastAPI(title="FAISS Schema Service", description="Schema recommender via Trino JDBC metadata", version="1.3.0")
@@ -283,7 +301,12 @@ async def health():
 
 
 @app.post("/recommend", response_model=SchemaRecommendationResponse)
-async def recommend(req: SchemaRecommendationRequest, user: dict = Depends(verify_service_token)):
+async def recommend(req: SchemaRecommendationRequest, auth: dict = Depends(verify_service_auth)):
+    """
+    Endpoint for schema recommendations (requires service key)
+    
+    Security: Simple service key authentication (X-Service-Key header)
+    """
     try:
         return schema_service.recommend(
             req.natural_language_query, 
@@ -297,41 +320,69 @@ async def recommend(req: SchemaRecommendationRequest, user: dict = Depends(verif
 
 
 @app.post("/refresh")
-async def manual_refresh(user: dict = Depends(verify_service_token)):
+async def refresh_schemas_endpoint(auth: dict = Depends(verify_service_auth)):
+    """
+    Endpoint for manual schema refresh (requires service key)
+    
+    Security: Simple service key authentication (X-Service-Key header)
+    Only trusted internal services (Nexus) can call this.
+    
+    Refreshes:
+    - In-memory schema metadata from Trino
+    - FAISS vector embeddings
+    - Makes newly uploaded tables available for AI queries
+    """
     try:
+        logger.info("Schema refresh triggered by authenticated service")
         await schema_service.refresh_schemas()
-        return {"status": "success", "last_updated": schema_service.embedder.last_updated.isoformat()}
+        return {
+            "status": "success",
+            "message": "Schema metadata and vectors refreshed successfully",
+            "last_updated": schema_service.embedder.last_updated.isoformat(),
+            "total_schemas": len(schema_service.embedder.schema_metadata)
+        }
     except Exception as e:
-        logger.exception("Manual refresh failed")
+        logger.exception("Schema refresh failed")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/intent/reload")
-async def reload_intent_examples(user: dict = Depends(verify_service_token)):
-    """Reload intent examples from database without restarting service."""
+@app.post("/refresh-metadata")
+async def refresh_metadata(auth: dict = Depends(verify_service_auth)):
+    """
+    Endpoint for triggering metadata refresh (requires service key)
+    
+    Used by Nexus when new tables are uploaded via file import.
+    
+    Security: Simple service key authentication (X-Service-Key header)
+    Only trusted internal services can trigger refresh.
+    
+    What it does:
+    1. Fetches all schemas/tables from Trino (including new user_uploads tables)
+    2. Rebuilds FAISS vector index with fresh metadata
+    3. Updates in-memory schema cache
+    4. Makes new tables immediately available for AI-powered queries
+    """
     try:
-        schema_service.intent_detector.reload_examples()
-        total_examples = sum(len(v) for v in schema_service.intent_detector.intent_examples.values())
+        logger.info("Metadata refresh triggered by authenticated service (file upload)")
+        await schema_service.refresh_schemas()
         return {
             "status": "success",
-            "message": "Intent examples reloaded from database",
-            "total_examples": total_examples,
-            "intents": {
-                intent: len(examples) 
-                for intent, examples in schema_service.intent_detector.intent_examples.items()
-            }
+            "message": "Metadata and vectors refreshed successfully",
+            "last_updated": schema_service.embedder.last_updated.isoformat(),
+            "total_schemas": len(schema_service.embedder.schema_metadata),
+            "index_size": schema_service.embedder.index.ntotal if schema_service.embedder.index else 0
         }
     except Exception as e:
-        logger.exception("Intent examples reload failed")
+        logger.exception("Metadata refresh failed")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/intent/detect", response_model=IntentDetectionResponse)
-async def detect_intent(req: IntentDetectionRequest, user: dict = Depends(verify_service_token)):
+async def detect_intent(req: IntentDetectionRequest, auth: dict = Depends(verify_service_auth)):
     """
     Detect user intent using MPNet embeddings and cosine similarity.
     
-    No heuristics. No hosted LLMs. Pure ML-based classification.
+    Security: Simple service key authentication (X-Service-Key header)
     
     Intent Labels:
     - NEW_QUERY: Execute a new query (triggers schema narrowing)
@@ -352,13 +403,41 @@ async def detect_intent(req: IntentDetectionRequest, user: dict = Depends(verify
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/intent/reload")
+async def reload_intent_examples(auth: dict = Depends(verify_service_auth)):
+    """
+    Reload intent examples from database without restarting service.
+    
+    Security: Simple service key authentication (X-Service-Key header)
+    """
+    try:
+        schema_service.intent_detector.reload_examples()
+        total_examples = sum(len(v) for v in schema_service.intent_detector.intent_examples.values())
+        return {
+            "status": "success",
+            "message": "Intent examples reloaded from database",
+            "total_examples": total_examples,
+            "intents": {
+                intent: len(examples) 
+                for intent, examples in schema_service.intent_detector.intent_examples.items()
+            }
+        }
+    except Exception as e:
+        logger.exception("Intent examples reload failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============================================================================
 # DBeaver-style Database Explorer API Endpoints
 # ============================================================================
 
 @app.get("/explorer/databases")
-async def get_databases(user: dict = Depends(verify_service_token)):
-    """Get list of all databases/catalogs (Level 1: Database Browser)."""
+async def get_databases(auth: dict = Depends(verify_service_auth)):
+    """
+    Get list of all databases/catalogs (Level 1: Database Browser).
+    
+    Security: Simple service key authentication (X-Service-Key header)
+    """
     return get_databases_list(
         schema_service.embedder.raw_schema_cache,
         schema_service.embedder.last_updated
@@ -366,8 +445,12 @@ async def get_databases(user: dict = Depends(verify_service_token)):
 
 
 @app.get("/explorer/databases/{database}/schemas")
-async def get_database_schemas(database: str, user: dict = Depends(verify_service_token)):
-    """Get list of all schemas in a database (Level 2: Schema Browser)."""
+async def get_database_schemas(database: str, auth: dict = Depends(verify_service_auth)):
+    """
+    Get list of all schemas in a database (Level 2: Schema Browser).
+    
+    Security: Simple service key authentication (X-Service-Key header)
+    """
     return get_database_schemas_list(
         database,
         schema_service.embedder.raw_schema_cache,
@@ -376,8 +459,12 @@ async def get_database_schemas(database: str, user: dict = Depends(verify_servic
 
 
 @app.get("/explorer/databases/{database}/schemas/{schema}/objects")
-async def get_schema_objects(database: str, schema: str, user: dict = Depends(verify_service_token)):
-    """Get all database objects in a schema (Level 3: Object Browser)."""
+async def get_schema_objects(database: str, schema: str, auth: dict = Depends(verify_service_auth)):
+    """
+    Get all database objects in a schema (Level 3: Object Browser).
+    
+    Security: Simple service key authentication (X-Service-Key header)
+    """
     return get_schema_objects_list(
         database,
         schema,
@@ -387,8 +474,12 @@ async def get_schema_objects(database: str, schema: str, user: dict = Depends(ve
 
 
 @app.get("/explorer/databases/{database}/schemas/{schema}/tables/{table}")
-async def get_table_details(database: str, schema: str, table: str, user: dict = Depends(verify_service_token)):
-    """Get detailed information about a specific table/view (Level 4: Object Details)."""
+async def get_table_details(database: str, schema: str, table: str, auth: dict = Depends(verify_service_auth)):
+    """
+    Get detailed information about a specific table/view (Level 4: Object Details).
+    
+    Security: Simple service key authentication (X-Service-Key header)
+    """
     return get_table_detail(
         database,
         schema,
@@ -404,9 +495,13 @@ async def search_database_objects(
     database: Optional[str] = None,
     schema: Optional[str] = None,
     object_type: Optional[str] = None,
-    user: dict = Depends(verify_service_token)
+    auth: dict = Depends(verify_service_auth)
 ):
-    """Search for database objects across all databases/schemas."""
+    """
+    Search for database objects across all databases/schemas.
+    
+    Security: Simple service key authentication (X-Service-Key header)
+    """
     return search_database_objects_list(
         query,
         schema_service.embedder.raw_schema_cache,

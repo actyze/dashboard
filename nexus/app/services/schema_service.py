@@ -1,47 +1,23 @@
 """Schema recommendation service client."""
 
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
-from jose import jwt
+import os
 from app.services.base import BaseService
 from app.config import settings
-from app.services.user_service import UserService
 
 class SchemaService(BaseService):
     """Client for FAISS-based schema recommendation service."""
     
     def __init__(self):
         super().__init__(settings.schema_service_url, "schema-service")
-        self.user_service = UserService()
-        self._service_token = None
+        # Simple service key for internal authentication
+        self._service_key = os.getenv("SCHEMA_SERVICE_KEY", "")
         
-    async def _get_auth_headers(self) -> Dict[str, str]:
-        """Get authentication headers for service requests, refreshing if needed."""
-        should_refresh = False
-        
-        if not self._service_token:
-            should_refresh = True
-        else:
-            try:
-                # Decode without verification just to check expiration (verification happens on server)
-                # We just want to know if WE think it's expired
-                payload = jwt.get_unverified_claims(self._service_token)
-                exp = payload.get("exp")
-                
-                if exp:
-                    expiration_time = datetime.utcfromtimestamp(exp)
-                    # Refresh if expires in less than 5 minutes
-                    if expiration_time - datetime.utcnow() < timedelta(minutes=5):
-                        should_refresh = True
-                else:
-                    should_refresh = True
-            except Exception:
-                should_refresh = True
-        
-        if should_refresh:
-            self._service_token = await self.user_service.get_service_token("nexus-service")
-        
-        return {"Authorization": f"Bearer {self._service_token}"}
+    def _get_auth_headers(self) -> Dict[str, str]:
+        """Get authentication headers with simple service key."""
+        if self._service_key:
+            return {"X-Service-Key": self._service_key}
+        return {}
     
     async def get_recommendations(
         self, 
@@ -66,7 +42,7 @@ class SchemaService(BaseService):
         )
         
         try:
-            headers = await self._get_auth_headers()
+            headers = self._get_auth_headers()
             result = await self._make_request("POST", "/recommend", data=request_data, headers=headers)
             
             # Validate response structure
@@ -101,7 +77,7 @@ class SchemaService(BaseService):
     async def refresh_schemas(self) -> Dict[str, Any]:
         """Trigger schema refresh."""
         try:
-            headers = await self._get_auth_headers()
+            headers = self._get_auth_headers()
             result = await self._make_request("POST", "/refresh", headers=headers)
             self.logger.info("Schema refresh triggered")
             return result
@@ -112,7 +88,7 @@ class SchemaService(BaseService):
     async def get_all_schemas(self) -> Dict[str, Any]:
         """Get all loaded schemas."""
         try:
-            headers = await self._get_auth_headers()
+            headers = self._get_auth_headers()
             result = await self._make_request("GET", "/schemas", headers=headers)
             return result
         except Exception as e:
@@ -135,7 +111,7 @@ class SchemaService(BaseService):
         self.logger.info("Detecting user intent", text=user_text[:100])
         
         try:
-            headers = await self._get_auth_headers()
+            headers = self._get_auth_headers()
             result = await self._make_request("POST", "/intent/detect", data=request_data, headers=headers)
             
             intent = result.get("intent", "AMBIGUOUS")
@@ -171,7 +147,7 @@ class SchemaService(BaseService):
     async def get_databases(self) -> List[str]:
         """Get list of all databases."""
         try:
-            headers = await self._get_auth_headers()
+            headers = self._get_auth_headers()
             return await self._make_request("GET", "/explorer/databases", headers=headers)
         except Exception as e:
             self.logger.error("Failed to get databases", error=str(e))
@@ -180,7 +156,7 @@ class SchemaService(BaseService):
     async def get_database_schemas(self, database: str) -> List[str]:
         """Get schemas for a database."""
         try:
-            headers = await self._get_auth_headers()
+            headers = self._get_auth_headers()
             return await self._make_request("GET", f"/explorer/databases/{database}/schemas", headers=headers)
         except Exception as e:
             self.logger.error("Failed to get schemas for database", database=database, error=str(e))
@@ -189,7 +165,7 @@ class SchemaService(BaseService):
     async def get_schema_objects(self, database: str, schema: str) -> List[Dict[str, Any]]:
         """Get objects (tables/views) for a schema."""
         try:
-            headers = await self._get_auth_headers()
+            headers = self._get_auth_headers()
             return await self._make_request("GET", f"/explorer/databases/{database}/schemas/{schema}/objects", headers=headers)
         except Exception as e:
             self.logger.error("Failed to get objects for schema", database=database, schema=schema, error=str(e))
@@ -198,7 +174,7 @@ class SchemaService(BaseService):
     async def get_table_details(self, database: str, schema: str, table: str) -> Dict[str, Any]:
         """Get details for a specific table."""
         try:
-            headers = await self._get_auth_headers()
+            headers = self._get_auth_headers()
             return await self._make_request("GET", f"/explorer/databases/{database}/schemas/{schema}/tables/{table}", headers=headers)
         except Exception as e:
             self.logger.error("Failed to get table details", database=database, schema=schema, table=table, error=str(e))
@@ -207,7 +183,7 @@ class SchemaService(BaseService):
     async def search_database_objects(self, query: str, database: str = None, schema: str = None, object_type: str = None) -> List[Dict[str, Any]]:
         """Search for database objects."""
         try:
-            headers = await self._get_auth_headers()
+            headers = self._get_auth_headers()
             params = {"query": query}
             if database:
                 params["database"] = database

@@ -37,15 +37,49 @@ function UserPreferences() {
   const handleAddPreference = async (resources) => {
     const resourcesArray = Array.isArray(resources) ? resources : [resources];
     
-    try {
-      const promises = resourcesArray.map(resource => 
-        PreferencesService.addUserPreference(resource)
+    // Check for duplicates before submitting
+    const duplicates = [];
+    const toAdd = [];
+    
+    for (const resource of resourcesArray) {
+      const isDuplicate = preferences.some(pref => 
+        (pref.catalog || '') === (resource.catalog || '') &&
+        (pref.database_name || '') === (resource.database_name || '') &&
+        (pref.schema_name || '') === (resource.schema_name || '') &&
+        (pref.table_name || '') === (resource.table_name || '')
       );
-      await Promise.all(promises);
-      showSuccess(`${resourcesArray.length} preference${resourcesArray.length > 1 ? 's' : ''} added`);
-      loadPreferences();
-    } catch (err) {
-      showError(err.response?.data?.detail || err.message || 'Failed to add preference');
+      
+      if (isDuplicate) {
+        const path = [
+          resource.catalog,
+          resource.database_name,
+          resource.schema_name,
+          resource.table_name
+        ].filter(Boolean).join('.');
+        duplicates.push(path);
+      } else {
+        toAdd.push(resource);
+      }
+    }
+    
+    // Show warning for duplicates
+    if (duplicates.length > 0) {
+      showError(`Already exists: ${duplicates.join(', ')}`);
+      if (toAdd.length === 0) return; // All were duplicates
+    }
+    
+    // Add only non-duplicates
+    if (toAdd.length > 0) {
+      try {
+        const promises = toAdd.map(resource => 
+          PreferencesService.addUserPreference(resource)
+        );
+        await Promise.all(promises);
+        showSuccess(`${toAdd.length} preference${toAdd.length > 1 ? 's' : ''} added`);
+        loadPreferences();
+      } catch (err) {
+        showError(err.response?.data?.detail || err.message || 'Failed to add preference');
+      }
     }
   };
 
@@ -90,10 +124,7 @@ function UserPreferences() {
       {/* Header */}
       <div className="px-6 py-4 flex items-center justify-between">
         <div>
-          <h2 className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            Schema Preferences
-          </h2>
-          <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+          <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
             Boost preferred schemas in AI recommendations
           </p>
         </div>

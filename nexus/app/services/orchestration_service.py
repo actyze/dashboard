@@ -10,6 +10,7 @@ from app.services.trino_service import TrinoService
 from app.services.cache_factory import cache_service
 from app.services.user_service import UserService
 from app.services.sql_error_analysis_service import SqlErrorAnalysisService
+from app.services.preference_service import preference_service
 
 logger = structlog.get_logger()
 
@@ -24,6 +25,7 @@ class OrchestrationService:
         self.cache_service = cache_service
         self.user_service = UserService()
         self.error_analysis_service = SqlErrorAnalysisService()
+        self.preference_service = preference_service
         self.logger = logger.bind(service="orchestration-service")
     
     async def initialize(self):
@@ -44,7 +46,8 @@ class OrchestrationService:
         conversation_history: Optional[List[str]] = None,
         session_id: Optional[str] = None,
         last_sql: Optional[str] = None,
-        last_schema_recommendations: Optional[List[Dict[str, Any]]] = None
+        last_schema_recommendations: Optional[List[Dict[str, Any]]] = None,
+        user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Step 1 & 2: Generate SQL from Natural Language using Schema Service and LLM.
@@ -139,6 +142,10 @@ class OrchestrationService:
                     }
                 
                 recommendations = schema_recommendations.get("recommendations", []) or []
+                
+                # Apply user preference boost if user_id is provided
+                if user_id and recommendations:
+                    recommendations = await self._apply_preference_boost(user_id, recommendations)
             
             else:
                 # REFINE_RESULT, REJECT_RESULT, EXPLAIN_RESULT, FOLLOW_UP_SAME_DOMAIN
@@ -161,6 +168,10 @@ class OrchestrationService:
                     else:
                         # Defensive: Continue even if schema service fails
                         recommendations = []
+                
+                # Apply user preference boost if user_id is provided
+                if user_id and recommendations:
+                    recommendations = await self._apply_preference_boost(user_id, recommendations)
                 
                 # Construct schema_recommendations dict for LLM (CRITICAL FIX)
                 # Only construct if we got recommendations from session/params (not from fallback)
@@ -797,6 +808,89 @@ class OrchestrationService:
             "success": success,
             "message": "Cache cleared successfully" if success else "Failed to clear cache"
         }
+    
+    async def _apply_preference_boost(self, user_id: str, recommendations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Apply user preference boost multipliers to schema recommendations."""
+        try:
+            # Get user preferences
+            preferences = await self.preference_service.get_user_preferences(user_id)
+            
+            if not preferences:
+                self.logger.debug("No user preferences found", user_id=user_id)
+                return recommendations
+            
+            # Convert to boost map
+            boost_map = self.preference_service.get_boost_map(preferences)
+            
+            if not boost_map:
+                self.logger.debug("No boost map created", user_id=user_id)
+                return recommendations
+            
+            self.logger.info("Applying preference boost", user_id=user_id, boost_count=len(boost_map))
+            
+            # Apply boost to each recommendation
+            boosted_count = 0
+            for rec in recommendations:
+                full_name = rec.get("full_name", "")
+                catalog = rec.get("catalog", "")
+                schema = rec.get("schema", "")
+                table = rec.get("table", "")
+                
+                original_confidence = rec.get("confidence", 0.0)
+                boost = 1.0
+                matched_key = None
+                
+                # Try to match in order of specificity: database.schema.table > database.schema > database
+                table_key = f"{catalog}.{schema}.{table}"
+                schema_key = f"{catalog}.{schema}"
+                
+                if table_key in boost_map:
+                    boost = boost_map[table_key]
+                    matched_key = table_key
+                elif schema_key in boost_map:
+                    boost = boost_map[schema_key]
+                    matched_key = schema_key
+                elif catalog in boost_map:
+                    boost = boost_map[catalog]
+                    matched_key = catalog
+                
+                # Apply boost by multiplying confidence
+                if boost > 1.0:
+                    boosted_confidence = min(1.0, original_confidence * boost)
+                    rec["confidence"] = boosted_confidence
+                    rec["preference_boost"] = boost
+                    rec["original_confidence"] = original_confidence
+                    boosted_count += 1
+                    
+                    self.logger.debug(
+                        "Boost applied",
+                        table=full_name,
+                        matched_key=matched_key,
+                        original=f"{original_confidence:.4f}",
+                        boost=f"{boost}x",
+                        boosted=f"{boosted_confidence:.4f}"
+                    )
+            
+            # Re-sort by boosted confidence
+            recommendations.sort(key=lambda x: x.get("confidence", 0), reverse=True)
+            
+            # Update ranks
+            for i, rec in enumerate(recommendations):
+                rec["rank"] = i + 1
+            
+            self.logger.info(
+                "Preference boost complete",
+                user_id=user_id,
+                total_recommendations=len(recommendations),
+                boosted_count=boosted_count
+            )
+            
+            return recommendations
+            
+        except Exception as e:
+            self.logger.error("Failed to apply preference boost", error=str(e), user_id=user_id)
+            # Return original recommendations if boost fails
+            return recommendations
 
 # Global orchestration service instance
 orchestration_service = OrchestrationService()

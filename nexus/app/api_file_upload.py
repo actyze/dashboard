@@ -6,7 +6,7 @@ Handles CSV and Excel file uploads
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 import structlog
 import json
 
@@ -148,9 +148,21 @@ async def upload_file(
                 row_count, column_count, column_defs,
                 is_temporary, retention_days, sample_data
             )
-        # Trigger schema service refresh in background
-        if background_tasks:
-            background_tasks.add_task(notify_schema_service_refresh)
+        
+        # Trigger schema service incremental add in background
+        if background_tasks and not insert_into_existing:
+            # Only add to schema service for new tables (not inserts into existing)
+            # Build table metadata for schema service
+            columns_for_schema = [f"{col}|{sql_type.lower()}" for col, sql_type in column_defs.items()]
+            table_metadata = {
+                "catalog": "postgres",  # Assuming postgres catalog
+                "schema": schema_name,
+                "table": final_table_name,
+                "full_name": f"postgres.{schema_name}.{final_table_name}",
+                "columns": columns_for_schema,
+                "type": "TABLE"
+            }
+            background_tasks.add_task(notify_schema_service_add_table, table_metadata)
         
         logger.info("file_upload_completed",
                    filename=file.filename,
@@ -213,9 +225,17 @@ async def delete_user_table(
     try:
         result = await FileUploadService.truncate_user_table(db, user_id, table_id)
         
-        # Trigger schema service refresh in background
+        # Trigger schema service incremental remove in background
         if background_tasks and result.get("success"):
-            background_tasks.add_task(notify_schema_service_refresh)
+            schema_name = result.get("schema_name")
+            table_name = result.get("table_name")
+            if schema_name and table_name:
+                background_tasks.add_task(
+                    notify_schema_service_remove_table,
+                    "postgres",  # catalog
+                    schema_name,
+                    table_name
+                )
         
         return result
     except Exception as e:
@@ -242,8 +262,15 @@ async def cleanup_expired_tables(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def notify_schema_service_refresh():
-    """Notify schema service to refresh metadata"""
+async def notify_schema_service_add_table(table_metadata: Dict[str, Any]):
+    """
+    Notify schema service to add a single table (incremental update)
+    
+    Much faster than full refresh:
+    - Only adds 1 table vector (~50-100ms)
+    - No expensive Trino catalog queries
+    - Scales independently of total table count
+    """
     try:
         import os
         schema_service_url = os.getenv("SCHEMA_SERVICE_URL", "http://schema-service:8000")
@@ -255,14 +282,51 @@ async def notify_schema_service_refresh():
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{schema_service_url}/refresh-metadata",
-                headers=headers
+                f"{schema_service_url}/table/add",
+                json=table_metadata,
+                headers=headers,
+                timeout=30.0
             )
             if response.status_code == 200:
-                logger.info("schema_service_notified")
+                logger.info("schema_service_table_added", table=table_metadata.get("full_name"))
             else:
-                logger.warning("schema_service_notification_failed", 
-                             status_code=response.status_code)
+                logger.warning("schema_service_add_failed", 
+                             status_code=response.status_code,
+                             response=response.text)
     except Exception as e:
-        logger.error("schema_service_notification_error", error=str(e))
+        logger.error("schema_service_add_error", error=str(e))
+
+
+async def notify_schema_service_remove_table(catalog: str, schema_name: str, table_name: str):
+    """
+    Notify schema service to remove a table (incremental update)
+    
+    Faster than full refresh:
+    - No Trino queries
+    - Rebuilds index from in-memory metadata (~1-5s)
+    """
+    try:
+        import os
+        schema_service_url = os.getenv("SCHEMA_SERVICE_URL", "http://schema-service:8000")
+        service_key = os.getenv("SCHEMA_SERVICE_KEY", "")
+        
+        headers = {}
+        if service_key:
+            headers["X-Service-Key"] = service_key
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(
+                f"{schema_service_url}/table/{catalog}/{schema_name}/{table_name}",
+                headers=headers,
+                timeout=30.0
+            )
+            if response.status_code == 200:
+                logger.info("schema_service_table_removed", 
+                          table=f"{catalog}.{schema_name}.{table_name}")
+            else:
+                logger.warning("schema_service_remove_failed", 
+                             status_code=response.status_code,
+                             response=response.text)
+    except Exception as e:
+        logger.error("schema_service_remove_error", error=str(e))
 

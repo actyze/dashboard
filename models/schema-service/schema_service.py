@@ -346,34 +346,77 @@ async def refresh_schemas_endpoint(auth: dict = Depends(verify_service_auth)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/refresh-metadata")
-async def refresh_metadata(auth: dict = Depends(verify_service_auth)):
+@app.post("/table/add")
+async def add_table(table: Dict[str, Any], auth: dict = Depends(verify_service_auth)):
     """
-    Endpoint for triggering metadata refresh (requires service key)
+    Add a single table to the FAISS index (incremental update)
     
-    Used by Nexus when new tables are uploaded via file import.
+    This is much faster than full refresh:
+    - Only encodes 1 table (~50-100ms)
+    - No Trino queries
+    - Scales independently of total table count
     
     Security: Simple service key authentication (X-Service-Key header)
-    Only trusted internal services can trigger refresh.
     
-    What it does:
-    1. Fetches all schemas/tables from Trino (including new user_uploads tables)
-    2. Rebuilds FAISS vector index with fresh metadata
-    3. Updates in-memory schema cache
-    4. Makes new tables immediately available for AI-powered queries
+    Request body should include:
+    - catalog: string
+    - schema: string  
+    - table: string
+    - full_name: string (catalog.schema.table)
+    - columns: list of "column_name|type" strings or dicts
+    - type: string (TABLE, VIEW, etc.)
     """
     try:
-        logger.info("Metadata refresh triggered by authenticated service (file upload)")
-        await schema_service.refresh_schemas()
-        return {
-            "status": "success",
-            "message": "Metadata and vectors refreshed successfully",
-            "last_updated": schema_service.embedder.last_updated.isoformat(),
-            "total_schemas": len(schema_service.embedder.schema_metadata),
-            "index_size": schema_service.embedder.index.ntotal if schema_service.embedder.index else 0
-        }
+        logger.info(f"Adding table to index: {table.get('full_name', 'unknown')}")
+        success = await schema_service.embedder.add_table(table)
+        
+        if success:
+            return {
+                "status": "success",
+                "message": f"Table {table.get('full_name')} added successfully",
+                "index_size": schema_service.embedder.index.ntotal if schema_service.embedder.index else 0,
+                "total_schemas": len(schema_service.embedder.schema_metadata)
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to add table to index")
+            
     except Exception as e:
-        logger.exception("Metadata refresh failed")
+        logger.exception("Failed to add table")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/table/{catalog}/{schema}/{table}")
+async def remove_table(catalog: str, schema: str, table: str, auth: dict = Depends(verify_service_auth)):
+    """
+    Remove a table from the FAISS index (incremental update)
+    
+    Faster than full refresh:
+    - No Trino queries
+    - Only rebuilds index from in-memory metadata (~1-5s)
+    - Much faster than querying all catalogs/schemas
+    
+    Security: Simple service key authentication (X-Service-Key header)
+    """
+    try:
+        full_name = f"{catalog}.{schema}.{table}"
+        logger.info(f"Removing table from index: {full_name}")
+        
+        success = await schema_service.embedder.remove_table(full_name)
+        
+        if success:
+            return {
+                "status": "success",
+                "message": f"Table {full_name} removed successfully",
+                "index_size": schema_service.embedder.index.ntotal if schema_service.embedder.index else 0,
+                "total_schemas": len(schema_service.embedder.schema_metadata)
+            }
+        else:
+            raise HTTPException(status_code=404, detail=f"Table {full_name} not found in index")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to remove table")
         raise HTTPException(status_code=500, detail=str(e))
 
 

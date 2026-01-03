@@ -14,6 +14,7 @@ from app.api import router as api_router, auth_router, explorer_router, dashboar
 from app.admin_api import admin_router
 from app.api_preferences import router as preferences_router
 from app.api_file_upload import router as file_upload_router
+from app.api_metadata import router as metadata_router
 
 # Configure logging
 configure_logging()
@@ -82,6 +83,7 @@ app.include_router(dashboard_router)
 app.include_router(admin_router)  # Admin endpoints (requires ADMIN role)
 app.include_router(preferences_router, prefix="/api", tags=["User Preferences"])  # User preferences
 app.include_router(file_upload_router)  # File upload endpoints
+app.include_router(metadata_router)  # Metadata catalog descriptions (org-level)
 app.include_router(public_router)  # No authentication required
 
 

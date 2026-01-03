@@ -54,15 +54,30 @@ class FAISSSchemaEmbedder:
             cols = ", ".join([c["name"] for c in schema["columns"]])
             types = ", ".join(sorted(set(c["type"] for c in schema["columns"])))
         
-        return (
+        # Base schema information
+        text = (
             f"Database: {schema['catalog']} | "
             f"Schema: {schema['schema']} | "
             f"Type: {schema.get('type', 'TABLE')} | "
             f"Table: {schema['table']} | "
-            f"Full name: {schema['full_name']} | "
-            f"Columns: {cols} | "
-            f"Column types: {types}"
+            f"Full name: {schema['full_name']}"
         )
+        
+        # Add user-provided table description if available (improves semantic matching)
+        if schema.get('description'):
+            text += f" | Description: {schema['description']}"
+        
+        text += f" | Columns: {cols} | Column types: {types}"
+        
+        # Add column descriptions if available
+        if schema.get('column_descriptions'):
+            col_desc_text = ", ".join([
+                f"{col_name}: {desc}"
+                for col_name, desc in schema['column_descriptions'].items()
+            ])
+            text += f" | Column details: {col_desc_text}"
+        
+        return text
 
     @staticmethod
     def _build_raw_schema_cache(schemas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

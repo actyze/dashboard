@@ -684,7 +684,9 @@ class FileUploadService:
             
             return {
                 "success": True,
-                "message": f"Table '{table['table_name']}' deleted successfully"
+                "message": f"Table '{table['table_name']}' deleted successfully",
+                "schema_name": table["schema_name"],
+                "table_name": table["table_name"]
             }
             
         except Exception as e:

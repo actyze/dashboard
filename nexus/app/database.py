@@ -244,3 +244,25 @@ class DatabaseManager:
 
 # Global database manager instance
 db_manager = DatabaseManager()
+
+
+# FastAPI dependency for database sessions
+async def get_db():
+    """
+    FastAPI dependency that provides a database session.
+    
+    Usage:
+        @router.post("/endpoint")
+        async def my_endpoint(db: AsyncSession = Depends(get_db)):
+            # Use db here
+            ...
+    """
+    session = db_manager.get_session()
+    try:
+        yield session
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await session.close()

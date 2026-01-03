@@ -107,8 +107,107 @@ class SchemaService:
         """
         logger.info("Refreshing schemas from Trino...")
         schemas = await self.trino_service.get_all_schemas()
-        await self.embedder.build_embeddings(schemas)
-        logger.info(f"Refresh complete: {len(schemas)} schemas embedded")
+        
+        # Enrich schemas with user-provided descriptions from Nexus
+        schemas_with_descriptions = await self.enrich_with_descriptions(schemas)
+        
+        await self.embedder.build_embeddings(schemas_with_descriptions)
+        logger.info(f"Refresh complete: {len(schemas_with_descriptions)} schemas embedded")
+    
+    async def enrich_with_descriptions(self, schemas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Fetch metadata descriptions from Nexus and enrich schema objects.
+        
+        Args:
+            schemas: List of schema dicts from Trino
+            
+        Returns:
+            Enriched schema dicts with 'description' and 'column_descriptions' fields
+        """
+        try:
+            import asyncpg
+            
+            # Connect to Nexus database
+            conn = await asyncpg.connect(
+                host=self.postgres_host,
+                port=self.postgres_port,
+                database=self.postgres_db,
+                user=self.postgres_user,
+                password=self.postgres_password
+            )
+            
+            # Fetch all descriptions
+            rows = await conn.fetch("""
+                SELECT catalog, schema_name, table_name, column_name, description
+                FROM nexus.metadata_descriptions
+                ORDER BY catalog, schema_name, table_name, column_name
+            """)
+            
+            await conn.close()
+            
+            # Build lookup dictionaries for fast access
+            # Table descriptions: {(catalog, schema, table): description}
+            table_descriptions = {}
+            # Column descriptions: {(catalog, schema, table, column): description}
+            column_descriptions = {}
+            
+            for row in rows:
+                catalog = row['catalog']
+                schema_name = row['schema_name']
+                table_name = row['table_name']
+                column_name = row['column_name']
+                description = row['description']
+                
+                if column_name:
+                    # Column-level description
+                    column_descriptions[(catalog, schema_name, table_name, column_name)] = description
+                elif table_name:
+                    # Table-level description
+                    table_descriptions[(catalog, schema_name, table_name)] = description
+                # We don't currently use catalog/schema level descriptions in embeddings
+            
+            # Enrich schemas with descriptions
+            enriched_schemas = []
+            for schema in schemas:
+                enriched_schema = schema.copy()
+                
+                catalog = schema.get('catalog')
+                schema_name = schema.get('schema')
+                table_name = schema.get('table')
+                
+                # Add table description if available
+                table_key = (catalog, schema_name, table_name)
+                if table_key in table_descriptions:
+                    enriched_schema['description'] = table_descriptions[table_key]
+                
+                # Add column descriptions if available
+                col_descs = {}
+                columns = schema.get('columns', [])
+                for col in columns:
+                    # Columns can be strings "name|type" or dicts
+                    if isinstance(col, str) and '|' in col:
+                        col_name = col.split('|')[0]
+                    elif isinstance(col, dict):
+                        col_name = col.get('name')
+                    else:
+                        continue
+                    
+                    col_key = (catalog, schema_name, table_name, col_name)
+                    if col_key in column_descriptions:
+                        col_descs[col_name] = column_descriptions[col_key]
+                
+                if col_descs:
+                    enriched_schema['column_descriptions'] = col_descs
+                
+                enriched_schemas.append(enriched_schema)
+            
+            logger.info(f"Enriched {len(enriched_schemas)} schemas with {len(table_descriptions)} table descriptions and {len(column_descriptions)} column descriptions")
+            return enriched_schemas
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch descriptions from Nexus: {e}")
+            # Return original schemas if description fetching fails
+            return schemas
 
     def recommend(self, query: str, prior_context: List[str] = None, top_k: int = 10, threshold: float = 0.3) -> Dict[str, Any]:
         """Enhanced recommendation with domain labeling pipeline."""
@@ -417,6 +516,68 @@ async def remove_table(catalog: str, schema: str, table: str, auth: dict = Depen
         raise
     except Exception as e:
         logger.exception("Failed to remove table")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/table/refresh")
+async def refresh_table(table_info: Dict[str, Any], auth: dict = Depends(verify_service_auth)):
+    """
+    Refresh a specific table in the FAISS index (used when metadata description is updated).
+    
+    This removes the old embedding and adds a fresh one with updated descriptions:
+    - Fetches updated descriptions from Nexus
+    - Updates the FAISS embedding for the table
+    
+    Security: Simple service key authentication (X-Service-Key header)
+    
+    Request body should include:
+    - catalog: string
+    - schema: string
+    - table: string
+    """
+    try:
+        catalog = table_info.get('catalog')
+        schema_name = table_info.get('schema')
+        table_name = table_info.get('table')
+        
+        if not catalog or not schema_name or not table_name:
+            raise HTTPException(status_code=400, detail="Missing required fields: catalog, schema, table")
+        
+        full_name = f"{catalog}.{schema_name}.{table_name}"
+        logger.info(f"Refreshing table with updated descriptions: {full_name}")
+        
+        # Step 1: Find the table in current metadata
+        table_schema = None
+        for schema in schema_service.embedder.schema_metadata:
+            if schema.get('full_name') == full_name:
+                table_schema = schema.copy()
+                break
+        
+        if not table_schema:
+            raise HTTPException(status_code=404, detail=f"Table {full_name} not found in index")
+        
+        # Step 2: Remove old embedding
+        await schema_service.embedder.remove_table(full_name)
+        
+        # Step 3: Fetch updated descriptions from Nexus and enrich the table
+        enriched_schemas = await schema_service.enrich_with_descriptions([table_schema])
+        
+        # Step 4: Add back to FAISS index with new descriptions
+        if enriched_schemas:
+            await schema_service.embedder.add_table(enriched_schemas[0])
+            logger.info(f"Table {full_name} refreshed successfully with updated descriptions")
+        
+        return {
+            "status": "success",
+            "message": f"Table {full_name} refreshed with updated descriptions",
+            "index_size": schema_service.embedder.index.ntotal if schema_service.embedder.index else 0,
+            "total_schemas": len(schema_service.embedder.schema_metadata)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to refresh table")
         raise HTTPException(status_code=500, detail=str(e))
 
 

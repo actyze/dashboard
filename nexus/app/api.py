@@ -91,12 +91,14 @@ async def generate_sql(
     current_user: dict = Depends(require_viewer)
 ):
     """Generate SQL from natural language without executing it (with ML-based intent detection)."""
+    user_id = current_user.get("id")
     result = await orchestration_service.generate_sql_from_nl(
         request.nl_query, 
         request.conversation_history,
         session_id=request.session_id,
         last_sql=request.last_sql,
-        last_schema_recommendations=request.last_schema_recommendations
+        last_schema_recommendations=request.last_schema_recommendations,
+        user_id=user_id
     )
     return result
 

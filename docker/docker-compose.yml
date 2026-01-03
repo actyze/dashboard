@@ -107,6 +107,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-dashboard}
       POSTGRES_USER: ${POSTGRES_USER:-nexus_service}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Service Authentication
+      SCHEMA_SERVICE_KEY: ${SCHEMA_SERVICE_KEY}
     depends_on:
       trino:
         condition: service_healthy
@@ -157,6 +159,7 @@ services:
       TRINO_SSL: ${TRINO_SSL:-false}
       # Schema Service Configuration
       SCHEMA_SERVICE_URL: http://${SCHEMA_SERVICE_HOST:-schema-service}:${SCHEMA_SERVICE_PORT:-8000}
+      SCHEMA_SERVICE_KEY: ${SCHEMA_SERVICE_KEY}
       # External LLM Configuration
       EXTERNAL_LLM_ENABLED: ${EXTERNAL_LLM_ENABLED:-true}
       EXTERNAL_LLM_PROVIDER: ${EXTERNAL_LLM_PROVIDER:-perplexity}

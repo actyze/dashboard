@@ -10,6 +10,7 @@ import { useToast } from '../../contexts/ToastContext';
 import MetadataService from '../../services/MetadataService';
 import { RestService } from '../../services/RestService';
 import { useGetDatabases } from '../../hooks/useRestAPI';
+import ConnectorBadge from '../Common/ConnectorBadge';
 
 // Icons
 const ChevronRightIcon = () => (
@@ -483,10 +484,13 @@ function MetadataCatalog() {
           <span className={`${isDark ? 'text-gray-400' : 'text-gray-600'} flex-shrink-0`}>
             <DatabaseIcon />
           </span>
-          <span className={`flex-1 font-medium min-w-0 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            {db.name}
+          <span className={`flex-1 font-medium min-w-0 ${isDark ? 'text-white' : 'text-gray-900'} flex items-center gap-2`}>
+            <span>{db.name}</span>
+            {db.connector_type && (
+              <ConnectorBadge connector_type={db.connector_type} size="sm" />
+            )}
             {db.schema_count > 0 && (
-              <span className={`ml-2 text-xs font-normal ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+              <span className={`text-xs font-normal ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
                 {db.schema_count} schemas
               </span>
             )}

@@ -411,10 +411,11 @@ Generated SQL (Main Data):
         if recommendations:
             prompt_parts.append("\n=== AVAILABLE TABLES (by relevance) ===")
             
-            # Build table list with columns and confidence scores
+            # Build table list with connector type, columns and confidence scores
             for rec in recommendations:
                 confidence = rec.get('confidence', 0.0)
-                table_info = f"- {rec.get('full_name', 'unknown')} ({confidence:.2f})"
+                connector_type = rec.get('connector_type', 'unknown')
+                table_info = f"- {rec.get('full_name', 'unknown')} [connector: {connector_type}] ({confidence:.2f})"
                 if rec.get('columns'):
                     columns_str = ", ".join(rec['columns'][:10])
                     table_info += f"\n  Cols: {columns_str}"
@@ -440,8 +441,9 @@ Generated SQL (Main Data):
             "1. ONLY use tables from AVAILABLE TABLES list above",
             "2. No tables = no SQL (provide guidance instead)",
             "3. Use exact qualified names (catalog.schema.table)",
-            "4. Trino syntax, proper aliases, appropriate JOINs",
-            "5. Text filters: use LOWER() for case-insensitive match",
+            "4. Trino SQL syntax (default), adapt for connector-specific features when needed",
+            "5. Respect connector types: PostgreSQL, MySQL, MongoDB, Iceberg, Hive, etc.",
+            "6. Text filters: use LOWER() for case-insensitive match",
             "",
             "CHART RULES:",
             "- Result columns drop prefixes: 'c.city' → 'city' NOT 'ccity'",

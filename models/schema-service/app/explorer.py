@@ -18,6 +18,7 @@ def get_databases_list(raw_schema_cache, last_updated):
         if db_name not in databases:
             databases[db_name] = {
                 "name": db_name,
+                "connector_type": schema_obj.get("connector_type", "unknown"),
                 "schema_count": 0,
                 "table_count": 0,
                 "total_columns": 0
@@ -43,9 +44,12 @@ def get_databases_list(raw_schema_cache, last_updated):
 def get_database_schemas_list(database: str, raw_schema_cache, last_updated):
     """Get list of all schemas in a database."""
     schemas = {}
+    connector_type = None
     
     for schema_obj in raw_schema_cache:
         if schema_obj["database"].lower() == database.lower():
+            if connector_type is None:
+                connector_type = schema_obj.get("connector_type", "unknown")
             schema_name = schema_obj["schema"]
             if schema_name not in schemas:
                 schemas[schema_name] = {
@@ -62,6 +66,7 @@ def get_database_schemas_list(database: str, raw_schema_cache, last_updated):
     
     return {
         "database": database,
+        "connector_type": connector_type or "unknown",
         "schemas": list(schemas.values()),
         "total_schemas": len(schemas),
         "last_updated": last_updated.isoformat() if last_updated else None
@@ -71,13 +76,17 @@ def get_database_schemas_list(database: str, raw_schema_cache, last_updated):
 def get_schema_objects_list(database: str, schema: str, raw_schema_cache, last_updated):
     """Get all database objects in a schema."""
     tables = []
+    connector_type = None
     
     for schema_obj in raw_schema_cache:
         if (schema_obj["database"].lower() == database.lower() and 
             schema_obj["schema"].lower() == schema.lower()):
+            if connector_type is None:
+                connector_type = schema_obj.get("connector_type", "unknown")
             tables.append({
                 "name": schema_obj["table"],
                 "type": schema_obj.get("type", "TABLE"),
+                "connector_type": connector_type,
                 "column_count": schema_obj["column_count"],
                 "full_name": schema_obj["full_name"]
             })
@@ -137,6 +146,7 @@ def get_table_detail(database: str, schema: str, table: str, raw_schema_cache, l
         "table": table,
         "full_name": table_info["full_name"],
         "type": table_info.get("type", "TABLE"),
+        "connector_type": table_info.get("connector_type", "unknown"),
         "columns": table_info["columns"],
         "column_count": table_info["column_count"],
         "metadata": {

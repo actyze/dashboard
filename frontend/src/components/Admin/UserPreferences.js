@@ -9,6 +9,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import PreferencesService from '../../services/PreferencesService';
 import SchemaBrowserDialog from '../Common/SchemaBrowserDialog';
+import ConnectorBadge from '../Common/ConnectorBadge';
+import { RestService } from '../../services/RestService';
 
 function UserPreferences() {
   const { isDark } = useTheme();
@@ -17,10 +19,26 @@ function UserPreferences() {
   const [loading, setLoading] = useState(true);
   const [openBrowserDialog, setOpenBrowserDialog] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, path } of preference to delete
+  const [connectorMap, setConnectorMap] = useState({}); // database_name -> connector_type
 
   useEffect(() => {
     loadPreferences();
+    loadDatabases();
   }, []);
+
+  const loadDatabases = async () => {
+    try {
+      const response = await RestService.getDatabases();
+      // Create lookup map: database_name -> connector_type
+      const map = {};
+      response.databases.forEach(db => {
+        map[db.name] = db.connector_type || 'unknown';
+      });
+      setConnectorMap(map);
+    } catch (err) {
+      console.error('Failed to load databases for connector types:', err);
+    }
+  };
 
   const loadPreferences = async () => {
     try {
@@ -195,7 +213,10 @@ function UserPreferences() {
                 </div>
                 
                 {/* Database */}
-                <div className="col-span-2 flex items-center">
+                <div className="col-span-2 flex items-center gap-2">
+                  {pref.database_name && connectorMap[pref.database_name] && (
+                    <ConnectorBadge connector_type={connectorMap[pref.database_name]} size="sm" showIcon={false} />
+                  )}
                   <span className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                     {pref.database_name || '-'}
                   </span>

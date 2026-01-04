@@ -72,7 +72,8 @@ class TrinoSchemaService:
             raise
 
     async def get_all_schemas(self, retries: int = 3, backoff_base: float = 1.0) -> List[Dict[str, Any]]:
-        """Fetch catalog/schema/table/columns using system.jdbc.columns."""
+        """Fetch catalog/schema/table/columns with connector types using system.jdbc.columns."""
+        logger.info("Starting get_all_schemas - fetching schemas with connector types")
         if not self.connection:
             self.connect()
 
@@ -85,6 +86,7 @@ class TrinoSchemaService:
         excluded_catalogs_str = ', '.join(f"'{cat}'" for cat in excluded_catalogs)
         
         # For TPC-H, only load sf1 and tiny (exclude large scale factors: sf10, sf100, sf1000, etc.)
+        # Join with system.metadata.catalogs to get connector_name in the same query
         query = f"""
             SELECT
                 c.table_cat   AS catalog,
@@ -92,12 +94,15 @@ class TrinoSchemaService:
                 c.table_name,
                 t.table_type,
                 c.column_name,
-                c.type_name   AS data_type
+                c.type_name   AS data_type,
+                cat.connector_name AS connector_type
             FROM system.jdbc.columns c
             LEFT JOIN system.jdbc.tables t
                 ON c.table_cat   = t.table_cat
             AND c.table_schem = t.table_schem
             AND c.table_name  = t.table_name
+            LEFT JOIN system.metadata.catalogs cat
+                ON c.table_cat = cat.catalog_name
             WHERE c.table_cat NOT IN ({excluded_catalogs_str})
             AND c.table_schem <> 'information_schema'
             AND c.table_schem <> 'nexus'
@@ -128,15 +133,22 @@ class TrinoSchemaService:
 
                 # Group by table
                 table_map: Dict[str, Dict[str, Any]] = {}
-                for catalog, schema, table, table_type, col, dtype in rows:
+                connector_type_logged = False
+                for catalog, schema, table, table_type, col, dtype, connector_type in rows:
                     key = f"{catalog}.{schema}.{table}"
                     if key not in table_map:
+                        # Log first connector type as verification
+                        if not connector_type_logged:
+                            logger.info(f"Connector type fetched from query: '{connector_type}' for catalog '{catalog}'")
+                            connector_type_logged = True
+                        
                         table_map[key] = {
                             "catalog": catalog,
                             "schema": schema,
                             "table": table,
                             "type": table_type,
                             "full_name": key,
+                            "connector_type": connector_type or "unknown",
                             "columns": []
                         }
                     table_map[key]["columns"].append(f"{col}|{self._normalize_data_type(dtype)}")

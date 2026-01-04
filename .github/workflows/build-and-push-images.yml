@@ -92,14 +92,14 @@ jobs:
         id: build
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ./docker/Dockerfile.frontend
+          context: ./frontend
+          file: ./frontend/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
 
   build-nexus:
     runs-on: ubuntu-latest
@@ -172,7 +172,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
 
   build-schema-service:
     runs-on: ubuntu-latest
@@ -182,6 +182,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Free up disk space
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          # Remove unnecessary packages and files
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker system prune -af --volumes
+          echo "Disk space after cleanup:"
+          df -h
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -245,7 +258,10 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
+          # Note: arm64 disabled due to disk space constraints on GitHub Actions
+          # The schema service image is very large (~5GB) with ML models
+          # To enable arm64: add ",linux/arm64" to platforms above
 
   update-deployment-configs:
     runs-on: ubuntu-latest

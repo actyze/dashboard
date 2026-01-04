@@ -654,8 +654,7 @@ class FileUploadService:
     @staticmethod
     async def truncate_user_table(db, user_id: str, table_id: str) -> Dict[str, Any]:
         """
-        Truncate (fast delete) a user's uploaded table
-        Uses TRUNCATE for performance and no history overhead
+        Drop a user's uploaded table completely (removes table structure and data)
         """
         # Get table info
         table = await FileUploadService.get_table_by_id(db, user_id, table_id)
@@ -663,9 +662,9 @@ class FileUploadService:
             return {"success": False, "error": "Table not found"}
         
         try:
-            # TRUNCATE the table (fast, no transaction log overhead)
-            truncate_query = text(f'TRUNCATE TABLE {table["schema_name"]}."{table["table_name"]}" CASCADE')
-            await db.execute(truncate_query)
+            # DROP the table completely
+            drop_query = text(f'DROP TABLE IF EXISTS {table["schema_name"]}."{table["table_name"]}" CASCADE')
+            await db.execute(drop_query)
             
             # Mark as deleted in metadata
             update_query = text("""
@@ -677,7 +676,7 @@ class FileUploadService:
             await db.execute(update_query, {"table_id": int(table_id)})
             await db.commit()
             
-            logger.info("table_truncated",
+            logger.info("table_dropped",
                        schema=table["schema_name"],
                        table=table["table_name"],
                        user_id=user_id)
@@ -691,7 +690,7 @@ class FileUploadService:
             
         except Exception as e:
             await db.rollback()
-            logger.error("truncate_table_error",
+            logger.error("drop_table_error",
                         error=str(e),
                         table_id=table_id,
                         user_id=user_id)

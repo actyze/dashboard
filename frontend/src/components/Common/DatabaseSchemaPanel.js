@@ -4,6 +4,7 @@ import { Text, Button } from '../ui';
 import TableSchema from './TableSchema';
 import { useGetDatabases } from '../../hooks/useRestAPI';
 import { RestService } from '../../services/RestService';
+import ConnectorBadge from './ConnectorBadge';
 
 const DatabaseSchemaPanel = ({ 
   isCollapsed, 
@@ -203,6 +204,9 @@ const DatabaseSchemaPanel = ({
                   <ChevronIcon isExpanded={expandedDatabases.has(database.name)} />
                   <DatabaseIcon />
                   <Text className="font-medium text-xs">{database.name}</Text>
+                  {database.connector_type && (
+                    <ConnectorBadge connector_type={database.connector_type} size="sm" showIcon={false} />
+                  )}
                   <Text className="text-xs text-gray-400 ml-auto">
                     {database.schema_count} schemas
                   </Text>

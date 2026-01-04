@@ -55,7 +55,9 @@ class FAISSSchemaEmbedder:
             types = ", ".join(sorted(set(c["type"] for c in schema["columns"])))
         
         # Base schema information
+        connector_type = schema.get('connector_type', 'unknown')
         text = (
+            f"Connector: {connector_type} | "
             f"Database: {schema['catalog']} | "
             f"Schema: {schema['schema']} | "
             f"Type: {schema.get('type', 'TABLE')} | "

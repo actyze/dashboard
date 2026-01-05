@@ -352,7 +352,6 @@ class AdminService:
         self,
         user_id: str,
         catalog: str,
-        database: str,
         schema: str,
         table: str
     ) -> Dict[str, Any]:
@@ -360,6 +359,9 @@ class AdminService:
         Check if a user has access to query a specific table.
         - ADMIN role users have full access (no restrictions)
         - USER role users get access through direct user_data_access rules
+        
+        Trino naming: catalog.schema.table
+        Access rules stored in database with database_name = catalog (e.g., "tpch", "postgres")
         """
         async with db_manager.get_session() as session:
             try:
@@ -381,22 +383,23 @@ class AdminService:
                     user_role_result = await session.execute(user_role_query)
                     if user_role_result.scalar_one_or_none():
                         # User is an admin - grant full access
+                        self.logger.info("RBAC: ADMIN user granted access", user_id=user_id, table=f"{catalog}.{schema}.{table}")
                         return {"has_access": True, "reason": "ADMIN role has full access"}
                 
                 # Check direct user data access rules
-                # Rules are hierarchical:
-                # - NULL database_name = access to all databases
-                # - database_name + NULL schema_name = access to entire database
-                # - database_name + schema_name + NULL table_name = access to entire schema
-                # - database_name + schema_name + table_name = access to specific table
+                # Rules are hierarchical (Trino naming: catalog.schema.table):
+                # - NULL database_name = access to all catalogs
+                # - database_name (catalog) + NULL schema_name = access to entire catalog
+                # - database_name (catalog) + schema_name + NULL table_name = access to entire schema
+                # - database_name (catalog) + schema_name + table_name = access to specific table
                 
                 access_query = select(UserDataAccess).where(
                     and_(
                         UserDataAccess.user_id == user_uuid,
                         UserDataAccess.can_query == True,
-                        # Match database (NULL = all databases)
+                        # Match catalog (stored as database_name) - NULL = all catalogs
                         or_(
-                            UserDataAccess.database_name == database,
+                            UserDataAccess.database_name == catalog,
                             UserDataAccess.database_name.is_(None)
                         )
                     )
@@ -408,28 +411,33 @@ class AdminService:
                 for rule in access_rules:
                     # Check hierarchical access
                     if rule.database_name is None:
-                        # Access to all databases
+                        # Access to all catalogs
+                        self.logger.info("RBAC: Access granted via wildcard catalog rule", user_id=user_id, rule_id=str(rule.id))
                         return {"has_access": True, "rule_id": str(rule.id)}
                     
-                    if rule.database_name == database:
+                    if rule.database_name == catalog:
                         if rule.schema_name is None:
-                            # Access to entire database
+                            # Access to entire catalog
+                            self.logger.info("RBAC: Access granted via catalog rule", user_id=user_id, catalog=catalog, rule_id=str(rule.id))
                             return {"has_access": True, "rule_id": str(rule.id)}
                         
                         if rule.schema_name == schema:
                             if rule.table_name is None:
                                 # Access to entire schema
+                                self.logger.info("RBAC: Access granted via schema rule", user_id=user_id, schema=f"{catalog}.{schema}", rule_id=str(rule.id))
                                 return {"has_access": True, "rule_id": str(rule.id)}
                             
                             if rule.table_name == table:
                                 # Access to specific table
+                                self.logger.info("RBAC: Access granted via table rule", user_id=user_id, table=f"{catalog}.{schema}.{table}", rule_id=str(rule.id))
                                 return {"has_access": True, "rule_id": str(rule.id)}
                 
                 # No matching rules found
+                self.logger.warning("RBAC: Access denied - no matching rules", user_id=user_id, table=f"{catalog}.{schema}.{table}")
                 return {"has_access": False, "reason": "No matching access rules"}
                 
             except Exception as e:
-                self.logger.error("Failed to check user access", error=str(e), user_id=user_id, table=f"{catalog}.{database}.{schema}.{table}")
+                self.logger.error("Failed to check user access", error=str(e), user_id=user_id, table=f"{catalog}.{schema}.{table}")
                 return {"has_access": False, "reason": str(e)}
     
     # =========================================================================

@@ -80,7 +80,13 @@ def is_select_query(sql: str) -> bool:
     """
     Check if the SQL query is a SELECT query.
     Analytics platform only allows SELECT queries.
+    Handles leading comments (-- and /* */).
     """
-    sql_upper = sql.strip().upper()
+    # Remove comments first
+    sql_no_comments = re.sub(r'--.*$', '', sql, flags=re.MULTILINE)
+    sql_no_comments = re.sub(r'/\*.*?\*/', '', sql_no_comments, flags=re.DOTALL)
+    
+    # Check if it starts with SELECT or WITH (after stripping whitespace)
+    sql_upper = sql_no_comments.strip().upper()
     return sql_upper.startswith('SELECT') or sql_upper.startswith('WITH')
 

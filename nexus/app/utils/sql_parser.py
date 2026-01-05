@@ -14,13 +14,14 @@ logger = structlog.get_logger()
 def extract_tables_from_sql(sql: str) -> List[Dict[str, str]]:
     """
     Extract table references from SELECT queries only.
-    Returns list of dicts with catalog, database, schema, and table.
+    Returns list of dicts with catalog, schema, and table (Trino naming convention).
+    
+    Trino naming hierarchy: catalog.schema.table
     
     Handles:
-    - catalog.database.schema.table
-    - database.schema.table
-    - schema.table
-    - table
+    - catalog.schema.table (3 parts - Trino standard)
+    - schema.table (2 parts - assumes 'postgres' catalog)
+    - table (1 part - assumes postgres.public.table)
     
     This is an analytics platform - only SELECT queries are supported.
     """
@@ -32,8 +33,8 @@ def extract_tables_from_sql(sql: str) -> List[Dict[str, str]]:
     
     # SQL patterns for table references in SELECT queries (FROM/JOIN clauses only)
     patterns = [
-        # FROM/JOIN clauses with optional catalog.database.schema.table
-        r'(?:FROM|JOIN)\s+(?:LATERAL\s+)?([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+){0,3})',
+        # FROM/JOIN clauses with optional catalog.schema.table
+        r'(?:FROM|JOIN)\s+(?:LATERAL\s+)?([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+){0,2})',
     ]
     
     table_refs = set()
@@ -46,40 +47,31 @@ def extract_tables_from_sql(sql: str) -> List[Dict[str, str]]:
     for ref in table_refs:
         parts = ref.split('.')
         
-        if len(parts) == 4:
-            # catalog.database.schema.table
+        if len(parts) == 3:
+            # catalog.schema.table (Trino standard: tpch.sf1.orders)
             tables.append({
                 "catalog": parts[0],
-                "database": parts[1],
-                "schema": parts[2],
-                "table": parts[3]
-            })
-        elif len(parts) == 3:
-            # database.schema.table (assume postgres catalog)
-            tables.append({
-                "catalog": "postgres",
-                "database": parts[0],
                 "schema": parts[1],
                 "table": parts[2]
             })
         elif len(parts) == 2:
-            # schema.table (assume postgres catalog, default database)
+            # schema.table (assume postgres catalog)
             tables.append({
                 "catalog": "postgres",
-                "database": "demo",  # Default database
                 "schema": parts[0],
                 "table": parts[1]
             })
         else:
-            # Just table name (assume defaults)
+            # Just table name (assume postgres.public.table)
             tables.append({
                 "catalog": "postgres",
-                "database": "demo",
                 "schema": "public",
                 "table": parts[0]
             })
     
-    logger.info("Extracted tables from SQL", table_count=len(tables), tables=[t["table"] for t in tables])
+    logger.info("Extracted tables from SQL", 
+                table_count=len(tables), 
+                tables=[f"{t['catalog']}.{t['schema']}.{t['table']}" for t in tables])
     
     return tables
 

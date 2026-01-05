@@ -131,13 +131,12 @@ async def execute_sql(
         access_check = await admin_service.check_user_access(
             user_id=user_id,
             catalog=table["catalog"],
-            database=table["database"],
             schema=table["schema"],
             table=table["table"]
         )
         
         if not access_check.get("has_access", False):
-            access_denied_tables.append(f"{table['catalog']}.{table['database']}.{table['schema']}.{table['table']}")
+            access_denied_tables.append(f"{table['catalog']}.{table['schema']}.{table['table']}")
     
     if access_denied_tables:
         raise HTTPException(

@@ -29,8 +29,13 @@ A comprehensive dashboard application that converts natural language queries to 
 
 #### ☸️ **Kubernetes with Helm (Production)**
 ```bash
+# Helm charts are in a separate repository
+# Clone the helm-charts repo: https://github.com/actyze/helm-charts
+git clone https://github.com/actyze/helm-charts.git
+cd helm-charts
+
 # Deploy to Kubernetes cluster
-helm install dashboard ./helm/dashboard -f ./helm/dashboard/values-dev.yaml -n dashboard
+helm install dashboard ./dashboard -f ./dashboard/values-dev.yaml -n dashboard
 ```
 
 #### 🚀 **Pre-built Docker Images (Docker Hub)**
@@ -46,21 +51,33 @@ docker pull actyze/dashboard-schema-service:latest
 📖 **[CI/CD Pipeline Documentation](.github/workflows/README.md)**
 
 ### **Prerequisites:**
-- Docker & Kubernetes (Kind/AKS)
-- Helm 3.x
-- kubectl
+- Docker (for local development)
+- Kubernetes & Helm 3.x (for production deployment)
+- kubectl (for Kubernetes management)
 
-### **Local Deployment:**
+### **Local Development:**
 ```bash
-# Create Kind cluster
-kind create cluster --config kind-config-no-gpu.yaml
+# Use Docker Compose for local development
+./scripts/docker-start.sh local -d
 
-# Deploy with external LLM
-helm install dashboard ./helm/dashboard \
+# Access services
+# Frontend: http://localhost:3000
+# Nexus API: http://localhost:8000
+# PostgreSQL: localhost:5432
+```
+
+### **Kubernetes Deployment:**
+```bash
+# Clone helm-charts repository
+git clone https://github.com/actyze/helm-charts.git
+cd helm-charts
+
+# Deploy with Helm
+helm install dashboard ./dashboard \
   --namespace dashboard \
   --create-namespace \
-  --values ./helm/dashboard/values-dev.yaml \
-  --values ./helm/dashboard/values-dev-secrets.yaml
+  --values ./dashboard/values-dev.yaml \
+  --values ./dashboard/values-dev-secrets.yaml
 ```
 
 ## 🎯 **Key Features**
@@ -82,7 +99,7 @@ dashboard/
 ├── frontend/               # React dashboard application
 ├── schema-service/         # FAISS schema recommendations
 ├── docker/                 # Docker Compose setup & documentation
-└── helm/                   # Kubernetes charts & documentation
+└── scripts/                # Development and deployment scripts
 ```
 
 ## 🔧 **Configuration**
@@ -90,8 +107,8 @@ dashboard/
 ### **External LLM Setup:**
 See [EXTERNAL_LLM_SETUP.md](EXTERNAL_LLM_SETUP.md) for complete configuration guide.
 
-### **Helm Values:**
-See [helm/dashboard/VALUES_README.md](helm/dashboard/VALUES_README.md) for deployment options.
+### **Helm Charts & Deployment:**
+Helm charts are maintained in a separate repository: [actyze/helm-charts](https://github.com/actyze/helm-charts)
 
 ## 🧪 **Testing**
 
@@ -132,10 +149,10 @@ cd nexus && pytest
 
 - [External LLM Setup](EXTERNAL_LLM_SETUP.md)
 - [Docker Deployment](docker/DEPLOYMENT.md)
-- [Helm Values Guide](helm/dashboard/VALUES_README.md)
 - [Database Migrations](DATABASE_MIGRATIONS.md)
 - [Schema Service](schema-service/README.md)
 - [Nexus API](nexus/API_DOCUMENTATION.md)
+- [Helm Charts Repository](https://github.com/actyze/helm-charts)
 
 ## 🤝 **Contributing**
 

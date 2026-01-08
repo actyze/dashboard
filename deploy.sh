@@ -98,12 +98,10 @@ case $ACTION in
             
             # Check if images exist locally
             echo "🔍 Checking Docker images..."
-            docker images | grep -E "(dashboard-backend|dashboard-fastapi|dashboard-frontend)" || {
+            docker images | grep -E "(dashboard-nexus|dashboard-frontend|dashboard-schema-service)" || {
                 echo "⚠️  Warning: Some Docker images may not be available locally"
-                echo "Make sure to build images first:"
-                echo "  docker build -t dashboard-backend:latest -f docker/Dockerfile.backend ."
-                echo "  docker build -t dashboard-fastapi:dual-model -f docker/Dockerfile.fastapi ."
-                echo "  docker build -t dashboard-frontend:latest -f docker/Dockerfile.frontend ."
+                echo "Make sure to build images first using docker compose:"
+                echo "  cd docker && docker compose build"
             }
         fi
         
@@ -122,8 +120,8 @@ case $ACTION in
             echo "  Then visit: http://dashboard.local"
             echo ""
             echo "Or use port-forward:"
-            echo "  kubectl port-forward -n $NAMESPACE svc/dashboard-frontend 3000:3000"
-            echo "  kubectl port-forward -n $NAMESPACE svc/dashboard-backend 8080:8080"
+            echo "  kubectl port-forward -n $NAMESPACE svc/dashboard-frontend 3000:80"
+            echo "  kubectl port-forward -n $NAMESPACE svc/dashboard-nexus 8000:8000"
         else
             echo ""
             echo "🌐 Dashboard will be available at the configured ingress host"

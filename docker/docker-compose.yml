@@ -85,7 +85,7 @@ services:
   # Note: Database schema is now managed by Nexus migrations (nexus/db/migrations/)
   schema-service:
     build:
-      context: ../models/schema-service
+      context: ../schema-service
       dockerfile: Dockerfile
     container_name: dashboard-schema-service
     ports:

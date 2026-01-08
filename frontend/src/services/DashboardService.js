@@ -1,16 +1,6 @@
 import { apiInstance } from './network';
 
-/**
- * Dashboard Service
- * Handles all dashboard-related API calls including CRUD operations for dashboards,
- * tiles, and permissions.
- */
 export const DashboardService = {
-  // ==================== Dashboard CRUD ====================
-  
-  /**
-   * Get all dashboards accessible by the current user
-   */
   async getDashboards() {
     try {
       const response = await apiInstance.get('/api/dashboards');
@@ -19,7 +9,6 @@ export const DashboardService = {
         dashboards: response.data.dashboards || []
       };
     } catch (error) {
-      console.error('Failed to fetch dashboards:', error);
       return { 
         success: false, 
         error: error.response?.data?.detail || error.message 
@@ -27,22 +16,13 @@ export const DashboardService = {
     }
   },
 
-  /**
-   * Get a specific dashboard by ID
-   * @param {string} dashboardId - The dashboard UUID
-   * @param {Object} options - Optional parameters
-   * @param {boolean} options.includeTiles - If true, includes all tiles in response (default: false)
-   * @returns {Promise<Object>} Dashboard data (and tiles if includeTiles=true)
-   */
   async getDashboard(dashboardId, options = {}) {
     try {
       const { includeTiles = false } = options;
       const params = includeTiles ? '?include_tiles=true' : '';
       const response = await apiInstance.get(`/api/dashboards/${dashboardId}${params}`);
-      // Backend returns {success: true, dashboard: {...}, tiles: [...], total_tiles: N}
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch dashboard:', error);
       return { 
         success: false, 
         error: error.response?.data?.detail || error.message 
@@ -50,9 +30,6 @@ export const DashboardService = {
     }
   },
 
-  /**
-   * Create a new dashboard
-   */
   async createDashboard(dashboardData) {
     try {
       const payload = {
@@ -65,13 +42,11 @@ export const DashboardService = {
       };
       
       const response = await apiInstance.post('/api/dashboards', payload);
-      // API returns { success: true, dashboard: {...} }
       return {
         success: response.data.success,
         dashboard: response.data.dashboard
       };
     } catch (error) {
-      console.error('Failed to create dashboard:', error);
       return { 
         success: false, 
         error: error.response?.data?.detail || error.message 
@@ -79,10 +54,6 @@ export const DashboardService = {
     }
   },
 
-  /**
-   * Update an existing dashboard
-   * @returns {Promise<Object>} {success: true, dashboard: {...}} - Returns updated dashboard
-   */
   async updateDashboard(dashboardId, updates) {
     try {
       const payload = {
@@ -96,10 +67,8 @@ export const DashboardService = {
       };
       
       const response = await apiInstance.put(`/api/dashboards/${dashboardId}`, payload);
-      // Backend returns {success: true, dashboard: {...}}
       return response.data;
     } catch (error) {
-      console.error('Failed to update dashboard:', error);
       return { 
         success: false, 
         error: error.response?.data?.detail || error.message 
@@ -107,15 +76,11 @@ export const DashboardService = {
     }
   },
 
-  /**
-   * Delete a dashboard
-   */
   async deleteDashboard(dashboardId) {
     try {
       await apiInstance.delete(`/api/dashboards/${dashboardId}`);
       return { success: true };
     } catch (error) {
-      console.error('Failed to delete dashboard:', error);
       return { 
         success: false, 
         error: error.response?.data?.detail || error.message 
@@ -123,16 +88,12 @@ export const DashboardService = {
     }
   },
 
-  /**
-   * Publish a dashboard (creates a new version)
-   */
   async publishDashboard(dashboardId, versionNotes = null) {
     try {
       const payload = versionNotes ? { version_notes: versionNotes } : {};
       const response = await apiInstance.post(`/api/dashboards/${dashboardId}/publish`, payload);
       return response.data;
     } catch (error) {
-      console.error('Failed to publish dashboard:', error);
       return { 
         success: false, 
         error: error.response?.data?.detail || error.message 
@@ -140,11 +101,6 @@ export const DashboardService = {
     }
   },
 
-  // ==================== Tile CRUD ====================
-  
-  /**
-   * Get all tiles for a dashboard
-   */
   async getTiles(dashboardId) {
     try {
       const response = await apiInstance.get(`/api/dashboards/${dashboardId}/tiles`);
@@ -153,7 +109,6 @@ export const DashboardService = {
         tiles: response.data.tiles || []
       };
     } catch (error) {
-      console.error('Failed to fetch tiles:', error);
       return { 
         success: false, 
         error: error.response?.data?.detail || error.message 
@@ -161,12 +116,6 @@ export const DashboardService = {
     }
   },
 
-  /**
-   * Get a single tile by ID (useful for refreshing after update)
-   * @param {string} dashboardId - The dashboard UUID
-   * @param {string} tileId - The tile UUID
-   * @returns {Promise<Object>} Tile data
-   */
   async getTile(dashboardId, tileId) {
     try {
       const response = await apiInstance.get(`/api/dashboards/${dashboardId}/tiles/${tileId}`);
@@ -175,7 +124,6 @@ export const DashboardService = {
         tile: response.data.tile
       };
     } catch (error) {
-      console.error('Failed to fetch tile:', error);
       return { 
         success: false, 
         error: error.response?.data?.detail || error.message 
@@ -183,9 +131,6 @@ export const DashboardService = {
     }
   },
 
-  /**
-   * Create a new tile in a dashboard
-   */
   async createTile(dashboardId, tileData) {
     try {
       const payload = {
@@ -195,10 +140,10 @@ export const DashboardService = {
         nl_query: tileData.nl_query || null,
         chart_type: tileData.chart_type,
         chart_config: tileData.chart_config || {},
-        position_x: tileData.position_x || 0,
-        position_y: tileData.position_y || 0,
-        width: tileData.width || 6,
-        height: tileData.height || 4,
+        position_x: tileData.position?.x ?? tileData.position_x ?? 0,
+        position_y: tileData.position?.y ?? tileData.position_y ?? 0,
+        width: tileData.position?.width ?? tileData.width ?? 6,
+        height: tileData.position?.height ?? tileData.height ?? 2,
         refresh_interval_seconds: tileData.refresh_interval_seconds || null
       };
       
@@ -208,7 +153,6 @@ export const DashboardService = {
         tile: response.data
       };
     } catch (error) {
-      console.error('Failed to create tile:', error);
       return { 
         success: false, 
         error: error.response?.data?.detail || error.message 
@@ -216,23 +160,19 @@ export const DashboardService = {
     }
   },
 
-  /**
-   * Update a tile
-   * @returns {Promise<Object>} {success: true, tile: {...}} - Returns updated tile
-   */
   async updateTile(dashboardId, tileId, updates) {
     try {
       const payload = {
         title: updates.title,
         description: updates.description,
         sql_query: updates.sql_query,
-        nl_query: updates.nl_query,
+        nl_query: updates.nl_query || updates.natural_language_query,
         chart_type: updates.chart_type,
         chart_config: updates.chart_config,
-        position_x: updates.position_x,
-        position_y: updates.position_y,
-        width: updates.width,
-        height: updates.height,
+        position_x: updates.position?.x ?? updates.position_x,
+        position_y: updates.position?.y ?? updates.position_y,
+        width: updates.position?.width ?? updates.width,
+        height: updates.position?.height ?? updates.height,
         refresh_interval_seconds: updates.refresh_interval_seconds
       };
       
@@ -240,10 +180,8 @@ export const DashboardService = {
         `/api/dashboards/${dashboardId}/tiles/${tileId}`, 
         payload
       );
-      // Backend returns {success: true, tile: {...}}
       return response.data;
     } catch (error) {
-      console.error('Failed to update tile:', error);
       return { 
         success: false, 
         error: error.response?.data?.detail || error.message 
@@ -251,15 +189,33 @@ export const DashboardService = {
     }
   },
 
-  /**
-   * Delete a tile
-   */
+  async updateTilePosition(dashboardId, tileId, position) {
+    try {
+      const payload = {
+        position_x: position.x ?? 0,
+        position_y: position.y ?? 0,
+        width: position.width ?? 6,
+        height: position.height ?? 2
+      };
+      
+      const response = await apiInstance.put(
+        `/api/dashboards/${dashboardId}/tiles/${tileId}`, 
+        payload
+      );
+      return response.data;
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error.response?.data?.detail || error.message 
+      };
+    }
+  },
+
   async deleteTile(dashboardId, tileId) {
     try {
       await apiInstance.delete(`/api/dashboards/${dashboardId}/tiles/${tileId}`);
       return { success: true };
     } catch (error) {
-      console.error('Failed to delete tile:', error);
       return { 
         success: false, 
         error: error.response?.data?.detail || error.message 
@@ -267,11 +223,6 @@ export const DashboardService = {
     }
   },
 
-  // ==================== Permissions ====================
-  
-  /**
-   * Grant permission to a user or group
-   */
   async grantPermission(dashboardId, permissionData) {
     try {
       const payload = {
@@ -293,7 +244,6 @@ export const DashboardService = {
         permission: response.data
       };
     } catch (error) {
-      console.error('Failed to grant permission:', error);
       return { 
         success: false, 
         error: error.response?.data?.detail || error.message 
@@ -301,9 +251,6 @@ export const DashboardService = {
     }
   },
 
-  /**
-   * Revoke permission from a user or group
-   */
   async revokePermission(dashboardId, userId, groupId) {
     try {
       const params = new URLSearchParams();
@@ -313,7 +260,6 @@ export const DashboardService = {
       await apiInstance.delete(`/api/dashboards/${dashboardId}/permissions?${params.toString()}`);
       return { success: true };
     } catch (error) {
-      console.error('Failed to revoke permission:', error);
       return { 
         success: false, 
         error: error.response?.data?.detail || error.message 
@@ -321,11 +267,6 @@ export const DashboardService = {
     }
   },
 
-  // ==================== Public Dashboards (No Auth) ====================
-  
-  /**
-   * Get all public dashboards (no authentication required)
-   */
   async getPublicDashboards() {
     try {
       const response = await apiInstance.get('/api/public/dashboards');
@@ -334,7 +275,6 @@ export const DashboardService = {
         dashboards: response.data.dashboards || []
       };
     } catch (error) {
-      console.error('Failed to fetch public dashboards:', error);
       return { 
         success: false, 
         error: error.response?.data?.detail || error.message 
@@ -342,16 +282,11 @@ export const DashboardService = {
     }
   },
 
-  /**
-   * Get a specific public dashboard (no authentication required)
-   */
   async getPublicDashboard(dashboardId) {
     try {
       const response = await apiInstance.get(`/api/public/dashboards/${dashboardId}`);
-      // Backend already returns {success: true, dashboard: {...}}
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch public dashboard:', error);
       return { 
         success: false, 
         error: error.response?.data?.detail || error.message 
@@ -359,9 +294,6 @@ export const DashboardService = {
     }
   },
 
-  /**
-   * Get tiles for a public dashboard (no authentication required)
-   */
   async getPublicDashboardTiles(dashboardId) {
     try {
       const response = await apiInstance.get(`/api/public/dashboards/${dashboardId}/tiles`);
@@ -370,7 +302,6 @@ export const DashboardService = {
         tiles: response.data.tiles || []
       };
     } catch (error) {
-      console.error('Failed to fetch public dashboard tiles:', error);
       return { 
         success: false, 
         error: error.response?.data?.detail || error.message 
@@ -380,4 +311,3 @@ export const DashboardService = {
 };
 
 export default DashboardService;
-

@@ -36,7 +36,7 @@ spec:
               service:
                 name: {{ include "dashboard.fullname" $ }}-{{ .service }}
                 port:
-                  number: {{ if eq .service "frontend" }}{{ $.Values.frontend.service.port }}{{ else if eq .service "nexus" }}{{ $.Values.nexus.service.port }}{{ else if eq .service "backend" }}{{ $.Values.backend.service.port }}{{ else }}8000{{ end }}
+                  number: {{ if eq .service "frontend" }}{{ $.Values.frontend.service.port }}{{ else if eq .service "nexus" }}{{ $.Values.nexus.service.port }}{{ else }}8000{{ end }}
           {{- end }}
     {{- end }}
 {{- end }}

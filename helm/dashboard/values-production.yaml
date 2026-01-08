@@ -36,12 +36,12 @@ secrets:
     password: ""
 
 # ============================================================================
-# MODEL STRATEGY - Choose ONE approach for SQL generation
+# MODEL STRATEGY - External LLM APIs for SQL generation
 # ============================================================================
 modelStrategy:
-  # Option 1: External LLM APIs (Recommended for production)
+  # External LLM APIs (Recommended for production)
   externalLLM:
-    enabled: true              # ← Toggle: Use external LLM (production default)
+    enabled: true              # Use external LLM (production default)
     provider: "perplexity"     # Options: openai, perplexity, anthropic, groq, together
     model: "sonar-reasoning-pro"
     baseUrl: "https://api.perplexity.ai"
@@ -50,46 +50,6 @@ modelStrategy:
     temperature: 0.1
     timeout: 30s
     fallbackToLocal: false     # No fallback in production
-    
-  # Option 2: Local Phi-4 LoRA Model (Can enable for hybrid or cost optimization)
-  phiSqlLora:
-    enabled: false             # ← Toggle: Use local Phi-4-mini LoRA model
-    replicas: 2                # High availability in production
-    deploymentMode: "t4"       # Options: "t4", "api_key" (no MPS in production)
-    
-    # T4 GPU Configuration (Production)
-    t4:
-      enabled: true
-      resources:
-        requests:
-          memory: "4Gi"        # T4 FP16 optimized
-          cpu: "2000m"
-          nvidia.com/gpu: 1
-        limits:
-          memory: "8Gi"
-          cpu: "4000m"
-          nvidia.com/gpu: 1
-      nodeSelector:
-        accelerator: nvidia-tesla-t4
-      tolerations:
-      - key: nvidia.com/gpu
-        operator: Exists
-        effect: NoSchedule
-        
-    # API Key Configuration (Production Fallback)
-    apiKey:
-      enabled: false
-      provider: "perplexity"
-      endpoint: "https://api.perplexity.ai"
-      model: "sonar-reasoning-pro"
-      apiKey: "${EXTERNAL_LLM_API_KEY}"  # From Kubernetes secret
-      resources:
-        requests:
-          memory: "256Mi"
-          cpu: "100m"
-        limits:
-          memory: "512Mi"
-          cpu: "200m"
 
 # Service Account
 serviceAccount:
@@ -105,21 +65,21 @@ serviceAccount:
 services:
   # Core Services (required)
   nexus:
-    enabled: true        # ← Nexus orchestration service (REQUIRED) - replaces backend
+    enabled: true        # Nexus orchestration service (REQUIRED)
   
   # Optional Services
   frontend:
-    enabled: true        # ← React UI
+    enabled: true        # React UI
   schemaService:
-    enabled: true        # ← FAISS-based schema recommendations
+    enabled: true        # FAISS-based schema recommendations
   trino:
-    enabled: true        # ← Query execution engine
+    enabled: true        # Query execution engine
   
   # PostgreSQL Database (operational database)
   postgres:
-    enabled: true        # ← PostgreSQL operational database
+    enabled: true        # PostgreSQL operational database
 
-# Nexus FastAPI service (replaces Spring Boot backend)
+# Nexus FastAPI service
 nexus:
   replicaCount: 3        # High availability
   image:
@@ -250,11 +210,6 @@ autoscaling:
     minReplicas: 2
     maxReplicas: 6
     targetCPUUtilizationPercentage: 75
-  phiSqlLora:
-    enabled: false
-    minReplicas: 2
-    maxReplicas: 5
-    targetCPUUtilizationPercentage: 80
 
 # Pod Disruption Budget
 podDisruptionBudget:

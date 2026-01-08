@@ -206,7 +206,7 @@ jobs:
           pip install python-minifier
 
       - name: Obfuscate Schema Service code
-        working-directory: ./models/schema-service
+        working-directory: ./schema-service
         run: |
           # Create backup and minify Python files
           echo "Minifying Schema Service Python code..."
@@ -251,8 +251,8 @@ jobs:
         id: build
         uses: docker/build-push-action@v5
         with:
-          context: ./models/schema-service
-          file: ./models/schema-service/Dockerfile
+          context: ./schema-service
+          file: ./schema-service/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

@@ -38,12 +38,12 @@ secrets:
     password: ""  # ⚠️  LOADED from values-dev-secrets.yaml
 
 # ============================================================================
-# MODEL STRATEGY - Choose ONE approach for SQL generation
+# MODEL STRATEGY - External LLM APIs for SQL generation
 # ============================================================================
 modelStrategy:
-  # Option 1: External LLM APIs (Recommended for dev/testing)
+  # External LLM APIs (Recommended for dev/testing)
   externalLLM:
-    enabled: true              # ← Toggle: Use external LLM (OpenAI, Perplexity, Claude, etc.)
+    enabled: true              # Use external LLM (OpenAI, Perplexity, Claude, etc.)
     provider: "perplexity"     # Options: openai, perplexity, anthropic, groq, together
     model: "sonar-reasoning-pro"
     baseUrl: "https://api.perplexity.ai/chat/completions"  # Complete endpoint URL
@@ -55,11 +55,7 @@ modelStrategy:
     maxTokens: 1000
     temperature: 0.1
     timeout: 30
-    fallbackToLocal: false     # Don't fallback to local model if external fails
-    
-  # Option 2: Local Phi-4 LoRA Model (configuration in phiSqlLora section below)
-  phiSqlLora:
-    enabled: false             # ← Toggle: Use local Phi-4-mini LoRA model
+    fallbackToLocal: false
 
 # Service Account
 serviceAccount:
@@ -79,7 +75,7 @@ serviceAccount:
 services:
   # Core Services (required)
   nexus:
-    enabled: true        # Nexus orchestration service (REQUIRED) - replaces backend
+    enabled: true        # Nexus orchestration service (REQUIRED)
   frontend:
     enabled: true        # React frontend (REQUIRED)
   schemaService:
@@ -90,12 +86,6 @@ services:
     enabled: true        # PostgreSQL database (REQUIRED)
   trino:
     enabled: true        # Trino query engine (REQUIRED)
-  
-  # Disabled Services
-  backend:
-    enabled: false       # Old Java backend (DISABLED) - replaced by nexus
-  phiSqlLora:
-    enabled: false       # Local LLM service (DISABLED) - using external LLM
 
 # Nexus FastAPI service (replaces Spring Boot backend)
 nexus:
@@ -333,119 +323,7 @@ schemaService:
     storageClass: "standard"
 
 
-# Phi SQL LoRA Service (T4 GPU Only) - Optional
-phiSqlLora:
-  enabled: false  # Set to true to deploy local T4 GPU model
-  replicaCount: 1
-  
-  # ============================================================================
-  # T4 GPU CONFIGURATION - No CPU fallback
-  # ============================================================================
-  resources:
-    requests:
-      memory: "4Gi"      # T4 uses FP16, optimized memory usage
-      cpu: "2"
-      nvidia.com/gpu: 1
-    limits:
-      memory: "8Gi"
-      cpu: "4"
-      nvidia.com/gpu: 1
-      
-  nodeSelector:
-    accelerator: nvidia-tesla-t4
-    
-  tolerations:
-  - key: nvidia.com/gpu
-    operator: Exists
-    effect: NoSchedule
-      
-  
-  image:
-    repository: phi-sql-lora-unified
-    tag: latest
-    pullPolicy: Always
-    
-  service:
-    type: ClusterIP
-    port: 8000
-    targetPort: 8000
-    name: http
-    
-  env:
-    PYTHONUNBUFFERED: "1"
-    TRANSFORMERS_CACHE: "/app/model_cache"
-    HF_HOME: "/app/model_cache"
-    TOKENIZERS_PARALLELISM: "false"
-    MODEL_NAME: "microsoft/Phi-4-mini-instruct"
-    LORA_ADAPTER_PATH: "adapters/phi4-trino477-lora"
-    PORT: "8000"
-    
-  persistence:
-    enabled: true
-    storageClass: "standard"
-    accessMode: ReadWriteOnce
-    size: 20Gi              # Reduced size, more efficient
-    mountPath: /app/model_cache
-    
-  healthCheck:
-    enabled: true
-    path: /health
-    port: 8000
-    initialDelaySeconds: 120  # Faster startup with GPU
-    periodSeconds: 30
-    timeoutSeconds: 10
-    failureThreshold: 3
-    successThreshold: 1
-    
-  readinessCheck:
-    enabled: true
-    path: /health
-    port: 8000
-    initialDelaySeconds: 60   # Faster readiness with GPU
-    periodSeconds: 10
-    timeoutSeconds: 5
-    failureThreshold: 3
-    successThreshold: 1
-    
-  model:
-    name: "phi-4-mini-trino-lora-unified"
-    maxTokens: 500           # Optimized for faster inference
-    temperature: 0.1
-    
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
-      
-  securityContext:
-    runAsNonRoot: false
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: false
-    capabilities:
-      drop:
-      - ALL
-      add:
-      - NET_BIND_SERVICE
-
-# Logging configuration
-logging:
-  level:
-    dashboard: DEBUG
-    root: INFO
-    com.dashboard.service: DEBUG
-    com.dashboard.service.LlmCommunicationService: DEBUG
-    com.dashboard.service.OrchestrationService: DEBUG
-    com.dashboard.service.SchemaRecommendationService: DEBUG
-  files:
-    application:
-      path: "/app/logs/dashboard-backend.log"
-
 # Monitoring configuration
 monitoring:
   metrics:
     enabled: true
-
-# ============================================================================
-# NOTE: Model strategy is configured at the top in the modelStrategy section
-# ============================================================================

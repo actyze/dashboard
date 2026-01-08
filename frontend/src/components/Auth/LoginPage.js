@@ -147,18 +147,24 @@ const LoginPage = () => {
 
         {/* Center content */}
         <div className="relative z-10 flex flex-col items-center justify-center w-full px-12">
-          <h1 
-            className="text-6xl font-black tracking-tight mb-4 text-white"
-            style={{ textShadow: '0 4px 30px rgba(0,0,0,0.3)' }}
-          >
-            Actyze
-          </h1>
-          <p 
-            className="text-lg font-light tracking-wide text-white/80"
-            style={{ textShadow: '0 2px 10px rgba(0,0,0,0.2)' }}
-          >
-            Every Database, One Platform
-          </p>
+          <img 
+            src="/logo.svg" 
+            alt="Actyze" 
+            className="h-28 mb-6"
+            style={{ 
+              filter: 'brightness(0) invert(1)',
+              dropShadow: '0 4px 30px rgba(0,0,0,0.3)'
+            }}
+          />
+          <img 
+            src="/logo_sub.svg" 
+            alt="Every Database, One Platform" 
+            className="h-8"
+            style={{ 
+              filter: 'brightness(0) invert(1)',
+              opacity: 0.8
+            }}
+          />
           <div className="mt-8 h-px w-32" style={{ background: styles.decorativeLine }} />
         </div>
       </div>
@@ -170,16 +176,11 @@ const LoginPage = () => {
         <div className="w-full max-w-sm relative z-10">
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-10">
-            <h1
-              className="text-4xl font-black tracking-tight"
-              style={{
-                background: `linear-gradient(135deg, ${colors.primary}, ${colors.primaryLight})`,
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}
-            >
-              Actyze
-            </h1>
+            <img 
+              src="/logo.svg" 
+              alt="Actyze" 
+              className="h-10 mx-auto"
+            />
           </div>
 
           {/* Welcome text */}

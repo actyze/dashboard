@@ -1,19 +1,18 @@
 # Dashboard - Natural Language to SQL
 
-A comprehensive dashboard application that converts natural language queries to SQL using AI models, with support for both local T4 GPU inference and external LLM APIs.
+A comprehensive dashboard application that converts natural language queries to SQL using external LLM APIs.
 
 ## 🚀 **Architecture**
 
 ### **Core Components:**
-- **Backend**: Spring Boot orchestration service with intelligent routing
-- **Frontend**: React application with Material-UI
+- **Nexus**: FastAPI orchestration service with intelligent routing
+- **Frontend**: React application with Material-UI and Tailwind CSS
 - **Schema Service**: FAISS-powered schema recommendations with spaCy NER
-- **T4 Phi-4 Service**: Local T4 GPU inference with LoRA fine-tuning
 - **Trino**: Distributed SQL query engine
+- **PostgreSQL**: Operational database for metadata and user management
 
 ### **AI Model Options:**
-1. **T4 GPU Local**: Phi-4-mini-instruct with LoRA adapters (2-5s inference)
-2. **External LLM**: OpenAI, Perplexity, Anthropic, etc. (1-3s inference)
+- **External LLM**: OpenAI, Perplexity, Anthropic, Groq, Together.ai, etc. (1-3s inference)
 
 ## 📋 **Quick Start**
 
@@ -51,7 +50,7 @@ docker pull actyze/dashboard-schema-service:latest
 - Helm 3.x
 - kubectl
 
-### **Local Deployment (CPU-only):**
+### **Local Deployment:**
 ```bash
 # Create Kind cluster
 kind create cluster --config kind-config-no-gpu.yaml
@@ -60,41 +59,30 @@ kind create cluster --config kind-config-no-gpu.yaml
 helm install dashboard ./helm/dashboard \
   --namespace dashboard \
   --create-namespace \
-  --set phiSqlLora.enabled=false \
-  --set externalLLM.enabled=true \
-  --set externalLLM.apiKey="your-api-key"
-```
-
-### **T4 GPU Deployment:**
-```bash
-# Deploy with T4 service
-helm install dashboard ./helm/dashboard \
-  --namespace dashboard \
-  --create-namespace \
-  --set phiSqlLora.enabled=true \
-  --set externalLLM.enabled=true \
-  --set externalLLM.fallback.enabled=true
+  --values ./helm/dashboard/values-dev.yaml \
+  --values ./helm/dashboard/values-dev-secrets.yaml
 ```
 
 ## 🎯 **Key Features**
 
-- **Intelligent Schema Detection**: FAISS + spaCy NER for 38% better recommendations
-- **Dual Model Support**: T4 GPU + External LLM with automatic fallback
+- **Intelligent Schema Detection**: FAISS + spaCy NER for improved table recommendations
+- **External LLM Integration**: Support for multiple providers (OpenAI, Perplexity, Anthropic, Groq)
 - **Production Ready**: Kubernetes-native with health checks and monitoring
-- **Security**: SQL injection prevention, API key management
-- **Performance**: 2-5s T4 inference, 1-3s external LLM
+- **Security**: SQL injection prevention, RBAC, API key management
+- **Performance**: 1-3s external LLM inference
+- **User Preferences**: Schema boosting for personalized recommendations
+- **File Upload**: Import CSV/Excel files into user-managed tables
+- **Metadata Catalog**: Organization-level metadata descriptions for improved context
 
 ## 📁 **Project Structure**
 
 ```
 dashboard/
-├── backend/                 # Spring Boot orchestration service
+├── nexus/                  # FastAPI orchestration service
 ├── frontend/               # React dashboard application
+├── schema-service/         # FAISS schema recommendations
 ├── docker/                 # Docker Compose setup & documentation
-├── helm/                   # Kubernetes charts & documentation
-└── models/
-    ├── phi-sql-lora/      # T4 GPU Phi-4 LoRA service
-    └── schema-service/    # FAISS schema recommendations
+└── helm/                   # Kubernetes charts & documentation
 ```
 
 ## 🔧 **Configuration**
@@ -108,40 +96,46 @@ See [helm/dashboard/VALUES_README.md](helm/dashboard/VALUES_README.md) for deplo
 ## 🧪 **Testing**
 
 ```bash
-# Test natural language query
-curl -X POST http://localhost:8080/api/natural-language \
+# Test natural language query (requires authentication token)
+curl -X POST http://localhost:8000/api/generate-sql \
   -H "Content-Type: application/json" \
-  -d '{"message": "Show customers from California"}'
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{"nl_query": "Show customers from California"}'
 
 # Expected response with generated SQL
 ```
 
 ## 📊 **Performance**
 
-| Model Type | Inference Time | Memory | Cost/Query | Accuracy |
-|------------|----------------|--------|------------|----------|
-| T4 GPU Local | 2-5s | 8GB | $0 | 95% |
-| External LLM | 1-3s | 0GB | ~$0.001 | 97% |
+| Component | Response Time | Memory | Notes |
+|-----------|---------------|--------|-------|
+| External LLM | 1-3s | Minimal | OpenAI, Perplexity, Anthropic, etc. |
+| Schema Service | < 100ms | 1-2GB | FAISS vector search |
+| Nexus API | < 200ms | 512MB-1GB | Orchestration and caching |
+| Trino Queries | Varies | 2-4GB | Depends on query complexity |
 
 ## 🛠️ **Development**
 
 ```bash
-# Build services locally
-docker build -f docker/Dockerfile.backend -t dashboard-backend .
-docker build -f models/schema-service/Dockerfile -t dashboard-schema-service .
+# Build services locally using Docker Compose
+cd docker && docker compose build
+
+# Run all services
+docker compose --profile local up -d
 
 # Run tests
-cd backend && ./mvnw test
 cd frontend && npm test
+cd nexus && pytest
 ```
 
 ## 📚 **Documentation**
 
 - [External LLM Setup](EXTERNAL_LLM_SETUP.md)
+- [Docker Deployment](docker/DEPLOYMENT.md)
 - [Helm Values Guide](helm/dashboard/VALUES_README.md)
-- [API Examples](backend/API_EXAMPLES.md)
-- [T4 Phi-4 LoRA](models/phi-sql-lora/README.md)
-- [Schema Service](models/schema-service/README.md)
+- [Database Migrations](DATABASE_MIGRATIONS.md)
+- [Schema Service](schema-service/README.md)
+- [Nexus API](nexus/API_DOCUMENTATION.md)
 
 ## 🤝 **Contributing**
 

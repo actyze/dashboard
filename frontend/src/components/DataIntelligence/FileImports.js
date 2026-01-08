@@ -342,10 +342,9 @@ function FileImports() {
                 <div>
                   <p className={`font-medium mb-1 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Excel (.xlsx)</p>
                   <ul className={`space-y-0.5 ${isDark ? 'text-gray-500' : 'text-gray-600'}`}>
-                    <li>• Exactly ONE worksheet</li>
+                    <li>• Exactly one worksheet</li>
                     <li>• Header row must be first</li>
-                    <li>• All headers non-empty</li>
-                    <li>• Rectangular data (no ragged rows)</li>
+                    <li>• No empty headers</li>
                     <li>• No merged cells</li>
                     <li>• Max 50MB</li>
                   </ul>
@@ -355,7 +354,6 @@ function FileImports() {
                   <ul className={`space-y-0.5 ${isDark ? 'text-gray-500' : 'text-gray-600'}`}>
                     <li>• UTF-8 encoding</li>
                     <li>• Header required</li>
-                    <li>• Consistent column count</li>
                     <li>• No empty headers</li>
                     <li>• Max 50MB</li>
                   </ul>

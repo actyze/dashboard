@@ -51,16 +51,15 @@ apiInstance.interceptors.response.use(
     return response;
   },
   (error) => {
-    // Handle 401 Unauthorized (token expired)
+    // Handle 401 Unauthorized (token expired or invalid)
     if (error.response?.status === 401) {
-      console.log('🔒 Session expired - redirecting to login');
+      // Clear tokens and auth header
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      delete apiInstance.defaults.headers.common['Authorization'];
       
-      // Redirect to login page (only if not already there)
-      if (!window.location.pathname.includes('/login')) {
+      // Redirect to login page
         window.location.href = '/login';
-      }
     }
     
     return Promise.reject(error);

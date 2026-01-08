@@ -234,23 +234,23 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null, recentQueries
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={handleClose}
       />
       
-      {/* Modal with animated width */}
+      {/* Modal */}
       <div 
         className={`
-          relative mx-4 rounded-xl shadow-2xl flex overflow-hidden
+          relative rounded-xl shadow-2xl flex overflow-hidden max-h-[90vh]
           transition-all duration-300 ease-in-out
           ${isDark ? 'bg-[#17181a] border border-[#2a2b2e]' : 'bg-white border border-gray-200'}
         `}
         style={{ 
-          width: sidebarVisible ? '900px' : '672px',
-          maxWidth: '95vw'
+          width: sidebarVisible ? '900px' : '600px',
+          maxWidth: '100%'
         }}
       >
         {/* Sidebar - Query List */}
@@ -337,8 +337,8 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null, recentQueries
           </div>
           
           {/* Content */}
-          <div className="px-5 py-4 max-h-[70vh] overflow-y-auto">
-          {error && (
+          <div className="px-5 py-4 overflow-y-auto flex-1">
+            {error && (
             <div className={`
               mb-4 px-4 py-3 rounded-lg text-sm
               ${isDark ? 'bg-red-900/30 text-red-400 border border-red-800' : 'bg-red-50 text-red-600 border border-red-200'}
@@ -582,12 +582,12 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null, recentQueries
               <SqlEditor
                 value={sqlQuery}
                 onChange={setSqlQuery}
-                height="200px"
+                height="180px"
                 placeholder="SELECT column1, column2 FROM table_name WHERE condition"
               />
             </div>
+            </div>
           </div>
-        </div>
 
           {/* Footer */}
           <div className={`

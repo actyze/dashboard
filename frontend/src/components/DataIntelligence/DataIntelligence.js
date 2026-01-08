@@ -1,25 +1,22 @@
 /**
  * Data Intelligence Component
  * Main container for data management features:
- * - Schema Preferences (User)
+ * - Optimise: Combined schema boosting and metadata descriptions
  * - File Imports
- * - Metadata Catalog (Org)
  */
 
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import UserPreferences from '../Admin/UserPreferences';
+import SchemaOptimise from './SchemaOptimise';
 import FileImports from './FileImports';
-import MetadataCatalog from './MetadataCatalog';
 
 function DataIntelligence() {
   const { isDark } = useTheme();
-  const [activeTab, setActiveTab] = useState('schema-preferences');
+  const [activeTab, setActiveTab] = useState('optimise');
 
   const tabs = [
-    { id: 'schema-preferences', label: 'Schema Preferences', badge: 'User', component: UserPreferences },
-    { id: 'file-imports', label: 'File Imports', badge: null, component: FileImports },
-    { id: 'metadata-catalog', label: 'Metadata Catalog', badge: 'Org', component: MetadataCatalog }
+    { id: 'optimise', label: 'Optimise', badge: null, component: SchemaOptimise },
+    { id: 'file-imports', label: 'File Imports', badge: null, component: FileImports }
   ];
 
   const ActiveComponent = tabs.find(tab => tab.id === activeTab)?.component;

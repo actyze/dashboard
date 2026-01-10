@@ -123,32 +123,34 @@ docker run -d \
 
 ## Integration with Dashboard
 
-The schema service integrates with the dashboard's OrchestrationService to provide intelligent table recommendations:
+The schema service integrates with the dashboard's Nexus service to provide intelligent table recommendations:
 
 1. **Natural Language Query** → Schema Service recommends relevant tables
-2. **Table Context** → Passed to CodeT5+ model for better SQL generation
+2. **Table Context** → Passed to external LLM (GPT-4, Claude, etc.) for better SQL generation
 3. **Enhanced SQL** → More accurate queries with proper table references
 
 ### Integration Example
 
 ```python
-# In OrchestrationService.java
-import requests
+# In nexus/app/services/schema_service.py
+import httpx
 
-def getSchemaRecommendations(String nlQuery) {
-    Map<String, Object> request = new HashMap<>();
-    request.put("natural_language_query", nlQuery);
-    request.put("top_k", 3);
-    request.put("confidence_threshold", 0.4);
+async def get_schema_recommendations(nl_query: str, top_k: int = 15, confidence_threshold: float = 0.0):
+    """Get schema recommendations from the schema service."""
+    request_data = {
+        "natural_language_query": nl_query,
+        "top_k": top_k,
+        "confidence_threshold": confidence_threshold
+    }
     
-    ResponseEntity<Map> response = restTemplate.postForEntity(
-        "http://schema-service:8001/recommend",
-        request,
-        Map.class
-    );
-    
-    return response.getBody();
-}
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            f"{SCHEMA_SERVICE_URL}/recommend",
+            json=request_data,
+            headers=await self._get_auth_headers()
+        )
+        response.raise_for_status()
+        return response.json()
 ```
 
 ## Performance

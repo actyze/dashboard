@@ -28,7 +28,7 @@ function DataIntelligence() {
         <div className="px-6 pt-4">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              <h1 className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
                 Data Intelligence
               </h1>
               <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>

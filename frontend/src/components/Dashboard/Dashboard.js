@@ -54,7 +54,7 @@ const Dashboard = ({ isPublic = false }) => {
   
   // Grid container width - simple ref-based measurement
   const gridContainerRef = useRef(null);
-  const [gridWidth, setGridWidth] = useState(1200);
+  const [gridWidth, setGridWidth] = useState(0);
   
   // Refs for preventing duplicates
   const isCreatingRef = useRef(false);
@@ -64,17 +64,28 @@ const Dashboard = ({ isPublic = false }) => {
   useEffect(() => {
     const updateWidth = () => {
       if (gridContainerRef.current) {
-        const containerWidth = gridContainerRef.current.clientWidth;
+        // Use getBoundingClientRect for more accurate measurement
+        const rect = gridContainerRef.current.getBoundingClientRect();
+        const containerWidth = rect.width;
         if (containerWidth > 0) {
-          setGridWidth(containerWidth - 32); // Account for p-4 padding
+          // Account for p-4 padding (16px on each side = 32px total)
+          setGridWidth(containerWidth - 32);
         }
       }
     };
     
+    // Initial measurement with a small delay to ensure DOM is ready
     updateWidth();
+    const initialTimeout = setTimeout(updateWidth, 100);
     
     // Use ResizeObserver for responsive updates
-    const resizeObserver = new ResizeObserver(updateWidth);
+    const resizeObserver = new ResizeObserver((entries) => {
+      // Use requestAnimationFrame to batch updates
+      window.requestAnimationFrame(() => {
+        updateWidth();
+      });
+    });
+    
     if (gridContainerRef.current) {
       resizeObserver.observe(gridContainerRef.current);
     }
@@ -82,6 +93,7 @@ const Dashboard = ({ isPublic = false }) => {
     window.addEventListener('resize', updateWidth);
     
     return () => {
+      clearTimeout(initialTimeout);
       resizeObserver.disconnect();
       window.removeEventListener('resize', updateWidth);
     };
@@ -746,8 +758,8 @@ const Dashboard = ({ isPublic = false }) => {
               )}
             </div>
           </div>
-        ) : (
-          /* Grid Layout */
+        ) : gridWidth > 0 ? (
+          /* Grid Layout - only render when we have a valid width */
           <GridLayout
             className="layout"
             layout={layout}
@@ -799,6 +811,11 @@ const Dashboard = ({ isPublic = false }) => {
               </div>
             ))}
           </GridLayout>
+        ) : (
+          /* Loading state while measuring container width */
+          <div className="flex items-center justify-center py-8">
+            <CircularProgress size={24} />
+          </div>
         )}
       </div>
 

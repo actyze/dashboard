@@ -83,7 +83,7 @@ const Home = () => {
 
   return (
     <div className={`h-full overflow-auto ${isDark ? 'bg-[#101012]' : 'bg-white'}`}>
-      <div className="max-w-3xl mx-auto px-6 py-8">
+      <div className="px-6 py-8">
         {/* Header */}
         <div className="mb-8">
           <h1 className={`text-xl font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
@@ -95,7 +95,7 @@ const Home = () => {
         </div>
 
         {/* Quick Action Cards */}
-        <div className="grid grid-cols-2 gap-4 mb-8">
+        <div className="grid grid-cols-2 gap-4 mb-8 max-w-2xl">
           <button
             onClick={() => navigate('/query/new')}
             className={`group relative p-5 rounded-xl text-left transition-all duration-200 overflow-hidden ${

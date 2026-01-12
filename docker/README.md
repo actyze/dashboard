@@ -7,7 +7,7 @@ This directory contains a **simplified Docker setup** for local development and 
 ```bash
 # 1. Setup environment
 cp env.example .env
-# Edit .env with your API keys (especially PERPLEXITY_API_KEY)
+# Edit .env with your API keys (see LLM_PROVIDERS.md for all options)
 
 # 2. Start all services (builds images locally)
 ./start.sh
@@ -39,11 +39,15 @@ open http://localhost:3000
 
 ## 📋 **Environment Variables**
 
-Copy `docker.env.example` to `.env.docker` and configure:
+Copy `env.example` to `.env` and configure:
 
 ```bash
-# External LLM Configuration
+# LLM Configuration - Supports ANY provider!
+# See LLM_PROVIDERS.md for detailed configuration examples
 PERPLEXITY_API_KEY=your-api-key-here
+EXTERNAL_LLM_PROVIDER=perplexity  # or anthropic, openai, groq, etc.
+EXTERNAL_LLM_AUTH_TYPE=bearer     # or x-api-key, api-key
+EXTERNAL_LLM_EXTRA_HEADERS=       # Provider-specific headers (JSON)
 
 # Database Configuration
 POSTGRES_PASSWORD=dashboard_password
@@ -56,6 +60,19 @@ TRINO_PORT=443
 TRINO_USER=your-username
 TRINO_PASSWORD=your-password
 ```
+
+### 🤖 **LLM Provider Configuration**
+
+Actyze supports **any LLM provider** with flexible authentication:
+
+- **Anthropic Claude** - Excellent SQL generation (recommended)
+- **OpenAI GPT-4** - Industry standard
+- **Perplexity** - Fast with reasoning capabilities
+- **Groq** - Ultra-fast open-source models
+- **Together AI** - Wide selection of models
+- **Custom** - Any OpenAI-compatible endpoint
+
+**See [LLM_PROVIDERS.md](./LLM_PROVIDERS.md) for detailed configuration examples** for each provider.
 
 ## 🔄 Development Workflow
 

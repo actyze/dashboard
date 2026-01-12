@@ -444,6 +444,9 @@ Generated SQL (Main Data):
             "4. Trino SQL syntax (default), adapt for connector-specific features when needed",
             "5. Respect connector types: PostgreSQL, MySQL, MongoDB, Iceberg, Hive, etc.",
             "6. Text filters: use LOWER() for case-insensitive match",
+            "7. GROUP BY must match SELECT (apply same functions)",
+            "8. CRITICAL: Always quote these column names: \"cast\", \"date\", \"time\", \"user\", \"order\", \"comment\"",
+            "9. UNNEST: AS t(col) NOT AS t (col). ARRAY_AGG(col), ARRAY_JOIN(arr, ',')",
             "",
             "CHART RULES:",
             "- Result columns drop prefixes: 'c.city' → 'city' NOT 'ccity'",
@@ -460,8 +463,11 @@ Generated SQL (Main Data):
                 prompt_parts.append(f"- {msg}")
         
         prompt_parts.append("\nEXAMPLES:")
-        prompt_parts.append('Columns: SELECT c.city, SUM(o.amt) AS total → ["city", "total"] (NOT "ccity")')
-        prompt_parts.append('Text filter: WHERE LOWER(city) = LOWER(\'Delhi\') (NOT city = \'Delhi\')')
+        prompt_parts.append('CRITICAL: SPLIT(\"cast\",\',\') NOT SPLIT(cast,\',\') - cast is RESERVED')
+        prompt_parts.append('Quote: SELECT \"cast\",\"date\",\"user\" FROM movies WHERE \"order\">0')
+        prompt_parts.append('UNNEST: UNNEST(SPLIT(\"cast\",\',\')) AS t(val) NOT AS t (val)')
+        prompt_parts.append('GROUP: SELECT TRIM(n) FROM t GROUP BY TRIM(n)')
+        prompt_parts.append('Text: WHERE LOWER(city)=LOWER(\'Delhi\')')
         prompt_parts.append("")
         prompt_parts.append("FORMAT:")
         prompt_parts.append("With tables: ```sql\\nQUERY\\n```\\n```json\\n{\"reasoning\":\"...\",\"chart_type\":\"bar\",\"x_column\":\"...\",\"y_column\":\"...\",\"title\":\"...\"}\\n```")

@@ -135,6 +135,16 @@ class FAISSSchemaEmbedder:
         logger.info("Step 2: Encoding texts with SentenceTransformer model...")
         loop = asyncio.get_event_loop()
         
+        # Handle empty schemas case - create empty index
+        if len(texts) == 0:
+            logger.info("No schemas to encode - creating empty FAISS index")
+            new_index = faiss.IndexFlatIP(self.dimension)
+            self.index = new_index
+            self.schema_metadata = schemas
+            self.last_updated = datetime.now()
+            logger.info("Empty FAISS index ready (ntotal=0)")
+            return
+        
         def encode_with_progress(texts):
             batch_size = 100
             total_texts = len(texts)

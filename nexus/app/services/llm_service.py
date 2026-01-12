@@ -483,12 +483,34 @@ Generated SQL (Main Data):
             }
     
     async def _call_openai_compatible_api(self, prompt: str = None, messages: List[Dict[str, str]] = None) -> Dict[str, Any]:
-        """Call OpenAI-compatible API (works with OpenAI, Perplexity, Claude, etc.)."""
+        """Call external LLM API with flexible authentication for any provider."""
         
-        headers = {
-            "Authorization": f"Bearer {settings.external_llm_api_key}",
-            "Content-Type": "application/json"
-        }
+        # Build headers with configurable authentication
+        headers = {"Content-Type": "application/json"}
+        
+        # Apply authentication based on configured type
+        auth_type = settings.external_llm_auth_type.lower()
+        if auth_type == "bearer":
+            # OpenAI, Perplexity, Groq, etc.
+            headers["Authorization"] = f"Bearer {settings.external_llm_api_key}"
+        elif auth_type == "x-api-key":
+            # Anthropic Claude
+            headers["x-api-key"] = settings.external_llm_api_key
+        elif auth_type == "api-key":
+            # Azure OpenAI
+            headers["api-key"] = settings.external_llm_api_key
+        else:
+            # Default to Bearer
+            headers["Authorization"] = f"Bearer {settings.external_llm_api_key}"
+        
+        # Add any extra headers from configuration (for version headers, custom options, etc.)
+        if settings.external_llm_extra_headers:
+            try:
+                extra_headers = json.loads(settings.external_llm_extra_headers)
+                headers.update(extra_headers)
+            except json.JSONDecodeError:
+                self.logger.warning("Failed to parse external_llm_extra_headers, ignoring", 
+                                  value=settings.external_llm_extra_headers)
         
         # Construct messages if not provided
         if not messages:
@@ -535,14 +557,26 @@ Generated SQL (Main Data):
             self.logger.debug("Response Body Keys", keys=list(result.keys()))
             self.logger.debug("Raw Response Body", body=str(result)[:500] + "..." if len(str(result)) > 500 else str(result))
         
-        if "choices" not in result or not result["choices"]:
+        # Handle different response formats based on provider
+        content = None
+        
+        # Anthropic Claude format: {"content": [{"type": "text", "text": "..."}], ...}
+        if "content" in result and isinstance(result["content"], list):
+            for item in result["content"]:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    content = item.get("text")
+                    break
+        
+        # OpenAI/Perplexity/Groq format: {"choices": [{"message": {"content": "..."}}]}
+        elif "choices" in result and result["choices"]:
+            content = result["choices"][0]["message"]["content"]
+        
+        if not content:
             return {
                 "success": False,
                 "error": f"No response from {settings.external_llm_provider} API",
                 "error_type": "API_ERROR"
             }
-        
-        content = result["choices"][0]["message"]["content"]
         
         return {
             "success": True,

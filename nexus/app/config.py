@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     llm_do_sample: bool = False
     llm_num_beams: int = 1
     
-    # External LLM Configuration (OpenAI, Perplexity, etc.)
+    # External LLM Configuration (OpenAI, Perplexity, Anthropic, etc.)
     external_llm_enabled: bool = False
     external_llm_provider: str = ""
     external_llm_api_key: str = ""
@@ -83,6 +83,14 @@ class Settings(BaseSettings):
     external_llm_max_tokens: int = 4096
     external_llm_temperature: float = 0.1
     external_llm_timeout: int = 30
+    
+    # Authentication configuration (flexible for any provider)
+    # Options: "bearer" (OpenAI/Perplexity), "x-api-key" (Anthropic), "api-key" (Azure)
+    external_llm_auth_type: str = "bearer"
+    
+    # Optional: Additional headers as JSON string
+    # Example: '{"anthropic-version": "2023-06-01", "custom-header": "value"}'
+    external_llm_extra_headers: str = ""
     
     # =============================================================================
     # Trino Database Configuration

@@ -446,12 +446,13 @@ Generated SQL (Main Data):
             "6. Text filters: use LOWER() for case-insensitive match",
             "7. GROUP BY must match SELECT (apply same functions)",
             "8. CRITICAL: Always quote these column names: \"cast\", \"date\", \"time\", \"user\", \"order\", \"comment\"",
-            "9. UNNEST: AS t(col) NOT AS t (col). ARRAY_AGG(col), ARRAY_JOIN(arr, ',')",
+            "9. MongoDB arrays (cast, countries, genres): Use UNNEST(arr) directly, NO SPLIT() needed",
+            "10. UNNEST syntax: AS t(col) NOT AS t (col) - no space before parentheses",
             "",
             "CHART RULES:",
-            "- Result columns drop prefixes: 'c.city' → 'city' NOT 'ccity'",
-            "- With AS: 'c.city AS loc' → 'loc'",
-            "- x_column/y_column must match exact result names",
+            "- x_column/y_column MUST match FINAL SELECT output names exactly",
+            "- With AS: 'COUNT(*) AS country_count' → use 'country_count' NOT 'country'",
+            "- Table prefix: 'c.city' → 'city'; 'c.city AS loc' → 'loc'",
             "",
             f"REQUEST: {query}"
         ])
@@ -463,11 +464,11 @@ Generated SQL (Main Data):
                 prompt_parts.append(f"- {msg}")
         
         prompt_parts.append("\nEXAMPLES:")
-        prompt_parts.append('CRITICAL: SPLIT(\"cast\",\',\') NOT SPLIT(cast,\',\') - cast is RESERVED')
-        prompt_parts.append('Quote: SELECT \"cast\",\"date\",\"user\" FROM movies WHERE \"order\">0')
-        prompt_parts.append('UNNEST: UNNEST(SPLIT(\"cast\",\',\')) AS t(val) NOT AS t (val)')
-        prompt_parts.append('GROUP: SELECT TRIM(n) FROM t GROUP BY TRIM(n)')
-        prompt_parts.append('Text: WHERE LOWER(city)=LOWER(\'Delhi\')')
+        prompt_parts.append('CRITICAL: Quote reserved keywords: \"cast\", \"date\", \"user\", \"order\"')
+        prompt_parts.append('MongoDB arrays: UNNEST(\"cast\") AS t(actor) - arrays already split, NO SPLIT()')
+        prompt_parts.append('String split: UNNEST(SPLIT(tags,\',\')) AS t(tag) - only for varchar fields')
+        prompt_parts.append('UNNEST syntax: AS t(col) NOT AS t (col) - no space before parentheses')
+        prompt_parts.append('Chart: SELECT city, COUNT(*) AS total → x="city", y="total" NOT y="count"')
         prompt_parts.append("")
         prompt_parts.append("FORMAT:")
         prompt_parts.append("With tables: ```sql\\nQUERY\\n```\\n```json\\n{\"reasoning\":\"...\",\"chart_type\":\"bar\",\"x_column\":\"...\",\"y_column\":\"...\",\"title\":\"...\"}\\n```")

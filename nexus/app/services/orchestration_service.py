@@ -186,6 +186,17 @@ class OrchestrationService:
             # Step 2: Generate SQL using LLM
             self.logger.info("=== STEP 2: SQL GENERATION (LLM) ===")
             
+            # Check SQL generation cache first (more consistent than LLM response cache)
+            cached_sql_result = await self.cache_service.get_generated_sql(nl_query, intent)
+            if cached_sql_result:
+                self.logger.info("Using cached SQL generation result")
+                processing_time = (asyncio.get_event_loop().time() - start_time) * 1000
+                cached_sql_result["processing_time"] = processing_time
+                cached_sql_result["cache_hit"] = True
+                cached_sql_result["intent"] = intent
+                cached_sql_result["intent_confidence"] = intent_confidence
+                return cached_sql_result
+            
             cache_key = f"{nl_query}_{len(conversation_history)}_{len(recommendations)}"
             cached_response = await self.cache_service.get_llm_response(
                 cache_key, {"type": "sql_generation"}
@@ -313,6 +324,9 @@ class OrchestrationService:
             # Include intent in response (frontend will handle state)
             result["intent"] = intent
             result["intent_confidence"] = intent_confidence
+            
+            # Cache successful SQL generation for deterministic responses
+            await self.cache_service.cache_generated_sql(nl_query, intent, result)
             
             return result
             
@@ -537,13 +551,17 @@ class OrchestrationService:
         import re
         
         try:
-            # Extract column names/aliases from SELECT clause
-            # Match pattern: SELECT ... FROM
-            select_match = re.search(r'SELECT\s+(.*?)\s+FROM', sql, re.IGNORECASE | re.DOTALL)
-            if not select_match:
+            # Extract column names/aliases from FINAL SELECT clause (handle CTEs)
+            # If there are CTEs (WITH clause), we need the LAST SELECT, not the first
+            
+            # Find all SELECT...FROM patterns
+            select_patterns = list(re.finditer(r'SELECT\s+(.*?)\s+FROM', sql, re.IGNORECASE | re.DOTALL))
+            if not select_patterns:
                 self.logger.warning("Could not parse SELECT clause from SQL")
                 return None
             
+            # Use the LAST SELECT (the final query, not CTE)
+            select_match = select_patterns[-1]
             select_clause = select_match.group(1)
             
             # Extract column aliases (handle AS keyword and implicit aliases)

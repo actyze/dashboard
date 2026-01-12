@@ -223,6 +223,40 @@ class MemoryCacheService:
         self.logger.debug("Cached LLM response", key=cache_key[:20])
     
     # =============================================================================
+    # SQL Generation Caching (Natural Language → SQL)
+    # =============================================================================
+    
+    async def get_generated_sql(self, nl_query: str, intent: str = "NEW_QUERY") -> Optional[Dict[str, Any]]:
+        """Get cached SQL generation result for a natural language query."""
+        if not settings.cache_enabled:
+            return None
+            
+        cache_key = self._generate_key("sql_gen", {"query": nl_query.lower().strip(), "intent": intent})
+        
+        with self._lock:
+            result = self.llm_cache.get(cache_key)
+            
+        if result:
+            self._update_stats(hit=True)
+            self.logger.info("Cache hit for SQL generation", nl_query=nl_query[:50])
+            return result
+        else:
+            self._update_stats(hit=False)
+            return None
+    
+    async def cache_generated_sql(self, nl_query: str, intent: str, result: Dict[str, Any]):
+        """Cache SQL generation result."""
+        if not settings.cache_enabled:
+            return
+            
+        cache_key = self._generate_key("sql_gen", {"query": nl_query.lower().strip(), "intent": intent})
+        
+        with self._lock:
+            self.llm_cache[cache_key] = result
+            
+        self.logger.info("Cached SQL generation", nl_query=nl_query[:50], key=cache_key[:20])
+    
+    # =============================================================================
     # Metadata Caching (Fast Access)
     # =============================================================================
     

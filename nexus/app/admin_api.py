@@ -89,17 +89,8 @@ async def set_user_role(
     """
     Set user's role (ADMIN or USER).
     
-    **Requires:** ADMIN role (only super_admin can make other users ADMIN)
+    **Requires:** ADMIN role (any admin can promote users to ADMIN)
     """
-    # Check if current user is super admin (nexus_admin)
-    if data.role.upper() == "ADMIN":
-        # Only nexus_admin can promote to ADMIN
-        user_result = await admin_service.list_users(page=1, page_size=1, search=current_user["username"])
-        if user_result["success"] and user_result["users"]:
-            current_user_data = user_result["users"][0]
-            if current_user_data["username"] != "nexus_admin":
-                raise HTTPException(status_code=403, detail="Only super admin can promote users to ADMIN")
-    
     result = await admin_service.set_user_role(
         user_id=user_id,
         role=data.role,

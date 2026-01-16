@@ -247,16 +247,6 @@ const LoginPage = () => {
               />
             </button>
           </form>
-
-          {/* Footer hint */}
-          <div className={`mt-6 pt-4 border-t ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
-            <p className={`text-center text-xs ${isDark ? 'text-gray-600' : 'text-gray-500'}`}>
-              Default credentials:{' '}
-              <span className="font-mono" style={{ color: colors.primary }}>
-                nexus_admin / admin
-              </span>
-            </p>
-          </div>
         </div>
       </div>
     </div>

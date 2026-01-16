@@ -9,11 +9,15 @@ RUN npm ci --prefer-offline --no-audit
 # Copy source code
 COPY . .
 
+# Build arguments for React environment variables
+ARG REACT_APP_API_BASE_URL=/api
+ENV REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL
+
 # Build with reduced memory usage
 # - Disable source maps (major memory saver)
 # - Limit Node.js heap to 1.5GB
 ENV GENERATE_SOURCEMAP=false
-    ENV NODE_OPTIONS="--max-old-space-size=3072"
+ENV NODE_OPTIONS="--max-old-space-size=3072"
 RUN npm run build
 
 # Production stage

@@ -515,14 +515,12 @@ const UsersManagement = forwardRef((props, ref) => {
                   <select
                     value={user.role}
                     onChange={(e) => handleSetRole(user.id, e.target.value)}
-                    disabled={user.username === 'nexus_admin'}
                     className={`
                       px-2 py-1 text-xs rounded border cursor-pointer
                       ${isDark 
                         ? 'bg-[#1c1d1f] border-[#2a2b2e] text-gray-300' 
                         : 'bg-white border-gray-200 text-gray-700'
                       }
-                      ${user.username === 'nexus_admin' ? 'opacity-50 cursor-not-allowed' : ''}
                       focus:outline-none focus:border-[#5d6ad3] transition-colors
                     `}
                   >
@@ -580,13 +578,10 @@ const UsersManagement = forwardRef((props, ref) => {
                   {/* Deactivate Button */}
                   <button
                     onClick={() => handleDeactivate(user.id, user.username)}
-                    disabled={user.username === 'nexus_admin'}
                     className={`p-1 rounded transition-colors ${
-                      user.username === 'nexus_admin'
-                        ? 'opacity-30 cursor-not-allowed'
-                        : isDark 
-                          ? 'text-gray-600 hover:text-red-400 hover:bg-[#2a2b2e]' 
-                          : 'text-gray-400 hover:text-red-500 hover:bg-gray-100'
+                      isDark 
+                        ? 'text-gray-600 hover:text-red-400 hover:bg-[#2a2b2e]' 
+                        : 'text-gray-400 hover:text-red-500 hover:bg-gray-100'
                     }`}
                     title="Deactivate user"
                   >

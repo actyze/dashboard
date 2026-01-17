@@ -35,12 +35,13 @@ jobs:
         with:
           path: dashboard
 
-      - name: Checkout helm-charts repository
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.repository_owner }}/helm-charts
-          path: helm-charts
-          token: ${{ secrets.GITHUB_TOKEN }}
+      # Helm charts are now included in the dashboard repo under .helm-charts/
+      # - name: Checkout helm-charts repository
+      #   uses: actions/checkout@v4
+      #   with:
+      #     repository: ${{ github.repository_owner }}/helm-charts
+      #     path: helm-charts
+      #     token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -115,7 +116,8 @@ jobs:
 
       - name: Deploy with Helm
         run: |
-          cd helm-charts
+          # Helm charts are in .helm-charts/ directory
+          cd dashboard/.helm-charts
           
           # Verify Helm chart exists
           ls -la dashboard/

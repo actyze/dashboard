@@ -1,0 +1,150 @@
+{{- if .Values.services.trino.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dashboard.trino.fullname" . }}
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.trino.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.trino.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "dashboard.trino.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "dashboard.trino.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- if .Values.trino.security.authentication.enabled }}
+      initContainers:
+      - name: generate-password-file
+        image: python:3.11-slim
+        command:
+        - /bin/sh
+        - -c
+        - |
+          pip install bcrypt --quiet
+          python3 << 'EOF'
+          import bcrypt
+          import os
+          username = os.environ.get('TRINO_USER', 'admin')
+          password = os.environ.get('TRINO_PASSWORD', '')
+          if not password:
+              print("ERROR: TRINO_PASSWORD not set")
+              exit(1)
+          hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=10))
+          with open('/etc/trino-auth-init/password.db', 'w') as f:
+              f.write(f"{username}:{hashed.decode()}\n")
+          print(f"✅ Generated password file for user: {username}")
+          EOF
+        env:
+        - name: TRINO_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-trino-credentials
+              key: username
+        - name: TRINO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-trino-credentials
+              key: password
+        volumeMounts:
+        - name: trino-auth-generated
+          mountPath: /etc/trino-auth-init
+      {{- end }}
+      containers:
+      - name: trino
+        image: "{{ .Values.trino.image.repository }}:{{ .Values.trino.image.tag }}"
+        imagePullPolicy: {{ .Values.trino.imagePullPolicy | default .Values.global.imagePullPolicy }}
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        env:
+        - name: TRINO_ENVIRONMENT
+          value: {{ .Values.trino.environment | quote }}
+        {{- if .Values.services.postgres.enabled }}
+        # PostgreSQL password for catalog connection
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-postgres-credentials
+              key: password
+        {{- end }}
+        resources:
+          {{- toYaml .Values.trino.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /v1/info
+            port: http
+          initialDelaySeconds: {{ .Values.trino.livenessProbe.initialDelaySeconds | default 60 }}
+          periodSeconds: {{ .Values.trino.livenessProbe.periodSeconds | default 30 }}
+          timeoutSeconds: {{ .Values.trino.livenessProbe.timeoutSeconds | default 10 }}
+          failureThreshold: {{ .Values.trino.livenessProbe.failureThreshold | default 3 }}
+        readinessProbe:
+          httpGet:
+            path: /v1/info
+            port: http
+          initialDelaySeconds: {{ .Values.trino.readinessProbe.initialDelaySeconds | default 30 }}
+          periodSeconds: {{ .Values.trino.readinessProbe.periodSeconds | default 10 }}
+          timeoutSeconds: {{ .Values.trino.readinessProbe.timeoutSeconds | default 5 }}
+          failureThreshold: {{ .Values.trino.readinessProbe.failureThreshold | default 3 }}
+        {{- if .Values.trino.config.enabled }}
+        volumeMounts:
+        - name: trino-config
+          mountPath: /etc/trino
+          readOnly: true
+        - name: trino-catalogs
+          mountPath: /etc/trino/catalog
+          readOnly: true
+        {{- if .Values.trino.security.authentication.enabled }}
+        - name: trino-auth-generated
+          mountPath: /etc/trino-auth
+          readOnly: true
+        {{- end }}
+        {{- end }}
+      {{- if .Values.trino.config.enabled }}
+      volumes:
+      - name: trino-config
+        configMap:
+          name: {{ include "dashboard.trino.fullname" . }}-config
+          items:
+          - key: config.properties
+            path: config.properties
+          - key: jvm.config
+            path: jvm.config
+          - key: log.properties
+            path: log.properties
+          - key: node.properties
+            path: node.properties
+          {{- if .Values.trino.security.accessControl.enabled }}
+          - key: access-control.properties
+            path: access-control.properties
+          - key: rules.json
+            path: rules.json
+          {{- end }}
+          {{- if .Values.trino.security.authentication.enabled }}
+          - key: password-authenticator.properties
+            path: password-authenticator.properties
+          {{- end }}
+      - name: trino-catalogs
+        configMap:
+          name: {{ include "dashboard.trino.fullname" . }}-config
+          items:
+          {{- if .Values.trino.catalogs }}
+          {{- range $name, $config := .Values.trino.catalogs }}
+          - key: {{ $name }}.properties
+            path: {{ $name }}.properties
+          {{- end }}
+          {{- end }}
+          {{- if .Values.services.postgres.enabled }}
+          - key: postgres.properties
+            path: postgres.properties
+          {{- end }}
+      {{- if .Values.trino.security.authentication.enabled }}
+      - name: trino-auth-generated
+        emptyDir: {}  # Init container writes password.db here, Trino reads it
+      {{- end }}
+      {{- end }}
+{{- end }}

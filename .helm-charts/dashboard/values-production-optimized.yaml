@@ -1,0 +1,111 @@
+# Optimized Production Values for DigitalOcean (2 nodes × 4 CPU × 6.4Gi RAM)
+# Use this file: helm install -f values.yaml -f values-production-optimized.yaml -f values-secrets.yaml
+
+# ============================================================================
+# RESOURCE OPTIMIZATION FOR SMALL CLUSTER
+# ============================================================================
+
+# Reduce Frontend resources (lightweight React app)
+frontend:
+  replicaCount: 2
+  resources:
+    requests:
+      memory: "64Mi"    # Reduced from 128Mi (React is lightweight)
+      cpu: "50m"        # Reduced from 100m
+    limits:
+      memory: "128Mi"   # Reduced from 256Mi
+      cpu: "100m"       # Reduced from 200m
+
+# Optimize Nexus (main backend)
+nexus:
+  replicaCount: 2
+  resources:
+    requests:
+      memory: "256Mi"   # Reduced from 512Mi
+      cpu: "150m"       # Reduced from 250m
+    limits:
+      memory: "512Mi"   # Reduced from 1Gi
+      cpu: "300m"       # Reduced from 500m
+
+# Reduce PostgreSQL (moderate load expected)
+postgres:
+  resources:
+    requests:
+      memory: "256Mi"   # Reduced from 512Mi
+      cpu: "100m"       # Reduced from 250m
+    limits:
+      memory: "512Mi"   # Reduced from 2Gi
+      cpu: "250m"       # Reduced from 1000m
+  persistence:
+    size: 10Gi          # Reduced from 20Gi for demo
+
+# Optimize Trino (this is the biggest consumer)
+trino:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: "2Gi"     # Reduced from 4Gi (critical for fitting in node)
+      cpu: "1000m"      # Reduced from 2500m (1 CPU)
+    limits:
+      memory: "3Gi"     # Reduced from 8Gi
+      cpu: "2000m"      # Reduced from 4000m (2 CPUs max)
+  jvm:
+    maxHeapSize: "1536M"  # Reduced from 6G (75% of 2Gi = 1.5G)
+
+# Optimize Schema Service (FAISS embeddings)
+schemaService:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: "1Gi"     # Reduced from 2Gi
+      cpu: "500m"       # Reduced from 2000m
+    limits:
+      memory: "2Gi"     # Reduced from 4Gi
+      cpu: "1000m"      # Reduced from 4000m
+  storage:
+    size: 2Gi           # Reduced from 5Gi for demo
+  probes:
+    liveness:
+      initialDelaySeconds: 120  # Reduced from 300 (faster startup check)
+    readiness:
+      initialDelaySeconds: 30
+
+# Adjust autoscaling for smaller cluster
+autoscaling:
+  nexus:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4      # Reduced from 10 (cluster can't handle 10)
+    targetCPUUtilizationPercentage: 80  # Increased from 75 (scale less aggressively)
+  frontend:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 3      # Reduced from 5
+    targetCPUUtilizationPercentage: 80  # Increased from 75
+  schemaService:
+    enabled: false
+
+# ============================================================================
+# RESOURCE SUMMARY WITH OPTIMIZATIONS
+# ============================================================================
+# 
+# Service           | Replicas | CPU Request | Memory Request | CPU Limit | Memory Limit
+# ------------------|----------|-------------|----------------|-----------|-------------
+# Frontend          | 2        | 100m        | 128Mi          | 200m      | 256Mi
+# Nexus             | 2        | 300m        | 512Mi          | 600m      | 1Gi
+# Schema Service    | 1        | 500m        | 1Gi            | 1000m     | 2Gi
+# PostgreSQL        | 1        | 100m        | 256Mi          | 250m      | 512Mi
+# Trino             | 1        | 1000m       | 2Gi            | 2000m     | 3Gi
+# ------------------|----------|-------------|----------------|-----------|-------------
+# TOTAL             | 7        | 2.0 CPUs    | 4.0Gi          | 4.05 CPUs | 6.75Gi
+#
+# Cluster Available: 7.8 CPUs, 12.8Gi RAM
+# Requests:  2.0 CPUs (26% of cluster), 4.0Gi (31% of cluster) ✅
+# Limits:    4.05 CPUs (52% of cluster), 6.75Gi (53% of cluster) ✅
+# 
+# With Max Autoscaling (Frontend=3, Nexus=4):
+#   Frontend: 3 × 100m = 300m, 384Mi
+#   Nexus: 4 × 300m = 1200m, 2Gi
+#   Total: 3.0 CPUs, 5.4Gi ✅ Still fits comfortably!
+#
+# ============================================================================

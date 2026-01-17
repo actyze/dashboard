@@ -1,0 +1,434 @@
+# Actyze Dashboard Helm Chart - Unified Configuration
+# For secret values, use values-secrets.yaml (not committed to Git)
+
+# Environment identifier (dev, staging, production)
+environment: production
+
+# Global configuration
+global:
+  namespace: dashboard
+  imagePullPolicy: Always  # Always pull latest public images from DockerHub
+  storageClass: "standard"
+  
+  # Public DockerHub images - no authentication needed
+  imageRegistry: ""
+  imagePullSecrets: []
+
+# ============================================================================
+# SECRET MANAGEMENT
+# ============================================================================
+# ⚠️  SECRETS ARE EXTERNALIZED - NOT IN GIT
+# Copy values-secrets.yaml.template to values-secrets.yaml
+# Fill in your actual secrets in values-secrets.yaml (not committed to Git)
+secrets:
+  create: true  # Create secrets from values
+  
+  # External LLM configuration - LOADED FROM values-secrets.yaml
+  externalLLM:
+    apiKey: ""  # ⚠️  MUST be provided in values-secrets.yaml
+    
+  # Trino credentials - LOADED FROM values-secrets.yaml  
+  trino:
+    username: ""  # ⚠️  MUST be provided in values-secrets.yaml
+    password: ""  # ⚠️  MUST be provided in values-secrets.yaml
+    
+  # PostgreSQL database credentials - LOADED FROM values-secrets.yaml
+  postgres:
+    username: ""  # ⚠️  LOADED from values-secrets.yaml
+    password: ""  # ⚠️  LOADED from values-secrets.yaml
+
+# ============================================================================
+# MODEL STRATEGY - External LLM Configuration
+# ============================================================================
+modelStrategy:
+  externalLLM:
+    enabled: true              # Use external LLM (OpenAI, Perplexity, Claude, etc.)
+    provider: "anthropic"      # Options: openai, perplexity, anthropic, groq, together
+    model: "claude-sonnet-4-20250514"
+    baseUrl: "https://api.anthropic.com/v1/messages"
+    # Examples for other providers:
+    # OpenAI: "https://api.openai.com/v1/chat/completions"
+    # Perplexity: "https://api.perplexity.ai/chat/completions"
+    # Groq: "https://api.groq.com/openai/v1/chat/completions"  
+    # Together: "https://api.together.xyz/v1/chat/completions"
+    # apiKey loaded from secret: dashboard-external-llm
+    maxTokens: 4096            # Match .env: EXTERNAL_LLM_MAX_TOKENS=4096
+    temperature: 0.1
+    timeout: 30
+    fallbackToLocal: false
+    
+    # Authentication configuration (provider-specific)
+    # Options: "bearer" (OpenAI/Perplexity/Groq), "x-api-key" (Anthropic), "api-key" (Azure)
+    authType: "x-api-key"
+    
+    # Optional: Additional headers as JSON string (for version headers, custom options)
+    # Anthropic requires anthropic-version header
+    extraHeaders: '{"anthropic-version": "2023-06-01"}'
+    # Examples for other providers:
+    # OpenAI: ''  (no extra headers needed)
+    # Azure: '{"api-version": "2023-05-15"}'
+
+# Service Account
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+# ============================================================================
+# SERVICES - Enable/disable individual components
+# ============================================================================
+services:
+  # Core Services (required)
+  nexus:
+    enabled: true        # Nexus orchestration service (REQUIRED)
+  frontend:
+    enabled: true        # React frontend (REQUIRED)
+  schemaService:
+    enabled: true        # FAISS schema recommendations (REQUIRED)
+  
+  # Database Services (required)
+  postgres:
+    enabled: true        # PostgreSQL database (REQUIRED)
+  trino:
+    enabled: true        # Trino query engine (REQUIRED)
+
+# Nexus FastAPI orchestration service
+nexus:
+  replicaCount: 2  # High availability
+  image:
+    repository: actyze/dashboard-nexus  # Public DockerHub image
+    tag: main-llm-flex  # Flexible LLM authentication
+    pullPolicy: Always  # Always pull latest from DockerHub
+  service:
+    type: ClusterIP
+    port: 8002
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  env:
+    # Debug Configuration
+    debug: true                # Match .env: DEBUG=true
+    logLevel: "INFO"           # Match .env: LOG_LEVEL=INFO
+    
+    # Database Configuration
+    postgres:
+      host: "dashboard-postgres"
+      port: 5432
+      database: "dashboard"
+      # user and password loaded from values-secrets.yaml
+    # Cache Configuration (In-Memory - No Redis)
+    cache:
+      enabled: true
+      type: "memory"
+      queryMaxSize: 100        # Match .env: CACHE_QUERY_MAX_SIZE=100
+      queryTtl: 1800           # Match .env: CACHE_QUERY_TTL=1800
+      llmMaxSize: 200
+      llmTtl: 7200
+    # External Services
+    schemaService:
+      url: "http://dashboard-schema-service:8001"
+    trino:
+      # All Trino connection details loaded from values-secrets.yaml
+      # host, port, catalog, schema, user, password
+    # ML Service Configuration
+    mlService:
+      modelType: "external-llm"
+    # SQL Execution Configuration
+    sqlExecution:
+      defaultMaxResults: 100
+      defaultTimeoutSeconds: 30
+    # LLM Configuration
+    externalLlm:
+      enabled: true
+      provider: "anthropic"
+      model: "claude-sonnet-4-20250514"
+      # apiKey loaded from secret
+
+# Frontend React service
+frontend:
+  replicaCount: 2  # High availability
+  image:
+    repository: actyze/dashboard-frontend  # Public DockerHub image
+    tag: latest
+    pullPolicy: Always  # Always pull latest from DockerHub
+  service:
+    type: ClusterIP
+    port: 80  # Changed from 3000 to match nginx container port
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"  # Change to your ingress controller (e.g., "traefik", "haproxy", "alb")
+  annotations:
+    # SSL/TLS Configuration
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"  # Automatic SSL certificates
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    
+    # Request limits
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"  # For large file uploads
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    
+    # 🔒 Security Headers - DISABLED (snippet annotations blocked by ingress controller)
+    # Can be added later via ingress controller ConfigMap if needed
+    # nginx.ingress.kubernetes.io/configuration-snippet: |
+    #   add_header X-Robots-Tag "noindex, nofollow, noarchive, nosnippet" always;
+    #   add_header X-Frame-Options "DENY" always;
+    #   add_header X-Content-Type-Options "nosniff" always;
+    #   add_header Referrer-Policy "no-referrer" always;
+    #   add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    
+  # 🌐 Custom Domain Configuration
+  hosts:
+    - host: demo.actyze.ai  # Production domain
+      paths:
+        - path: /          # Frontend UI
+          pathType: Prefix
+          service: frontend
+        - path: /api       # Backend API
+          pathType: Prefix
+          service: nexus
+  
+  # 🔒 TLS/SSL Configuration
+  # Enable for HTTPS with automatic certificates from cert-manager
+  tls:
+    - secretName: demo-actyze-ai-tls
+      hosts:
+        - demo.actyze.ai
+  
+  # 📝 For cert-manager automatic SSL:
+  # 1. Ensure cert-manager is installed in your cluster
+  # 2. Uncomment the cert-manager annotation below
+  # 3. Update your DNS: demo.actyze.ai → [your-ingress-ip]
+  
+  # For local testing, use:
+  # hosts:
+  #   - host: dashboard.local
+  # tls: []
+
+# Service Monitor for Prometheus (optional)
+serviceMonitor:
+  enabled: false
+  namespace: monitoring
+  interval: 30s
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  nexus:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 75
+  frontend:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 75
+  schemaService:
+    enabled: false  # Schema service typically doesn't need autoscaling
+
+# Network Policies
+networkPolicy:
+  enabled: false  # Enable for production security
+
+# Pod Disruption Budgets
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Trino database service (when services.trino.enabled = true)
+trino:
+  replicaCount: 1
+  image:
+    repository: trinodb/trino  # Official Trino image
+    tag: "477"
+  service:
+    type: ClusterIP
+    port: 8080
+  resources:
+    requests:
+      memory: "4Gi"
+      cpu: "2500m"
+    limits:
+      memory: "8Gi"
+      cpu: "4000m"
+  environment: "production"
+  nodeId: "ffffffff-ffff-ffff-ffff-ffffffffffff"
+  jvm:
+    maxHeapSize: "6G"
+    # Additional JVM options required for Snowflake connector
+    additionalOptions:
+      - "--add-opens=java.base/java.nio=ALL-UNNAMED"
+  config:
+    enabled: true
+  security:
+    authentication:
+      enabled: false     # Disabled for Kind - enable with HTTPS for production
+      type: "PASSWORD"
+      internalSecret: "trino-internal-secret-change-in-production"  # For internal communication
+    accessControl:
+      enabled: true      # Enable file-based access control (read-only always enforced)
+      type: "file"       # Read-only enforcement
+  catalogs:
+    # Local PostgreSQL (operational database)
+    postgres:
+      connector.name: "postgresql"
+      connection-url: "jdbc:postgresql://dashboard-postgres:5432/dashboard"
+      connection-user: "nexus_service"
+      connection-password: "${ENV:POSTGRES_PASSWORD}"
+    
+    # Memory connector (for testing)
+    memory:
+      connector.name: "memory"
+    
+    # TPC-H (sample benchmark data)
+    tpch:
+      connector.name: "tpch"
+      tpch.splits-per-node: "4"
+    
+    # Add your external data sources in values-secrets.yaml
+    # Example configurations shown below (keep commented here):
+    # mongodb:
+    #   connector.name: "mongodb"
+    #   mongodb.connection-url: "mongodb+srv://user:pass@cluster.mongodb.net"
+    #
+    # databricks:
+    #   connector.name: "delta_lake"
+    #   delta.databricks.server-hostname: "your-workspace.cloud.databricks.com"
+    #   delta.databricks.http-path: "/sql/1.0/warehouses/your-warehouse-id"
+    #   delta.databricks.catalog: "main"
+    #   delta.databricks.auth-type: "pat"
+    #   delta.databricks.pat-token: "YOUR_DATABRICKS_PAT"
+    #
+    # snowflake:
+    #   connector.name: "snowflake"
+    #   snowflake.account: "YOUR_ACCOUNT-YOUR_LOCATOR"
+    #   snowflake.user: "your_username"
+    #   snowflake.password: "your_password"
+    #   snowflake.database: "YOUR_DATABASE"
+    #   snowflake.warehouse: "YOUR_WAREHOUSE"
+    #   snowflake.role: "ACCOUNTADMIN"
+    #
+    # supabase:
+    #   connector.name: "postgresql"
+    #   connection-url: "jdbc:postgresql://db.xxxxx.supabase.co:5432/postgres?sslmode=require"
+    #   connection-user: "postgres"
+    #   connection-password: "your_password"
+    #   postgresql.include-system-tables: "false"
+  livenessProbe:
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+# PostgreSQL operational database configuration
+postgres:
+  image:
+    repository: postgres  # Official PostgreSQL image
+    tag: "15-alpine"
+  database: "dashboard"
+  # user and password loaded from values-secrets.yaml
+  
+  # Persistence configuration
+  persistence:
+    enabled: true
+    size: 20Gi  # Increased for production
+    storageClass: "standard"
+    accessModes:
+      - ReadWriteOnce
+      
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+
+# Database Migrations Configuration
+migrations:
+  # Run DML (Data Manipulation Language) scripts?
+  # DDL (schema changes) always runs automatically
+  # DML (demo data inserts) only runs when enabled
+  runDML: false  # Set to true for dev/staging with demo data
+
+# FAISS Schema Service
+schemaService:
+  replicaCount: 1
+  image:
+    repository: actyze/dashboard-schema-service  # Public DockerHub image
+    tag: latest
+    pullPolicy: Always  # Always pull latest from DockerHub
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "2000m"
+    limits:
+      memory: "4Gi"
+      cpu: "4000m"
+  env:
+    trino:
+      # All Trino connection details loaded from values-secrets.yaml
+      # host, port, catalog, schema, user, password
+    refreshHours: 6  # Refresh schema every 6 hours
+    includeTpch: false  # Exclude TPC-H in production
+  probes:
+    liveness:
+      initialDelaySeconds: 300     # 1 minute - embeddings usually build in 30-60 seconds
+      periodSeconds: 60
+      timeoutSeconds: 30
+      failureThreshold: 3
+    readiness:
+      initialDelaySeconds: 30     # 30 seconds - faster for development
+      periodSeconds: 30
+      timeoutSeconds: 5
+      failureThreshold: 10
+  service:
+    type: ClusterIP
+    port: 8001
+  storage:
+    enabled: true
+    size: 5Gi  # Increased for production
+    storageClass: "standard"
+
+# Logging configuration
+logging:
+  level:
+    root: INFO
+    nexus: INFO  # Change to DEBUG for troubleshooting
+
+# Monitoring configuration
+monitoring:
+  metrics:
+    enabled: true
+
+# ============================================================================
+# PRODUCTION RECOMMENDATIONS
+# ============================================================================
+# 1. Set ingress.tls and configure cert-manager for HTTPS
+# 2. Enable networkPolicy for pod-to-pod security
+# 3. Increase resource limits based on your load
+# 4. Enable autoscaling for nexus and frontend
+# 5. Use managed database services (Azure PostgreSQL, AWS RDS) in production
+# 6. Configure proper backup/restore procedures
+# 7. Set up monitoring and alerting (Prometheus + Grafana)
+# ============================================================================
+

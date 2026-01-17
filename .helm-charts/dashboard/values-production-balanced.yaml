@@ -1,0 +1,146 @@
+# Balanced Production Values for DigitalOcean with Node Autoscaling (2-3 nodes)
+# Use this file: helm install -f values.yaml -f values-production-balanced.yaml -f values-secrets.yaml
+
+# ============================================================================
+# BALANCED RESOURCE ALLOCATION
+# Sized for comfortable operation on 2 nodes with room to scale to 3
+# ============================================================================
+
+# Frontend - Keep efficient but not starved
+frontend:
+  replicaCount: 2
+  resources:
+    requests:
+      memory: "96Mi"     # Between original (128Mi) and minimal (64Mi)
+      cpu: "75m"         # Comfortable for nginx + React
+    limits:
+      memory: "192Mi"    # Can handle traffic spikes
+      cpu: "150m"
+
+# Nexus - Main backend, balance performance and efficiency
+nexus:
+  replicaCount: 2
+  resources:
+    requests:
+      memory: "384Mi"    # Good for caching + FastAPI
+      cpu: "200m"        # Enough for API processing
+    limits:
+      memory: "768Mi"    # Can handle LLM responses and caching
+      cpu: "400m"        # Good burst capacity
+
+# PostgreSQL - Production-ready settings
+postgres:
+  resources:
+    requests:
+      memory: "384Mi"    # Good for production database
+      cpu: "150m"        # Comfortable for queries
+    limits:
+      memory: "1Gi"      # Can handle connection pools
+      cpu: "500m"        # Burst capacity for migrations/backups
+  persistence:
+    size: 15Gi           # Good size for production
+
+# Trino - Balanced for performance without overwhelming cluster
+trino:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: "3Gi"      # Good for query processing
+      cpu: "1500m"       # 1.5 CPUs for decent performance
+    limits:
+      memory: "5Gi"      # Can handle complex queries
+      cpu: "3000m"       # Up to 3 CPUs for heavy queries
+  jvm:
+    maxHeapSize: "2304M" # 2.25G (75% of 3Gi)
+
+# Schema Service - Comfortable for FAISS operations
+schemaService:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: "1536Mi"   # 1.5Gi - good for embeddings
+      cpu: "750m"        # Decent for initial indexing
+    limits:
+      memory: "3Gi"      # Can handle large schemas
+      cpu: "1500m"       # Burst for embedding generation
+  storage:
+    size: 3Gi            # Good size for embeddings
+  probes:
+    liveness:
+      initialDelaySeconds: 180  # Balanced startup time
+    readiness:
+      initialDelaySeconds: 30
+
+# Autoscaling - More aggressive with node scaling available
+autoscaling:
+  nexus:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6       # Can scale more with 3rd node
+    targetCPUUtilizationPercentage: 70  # More aggressive scaling
+  frontend:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4       # Can scale more
+    targetCPUUtilizationPercentage: 70
+  schemaService:
+    enabled: false       # Still doesn't benefit from scaling
+
+# ============================================================================
+# RESOURCE SUMMARY - BALANCED CONFIGURATION
+# ============================================================================
+# 
+# Service           | Replicas | CPU Request | Memory Request | CPU Limit | Memory Limit
+# ------------------|----------|-------------|----------------|-----------|-------------
+# Frontend          | 2        | 150m        | 192Mi          | 300m      | 384Mi
+# Nexus             | 2        | 400m        | 768Mi          | 800m      | 1536Mi
+# Schema Service    | 1        | 750m        | 1536Mi         | 1500m     | 3Gi
+# PostgreSQL        | 1        | 150m        | 384Mi          | 500m      | 1Gi
+# Trino             | 1        | 1500m       | 3Gi            | 3000m     | 5Gi
+# ------------------|----------|-------------|----------------|-----------|-------------
+# TOTAL             | 7        | 2.95 CPUs   | 5.85Gi         | 6.1 CPUs  | 11Gi
+#
+# 2 Nodes: 7.8 CPUs, 12.8Gi RAM
+#   Requests:  2.95 CPUs (38%), 5.85Gi (46%) ✅ Fits comfortably
+#   Limits:    6.1 CPUs (78%), 11Gi (86%)    ✅ Acceptable, triggers node scale
+#
+# 3 Nodes: 11.7 CPUs, 19.2Gi RAM  
+#   Requests:  2.95 CPUs (25%), 5.85Gi (30%) ✅ Plenty of room
+#   Limits:    6.1 CPUs (52%), 11Gi (57%)    ✅ Comfortable
+# 
+# With Max Autoscaling (Frontend=4, Nexus=6):
+#   Frontend: 4 × 150m = 600m, 768Mi
+#   Nexus: 6 × 400m = 2400m, 4.5Gi
+#   Total: 5.1 CPUs, 9.6Gi ✅ Triggers 3rd node, then comfortable
+#
+# ============================================================================
+
+# Node Affinity - Spread pods across nodes for HA
+# This ensures pods are distributed for high availability
+nexus:
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+            - key: app
+              operator: In
+              values:
+              - dashboard-nexus
+          topologyKey: kubernetes.io/hostname
+
+frontend:
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+            - key: app
+              operator: In
+              values:
+              - dashboard-frontend
+          topologyKey: kubernetes.io/hostname

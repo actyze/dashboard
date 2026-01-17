@@ -1,0 +1,83 @@
+{{- if .Values.services.nexus.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dashboard.fullname" . }}-nexus
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.nexus.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.nexus.service.type }}
+  ports:
+    - port: {{ .Values.nexus.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "dashboard.nexus.selectorLabels" . | nindent 4 }}
+{{- end }}
+
+{{- if .Values.services.fastapi }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dashboard.fullname" . }}-fastapi
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.fastapi.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.fastapi.service.type }}
+  ports:
+    - port: {{ .Values.fastapi.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: 8080
+      targetPort: trino
+      protocol: TCP
+      name: trino
+  selector:
+    {{- include "dashboard.fastapi.selectorLabels" . | nindent 4 }}
+{{- end }}
+
+{{- if .Values.services.frontend.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dashboard.fullname" . }}-frontend
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.frontend.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.frontend.service.type }}
+  ports:
+    - port: {{ .Values.frontend.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "dashboard.frontend.selectorLabels" . | nindent 4 }}
+{{- end }}
+
+{{- if .Values.services.trino }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dashboard.trino.fullname" . }}
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.trino.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.trino.service.type }}
+  ports:
+    - port: {{ .Values.trino.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "dashboard.trino.selectorLabels" . | nindent 4 }}
+{{- end }}

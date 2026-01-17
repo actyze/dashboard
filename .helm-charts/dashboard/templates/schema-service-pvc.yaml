@@ -1,0 +1,22 @@
+{{- if and .Values.services.schemaService.enabled .Values.schemaService.storage.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "dashboard.fullname" . }}-schema-service-pvc
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: schema-service
+  annotations:
+    # Keep PVC on helm uninstall to preserve model cache
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.schemaService.storage.size }}
+  {{- if .Values.schemaService.storage.storageClass }}
+  storageClassName: {{ .Values.schemaService.storage.storageClass }}
+  {{- end }}
+{{- end }}

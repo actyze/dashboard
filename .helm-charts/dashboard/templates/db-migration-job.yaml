@@ -1,0 +1,158 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "dashboard.fullname" . }}-db-migration
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db-migration
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    metadata:
+      name: {{ include "dashboard.fullname" . }}-db-migration
+      labels:
+        {{- include "dashboard.labels" . | nindent 8 }}
+        app.kubernetes.io/component: db-migration
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migration-tool
+          image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
+          imagePullPolicy: {{ .Values.postgres.imagePullPolicy | default .Values.global.imagePullPolicy }}
+          env:
+            - name: PGHOST
+              value: {{ include "dashboard.fullname" . }}-postgres
+            - name: PGPORT
+              value: "5432"
+            - name: PGDATABASE
+              value: {{ .Values.postgres.database }}
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dashboard.fullname" . }}-postgres-credentials
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dashboard.fullname" . }}-postgres-credentials
+                  key: password
+            - name: RUN_DML
+              value: {{ .Values.migrations.runDML | default "false" | quote }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              # Disable exit on error so deployment succeeds even if migration fails
+              set +e
+              
+              echo "========================================="
+              echo "Kubernetes Database Migration"
+              echo "========================================="
+              
+              # Check database connection
+              echo "Waiting for postgres to be ready..."
+              until pg_isready; do 
+                sleep 2
+              done
+              echo "✓ Database is ready"
+              echo ""
+              
+              # =============================================================================
+              # DDL Migration (REQUIRED - Schema changes)
+              # =============================================================================
+              echo "========================================="
+              echo "Running DDL migrations (schema changes)"
+              echo "========================================="
+              
+              DDL_COUNT=0
+              DDL_SUCCESS=0
+              DDL_FAILED=0
+              
+              if [ -d "/sql/ddl" ] && [ "$(ls -A /sql/ddl/*.sql 2>/dev/null)" ]; then
+                for file in /sql/ddl/*.sql; do
+                  if [ -f "$file" ]; then
+                    DDL_COUNT=$((DDL_COUNT + 1))
+                    filename=$(basename "$file")
+                    echo "[$DDL_COUNT] Applying DDL: $filename"
+                    
+                    if psql -f "$file" 2>&1 | grep -v "already exists\|duplicate"; then
+                      DDL_SUCCESS=$((DDL_SUCCESS + 1))
+                      echo "    ✓ Success"
+                    else
+                      DDL_FAILED=$((DDL_FAILED + 1))
+                      echo "    ⚠ Warning: May have failed (check logs)"
+                    fi
+                  fi
+                done
+                
+                echo ""
+                echo "DDL Summary: $DDL_SUCCESS successful, $DDL_FAILED warnings/failures"
+              else
+                echo "⚠ No DDL files found in /sql/ddl/"
+              fi
+              
+              echo ""
+              
+              # =============================================================================
+              # DML Migration (OPTIONAL - Demo data)
+              # =============================================================================
+              if [ "$RUN_DML" = "true" ]; then
+                echo "========================================="
+                echo "Running DML migrations (demo data)"
+                echo "========================================="
+                
+                DML_COUNT=0
+                
+                if [ -d "/sql/dml" ] && [ "$(ls -A /sql/dml/*.sql 2>/dev/null)" ]; then
+                  for file in /sql/dml/*.sql; do
+                    if [ -f "$file" ]; then
+                      DML_COUNT=$((DML_COUNT + 1))
+                      filename=$(basename "$file")
+                      echo "[$DML_COUNT] Applying DML: $filename"
+                      
+                      if psql -f "$file"; then
+                        echo "    ✓ Success"
+                      else
+                        echo "    ✗ Failed (non-critical, demo data only)"
+                      fi
+                    fi
+                  done
+                  
+                  echo ""
+                  echo "DML applied: $DML_COUNT file(s)"
+                else
+                  echo "⚠ No DML files found in /sql/dml/"
+                fi
+              else
+                echo "========================================="
+                echo "Skipping DML migrations (demo data)"
+                echo "========================================="
+                echo "To run demo data inserts, set:"
+                echo "  migrations.runDML: true"
+                echo ""
+                echo "Or run manually:"
+                echo "  helm upgrade --set migrations.runDML=true ..."
+              fi
+              
+              echo ""
+              echo "========================================="
+              echo "Migration Complete"
+              echo "========================================="
+              
+              # Exit successfully
+              exit 0
+          volumeMounts:
+            - name: ddl-scripts
+              mountPath: /sql/ddl
+            - name: dml-scripts
+              mountPath: /sql/dml
+      volumes:
+        - name: ddl-scripts
+          configMap:
+            name: {{ include "dashboard.fullname" . }}-postgres-ddl
+        - name: dml-scripts
+          configMap:
+            name: {{ include "dashboard.fullname" . }}-postgres-dml

@@ -1,0 +1,18 @@
+# DigitalOcean-specific fixes
+
+# Fix storage class (DO uses "do-block-storage", not "standard")
+global:
+  storageClass: "do-block-storage"
+
+postgres:
+  persistence:
+    storageClass: "do-block-storage"
+
+schemaService:
+  storage:
+    storageClass: "do-block-storage"
+
+# Fix Nexus image tag (main-llm-flex doesn't exist on DockerHub)
+nexus:
+  image:
+    tag: "latest"  # Use latest instead of main-llm-flex

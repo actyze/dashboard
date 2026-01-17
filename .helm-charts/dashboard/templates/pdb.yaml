@@ -1,0 +1,43 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "dashboard.fullname" . }}-nexus-pdb
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.nexus.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "dashboard.nexus.selectorLabels" . | nindent 6 }}
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "dashboard.fullname" . }}-frontend-pdb
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.frontend.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "dashboard.frontend.selectorLabels" . | nindent 6 }}
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "dashboard.fullname" . }}-fastapi-pdb
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.fastapi.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "dashboard.fastapi.selectorLabels" . | nindent 6 }}
+{{- end }}

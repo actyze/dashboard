@@ -1,0 +1,159 @@
+{{- if .Values.services.nexus.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dashboard.fullname" . }}-nexus
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.nexus.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.nexus.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "dashboard.nexus.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "dashboard.nexus.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: nexus
+        image: "{{ .Values.nexus.image.repository }}:{{ .Values.nexus.image.tag }}"
+        imagePullPolicy: {{ .Values.nexus.image.pullPolicy | default .Values.global.imagePullPolicy }}
+        ports:
+        - name: http
+          containerPort: 8002
+          protocol: TCP
+        env:
+        # Debug Configuration
+        - name: DEBUG
+          value: "{{ .Values.nexus.env.debug | default "false" }}"
+        - name: LOG_LEVEL
+          value: "{{ .Values.nexus.env.logLevel | default "INFO" }}"
+        # Schema Service Configuration
+        - name: SCHEMA_SERVICE_URL
+          value: {{ .Values.nexus.env.schemaService.url }}
+        {{- if .Values.nexus.env.schemaServiceKey }}
+        - name: SCHEMA_SERVICE_KEY
+          value: {{ .Values.nexus.env.schemaServiceKey | quote }}
+        {{- end }}
+        # Trino Configuration
+        - name: TRINO_HOST
+          value: "{{ .Values.nexus.env.trino.host }}"
+        - name: TRINO_PORT
+          value: "{{ .Values.nexus.env.trino.port }}"
+        - name: TRINO_CATALOG
+          value: "{{ .Values.nexus.env.trino.catalog }}"
+        - name: TRINO_SCHEMA
+          value: "{{ .Values.nexus.env.trino.schema }}"
+        - name: TRINO_SSL
+          value: "{{ .Values.nexus.env.trino.ssl | default "false" }}"
+        - name: TRINO_URL
+          value: "jdbc:trino://{{ .Values.nexus.env.trino.host }}:{{ .Values.nexus.env.trino.port }}/{{ .Values.nexus.env.trino.catalog }}/{{ .Values.nexus.env.trino.schema }}{{ if .Values.nexus.env.trino.jdbcParams }}{{ .Values.nexus.env.trino.jdbcParams }}{{ else if .Values.nexus.env.trino.ssl | default false }}?SSL=true&SSLVerification={{ .Values.nexus.env.trino.sslVerification | default "NONE" }}{{ else }}?SSL=false{{ end }}"
+        - name: TRINO_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-trino-credentials
+              key: username
+        - name: TRINO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-trino-credentials
+              key: password
+        # PostgreSQL Database Configuration
+        - name: POSTGRES_HOST
+          value: {{ .Values.nexus.env.postgres.host }}
+        - name: POSTGRES_PORT
+          value: "{{ .Values.nexus.env.postgres.port }}"
+        - name: POSTGRES_DATABASE
+          value: {{ .Values.nexus.env.postgres.database }}
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-postgres-credentials
+              key: username
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-postgres-credentials
+              key: password
+        {{- if .Values.modelStrategy.externalLLM.enabled }}
+        # External LLM Configuration
+        - name: EXTERNAL_LLM_ENABLED
+          value: "{{ .Values.modelStrategy.externalLLM.enabled }}"
+        # Spring relaxed-binding for dashboard.external-llm.enabled
+        - name: DASHBOARD_EXTERNAL_LLM_ENABLED
+          value: "{{ .Values.modelStrategy.externalLLM.enabled }}"
+        - name: EXTERNAL_LLM_PROVIDER
+          value: {{ .Values.modelStrategy.externalLLM.provider }}
+        - name: DASHBOARD_EXTERNAL_LLM_PROVIDER
+          value: {{ .Values.modelStrategy.externalLLM.provider }}
+        - name: EXTERNAL_LLM_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-external-llm
+              key: external-llm-api-key
+              optional: true
+        - name: DASHBOARD_EXTERNAL_LLM_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-external-llm
+              key: external-llm-api-key
+              optional: true
+        - name: EXTERNAL_LLM_MODEL
+          value: {{ .Values.modelStrategy.externalLLM.model }}
+        - name: DASHBOARD_EXTERNAL_LLM_MODEL
+          value: {{ .Values.modelStrategy.externalLLM.model }}
+        - name: EXTERNAL_LLM_BASE_URL
+          value: {{ .Values.modelStrategy.externalLLM.baseUrl }}
+        - name: DASHBOARD_EXTERNAL_LLM_BASE_URL
+          value: {{ .Values.modelStrategy.externalLLM.baseUrl }}
+        - name: EXTERNAL_LLM_MAX_TOKENS
+          value: "{{ .Values.modelStrategy.externalLLM.maxTokens }}"
+        - name: EXTERNAL_LLM_TEMPERATURE
+          value: "{{ .Values.modelStrategy.externalLLM.temperature }}"
+        - name: EXTERNAL_LLM_TIMEOUT
+          value: "{{ .Values.modelStrategy.externalLLM.timeout }}"
+        - name: EXTERNAL_LLM_FALLBACK_ENABLED
+          value: "{{ .Values.modelStrategy.externalLLM.fallbackToLocal }}"
+        # Authentication configuration (flexible for any LLM provider)
+        - name: EXTERNAL_LLM_AUTH_TYPE
+          value: {{ .Values.modelStrategy.externalLLM.authType | default "bearer" | quote }}
+        {{- if .Values.modelStrategy.externalLLM.extraHeaders }}
+        - name: EXTERNAL_LLM_EXTRA_HEADERS
+          value: {{ .Values.modelStrategy.externalLLM.extraHeaders | quote }}
+        {{- end }}
+        {{- end }}
+        # ML Service Configuration
+        - name: ML_SERVICE_MODEL_TYPE
+          value: "{{ .Values.nexus.env.mlService.modelType | default "external-llm" }}"
+        # SQL Execution Configuration
+        - name: SQL_EXECUTION_DEFAULT_MAX_RESULTS
+          value: "{{ .Values.nexus.env.sqlExecution.defaultMaxResults | default "100" }}"
+        - name: SQL_EXECUTION_DEFAULT_TIMEOUT_SECONDS
+          value: "{{ .Values.nexus.env.sqlExecution.defaultTimeoutSeconds | default "30" }}"
+        # Cache Configuration
+        - name: CACHE_ENABLED
+          value: "{{ .Values.nexus.env.cache.enabled | default "true" }}"
+        - name: CACHE_QUERY_MAX_SIZE
+          value: "{{ .Values.nexus.env.cache.queryMaxSize | default "100" }}"
+        - name: CACHE_QUERY_TTL
+          value: "{{ .Values.nexus.env.cache.queryTtl | default "1800" }}"
+        # Enable DEBUG logging for OrchestrationService without rebuild
+        - name: LOGGING_LEVEL_COM_DASHBOARD_SERVICE_ORCHESTRATIONSERVICE
+          value: DEBUG
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          {{- toYaml .Values.nexus.resources | nindent 10 }}
+{{- end }}

@@ -1,0 +1,22 @@
+apiVersion: v2
+name: dashboard
+description: AI-powered analytics dashboard with Natural Language to SQL conversion
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+keywords:
+  - dashboard
+  - ai
+  - nlp
+  - sql
+  - analytics
+  - trino
+  - fastapi
+  - react
+
+maintainers:
+  - name: Dashboard Team
+    email: team@dashboard.com
+
+dependencies: []

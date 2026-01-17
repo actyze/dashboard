@@ -1,0 +1,35 @@
+---
+# ConfigMap for DDL (Data Definition Language) - Schema changes
+# These are REQUIRED and run automatically on every deployment
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dashboard.fullname" . }}-postgres-ddl
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+    migration-type: ddl
+data:
+{{- range $path, $bytes := .Files.Glob "sql/ddl/*.sql" }}
+  {{ base $path }}: |
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}
+
+---
+# ConfigMap for DML (Data Manipulation Language) - Demo data
+# These are OPTIONAL and only run when migrations.runDML is true
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dashboard.fullname" . }}-postgres-dml
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+    migration-type: dml
+data:
+{{- range $path, $bytes := .Files.Glob "sql/dml/*.sql" }}
+  {{ base $path }}: |
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}

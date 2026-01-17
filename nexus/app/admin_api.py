@@ -9,7 +9,7 @@ from app.auth.dependencies import get_current_user, require_admin
 
 logger = structlog.get_logger()
 
-admin_router = APIRouter(prefix="/admin", tags=["Admin"])  # No /api - frontend adds it
+admin_router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
 # ============================================================================
 # REQUEST/RESPONSE MODELS

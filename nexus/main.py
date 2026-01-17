@@ -81,7 +81,7 @@ app.include_router(auth_router)
 app.include_router(explorer_router)
 app.include_router(dashboard_router)
 app.include_router(admin_router)  # Admin endpoints (requires ADMIN role)
-app.include_router(preferences_router, prefix="/preferences", tags=["User Preferences"])  # No /api - frontend adds it
+app.include_router(preferences_router, prefix="/api/preferences", tags=["User Preferences"])
 app.include_router(file_upload_router)  # File upload endpoints
 app.include_router(metadata_router)  # Metadata catalog descriptions (org-level)
 app.include_router(public_router)  # No authentication required

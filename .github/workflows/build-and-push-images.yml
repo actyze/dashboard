@@ -21,6 +21,14 @@ env:
 
 jobs:
   # Detect which services have changes to optimize build times
+  # 
+  # Build Triggers:
+  # - frontend/      → builds frontend only
+  # - nexus/         → builds nexus only
+  # - schema-service/ → builds schema-service only
+  # - [build-all] in commit message → builds all 3 services
+  # - Manual workflow dispatch with force_build=true → builds all 3 services
+  # - Workflow file changes do NOT trigger builds (use [build-all] flag if needed)
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
@@ -53,13 +61,10 @@ jobs:
           filters: |
             frontend:
               - 'frontend/**'
-              - '.github/workflows/build-and-push-images.yml'
             nexus:
               - 'nexus/**'
-              - '.github/workflows/build-and-push-images.yml'
             schema:
               - 'schema-service/**'
-              - '.github/workflows/build-and-push-images.yml'
 
   build-frontend:
     needs: detect-changes
@@ -335,74 +340,45 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update Docker Compose files
+      - name: Collect built image information
+        id: collect-images
         run: |
-          # Extract image tags
-          FRONTEND_TAG=$(echo "${{ needs.build-frontend.outputs.image-tag }}" | head -n1)
-          NEXUS_TAG=$(echo "${{ needs.build-nexus.outputs.image-tag }}" | head -n1)
-          SCHEMA_TAG=$(echo "${{ needs.build-schema-service.outputs.image-tag }}" | head -n1)
+          echo "📦 Collecting information about built images..."
+          IMAGES_BUILT=""
           
-          echo "Updating Docker Compose files with new image tags:"
-          echo "Frontend: $FRONTEND_TAG"
-          echo "Nexus: $NEXUS_TAG"
-          echo "Schema: $SCHEMA_TAG"
+          if [[ "${{ needs.build-frontend.result }}" == "success" ]]; then
+            FRONTEND_TAG=$(echo "${{ needs.build-frontend.outputs.image-tag }}" | head -n1)
+            echo "frontend-tag=$FRONTEND_TAG" >> $GITHUB_OUTPUT
+            IMAGES_BUILT="$IMAGES_BUILT\n- Frontend: $FRONTEND_TAG"
+            echo "✅ Frontend: $FRONTEND_TAG"
+          fi
           
-          # Update docker-compose files to use Docker Hub images instead of building locally
-          sed -i "s|build:|# build:|g" docker/docker-compose.*.yml
-          sed -i "s|context:|# context:|g" docker/docker-compose.*.yml
-          sed -i "s|dockerfile:|# dockerfile:|g" docker/docker-compose.*.yml
+          if [[ "${{ needs.build-nexus.result }}" == "success" ]]; then
+            NEXUS_TAG=$(echo "${{ needs.build-nexus.outputs.image-tag }}" | head -n1)
+            echo "nexus-tag=$NEXUS_TAG" >> $GITHUB_OUTPUT
+            IMAGES_BUILT="$IMAGES_BUILT\n- Nexus: $NEXUS_TAG"
+            echo "✅ Nexus: $NEXUS_TAG"
+          fi
           
-          # Add image references
-          sed -i "/dashboard-frontend:/a\\    image: $FRONTEND_TAG" docker/docker-compose.*.yml
-          sed -i "/dashboard-nexus:/a\\    image: $NEXUS_TAG" docker/docker-compose.*.yml
-          sed -i "/dashboard-schema-service:/a\\    image: $SCHEMA_TAG" docker/docker-compose.*.yml
+          if [[ "${{ needs.build-schema-service.result }}" == "success" ]]; then
+            SCHEMA_TAG=$(echo "${{ needs.build-schema-service.outputs.image-tag }}" | head -n1)
+            echo "schema-tag=$SCHEMA_TAG" >> $GITHUB_OUTPUT
+            IMAGES_BUILT="$IMAGES_BUILT\n- Schema Service: $SCHEMA_TAG"
+            echo "✅ Schema Service: $SCHEMA_TAG"
+          fi
+          
+          echo -e "$IMAGES_BUILT" > /tmp/images-built.txt
 
-      - name: Update Helm values
+      - name: Create deployment update notification
         run: |
-          # Extract image tags without registry prefix
-          FRONTEND_TAG=$(echo "${{ needs.build-frontend.outputs.image-tag }}" | head -n1 | sed 's|docker.io/||')
-          NEXUS_TAG=$(echo "${{ needs.build-nexus.outputs.image-tag }}" | head -n1 | sed 's|docker.io/||')
-          SCHEMA_TAG=$(echo "${{ needs.build-schema-service.outputs.image-tag }}" | head -n1 | sed 's|docker.io/||')
-          
-          echo "Updating Helm values with new image tags:"
-          echo "Frontend: $FRONTEND_TAG"
-          echo "Nexus: $NEXUS_TAG"
-          echo "Schema: $SCHEMA_TAG"
-          
-          # Update Helm values files
-          find helm -name "values*.yaml" -exec sed -i "s|repository: dashboard-frontend|repository: actyze/dashboard-frontend|g" {} \;
-          find helm -name "values*.yaml" -exec sed -i "s|repository: dashboard-nexus|repository: actyze/dashboard-nexus|g" {} \;
-          find helm -name "values*.yaml" -exec sed -i "s|repository: dashboard-schema-service|repository: actyze/dashboard-schema-service|g" {} \;
-          
-          # Update pull policy to Always for latest images
-          find helm -name "values*.yaml" -exec sed -i "s|pullPolicy: Never|pullPolicy: Always|g" {} \;
-          find helm -name "values*.yaml" -exec sed -i "s|pullPolicy: IfNotPresent|pullPolicy: Always|g" {} \;
-
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "chore: update deployment configs with new Docker images"
-          title: "Update deployment configs with new Docker images"
-          body: |
-            This PR updates the deployment configurations with newly built Docker images:
-            
-            - Frontend: ${{ needs.build-frontend.outputs.image-tag }}
-            - Nexus: ${{ needs.build-nexus.outputs.image-tag }}
-            - Schema Service: ${{ needs.build-schema-service.outputs.image-tag }}
-            
-            Note: Trino uses the official trinodb/trino image (not built by this workflow)
-            
-            Changes:
-            - Updated Docker Compose files to use Docker Hub images
-            - Updated Helm values to use Docker Hub repositories
-            - Set pull policy to Always for latest images
-            - All images built for linux/amd64 and linux/arm64
-            
-            Auto-generated by GitHub Actions.
-          branch: update-docker-images-${{ github.run_number }}
-          delete-branch: true
-
+          echo "📝 New Docker images are available on Docker Hub:"
+          cat /tmp/images-built.txt
+          echo ""
+          echo "To use these images:"
+          echo "  1. Update your Helm values or docker-compose files"
+          echo "  2. Deploy using: helm upgrade or docker-compose up"
+          echo ""
+          echo "Note: Helm charts in .helm-charts/ use 'latest' tag by default"
   security-scan:
     runs-on: ubuntu-latest
     needs: [build-frontend, build-nexus, build-schema-service]
@@ -414,24 +390,42 @@ jobs:
         needs.build-schema-service.result == 'success'
       )
     steps:
-      - name: Extract single image tags for scanning
+      - name: Extract and validate image tags
         id: extract-tags
         run: |
-          # Extract first tag from multi-line output for each service
-          FRONTEND_TAG=$(echo "${{ needs.build-frontend.outputs.image-tag }}" | head -n1 | tr -d '\n')
-          NEXUS_TAG=$(echo "${{ needs.build-nexus.outputs.image-tag }}" | head -n1 | tr -d '\n')
-          SCHEMA_TAG=$(echo "${{ needs.build-schema-service.outputs.image-tag }}" | head -n1 | tr -d '\n')
+          # Only extract tags for builds that actually succeeded
+          if [[ "${{ needs.build-frontend.result }}" == "success" ]]; then
+            FRONTEND_TAG=$(echo "${{ needs.build-frontend.outputs.image-tag }}" | head -n1 | tr -d '\n')
+            echo "frontend-tag=$FRONTEND_TAG" >> $GITHUB_OUTPUT
+            echo "scan-frontend=true" >> $GITHUB_OUTPUT
+            echo "✅ Frontend built: $FRONTEND_TAG"
+          else
+            echo "scan-frontend=false" >> $GITHUB_OUTPUT
+            echo "⏭️  Frontend: skipped"
+          fi
           
-          echo "frontend-tag=$FRONTEND_TAG" >> $GITHUB_OUTPUT
-          echo "nexus-tag=$NEXUS_TAG" >> $GITHUB_OUTPUT
-          echo "schema-tag=$SCHEMA_TAG" >> $GITHUB_OUTPUT
+          if [[ "${{ needs.build-nexus.result }}" == "success" ]]; then
+            NEXUS_TAG=$(echo "${{ needs.build-nexus.outputs.image-tag }}" | head -n1 | tr -d '\n')
+            echo "nexus-tag=$NEXUS_TAG" >> $GITHUB_OUTPUT
+            echo "scan-nexus=true" >> $GITHUB_OUTPUT
+            echo "✅ Nexus built: $NEXUS_TAG"
+          else
+            echo "scan-nexus=false" >> $GITHUB_OUTPUT
+            echo "⏭️  Nexus: skipped"
+          fi
           
-          echo "Extracted tags for security scanning:"
-          echo "Frontend: $FRONTEND_TAG"
-          echo "Nexus: $NEXUS_TAG"
-          echo "Schema: $SCHEMA_TAG"
+          if [[ "${{ needs.build-schema-service.result }}" == "success" ]]; then
+            SCHEMA_TAG=$(echo "${{ needs.build-schema-service.outputs.image-tag }}" | head -n1 | tr -d '\n')
+            echo "schema-tag=$SCHEMA_TAG" >> $GITHUB_OUTPUT
+            echo "scan-schema=true" >> $GITHUB_OUTPUT
+            echo "✅ Schema Service built: $SCHEMA_TAG"
+          else
+            echo "scan-schema=false" >> $GITHUB_OUTPUT
+            echo "⏭️  Schema Service: skipped"
+          fi
 
       - name: Run Trivy vulnerability scanner - Frontend
+        if: steps.extract-tags.outputs.scan-frontend == 'true'
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.extract-tags.outputs.frontend-tag }}
@@ -439,6 +433,7 @@ jobs:
           output: 'trivy-frontend.sarif'
 
       - name: Run Trivy vulnerability scanner - Nexus
+        if: steps.extract-tags.outputs.scan-nexus == 'true'
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.extract-tags.outputs.nexus-tag }}
@@ -446,6 +441,7 @@ jobs:
           output: 'trivy-nexus.sarif'
 
       - name: Run Trivy vulnerability scanner - Schema Service
+        if: steps.extract-tags.outputs.scan-schema == 'true'
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.extract-tags.outputs.schema-tag }}
@@ -453,6 +449,30 @@ jobs:
           output: 'trivy-schema.sarif'
 
       - name: Upload Trivy scan results to GitHub Security tab
+        if: always()  # Upload even if some scans were skipped
         uses: github/codeql-action/upload-sarif@v2
         with:
           sarif_file: '.'
+  # Final job to ensure workflow is marked as success if builds succeeded
+  # This prevents deployment workflow from being skipped due to optional job failures
+  build-complete:
+    runs-on: ubuntu-latest
+    needs: [build-frontend, build-nexus, build-schema-service]
+    if: always()
+    steps:
+      - name: Check build status
+        run: |
+          echo "Build Status Summary:"
+          echo "  Frontend: ${{ needs.build-frontend.result }}"
+          echo "  Nexus: ${{ needs.build-nexus.result }}"
+          echo "  Schema Service: ${{ needs.build-schema-service.result }}"
+          
+          # Fail only if ALL builds failed or were skipped
+          if [[ "${{ needs.build-frontend.result }}" != "success" ]] && \
+             [[ "${{ needs.build-nexus.result }}" != "success" ]] && \
+             [[ "${{ needs.build-schema-service.result }}" != "success" ]]; then
+            echo "❌ No builds succeeded - failing workflow"
+            exit 1
+          fi
+          
+          echo "✅ At least one build succeeded - workflow marked as success"

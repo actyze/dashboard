@@ -1,0 +1,74 @@
+{{- if and .Values.services.nexus.enabled .Values.autoscaling.nexus.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "dashboard.fullname" . }}-nexus-hpa
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.nexus.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "dashboard.fullname" . }}-nexus
+  minReplicas: {{ .Values.autoscaling.nexus.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.nexus.maxReplicas }}
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.autoscaling.nexus.targetCPUUtilizationPercentage }}
+{{- end }}
+
+{{- if and .Values.services.frontend.enabled .Values.autoscaling.frontend.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "dashboard.fullname" . }}-frontend-hpa
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.frontend.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "dashboard.fullname" . }}-frontend
+  minReplicas: {{ .Values.autoscaling.frontend.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.frontend.maxReplicas }}
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.autoscaling.frontend.targetCPUUtilizationPercentage }}
+{{- end }}
+
+{{- if and .Values.services.fastapi .Values.autoscaling.fastapi.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "dashboard.fullname" . }}-fastapi-hpa
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.fastapi.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "dashboard.fullname" . }}-fastapi
+  minReplicas: {{ .Values.autoscaling.fastapi.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.fastapi.maxReplicas }}
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.autoscaling.fastapi.targetCPUUtilizationPercentage }}
+{{- end }}

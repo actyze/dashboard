@@ -1,0 +1,131 @@
+# Trino with Horizontal Scaling (Coordinator + Workers)
+# Use this INSTEAD of the single-node Trino configuration
+
+# This overrides the trino section in values.yaml
+trino:
+  # Deploy as StatefulSet with coordinator + workers
+  architecture: "distributed"  # coordinator-worker model
+  
+  # Coordinator configuration
+  coordinator:
+    replicaCount: 1  # Always 1 coordinator
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+    jvm:
+      maxHeapSize: "1536M"  # 75% of 2Gi
+    
+    # Coordinator handles:
+    # - Query parsing and planning
+    # - Metadata management
+    # - Worker coordination
+    # - Client connections
+    
+  # Worker configuration
+  workers:
+    replicaCount: 2      # Initial worker count
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 5     # Can scale up to 5 workers
+      targetCPUUtilizationPercentage: 75
+    
+    resources:
+      requests:
+        memory: "2Gi"    # Workers need memory for data processing
+        cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+    jvm:
+      maxHeapSize: "1536M"
+    
+    # Workers handle:
+    # - Query execution
+    # - Data processing
+    # - Table scans
+    # - Joins and aggregations
+  
+  # Shared configuration (both coordinator and workers)
+  config:
+    enabled: true
+    # Discovery - workers find coordinator
+    discovery:
+      uri: "http://dashboard-trino-coordinator:8080"
+    
+    # Query settings
+    query:
+      maxMemory: "3GB"
+      maxMemoryPerNode: "1GB"
+      maxTotalMemory: "6GB"  # Across all workers
+  
+  # Security (same as before)
+  security:
+    authentication:
+      enabled: false     # Keep disabled to avoid SSL complexity
+      type: "PASSWORD"
+    accessControl:
+      enabled: true
+      type: "file"
+  
+  # Catalogs (same as before)
+  catalogs:
+    postgres:
+      connector.name: "postgresql"
+      connection-url: "jdbc:postgresql://dashboard-postgres:5432/dashboard"
+      connection-user: "nexus_service"
+      connection-password: "${ENV:POSTGRES_PASSWORD}"
+    memory:
+      connector.name: "memory"
+    tpch:
+      connector.name: "tpch"
+      tpch.splits-per-node: "4"
+
+# ============================================================================
+# RESOURCE SUMMARY - SCALABLE TRINO
+# ============================================================================
+#
+# Component          | Initial | CPU Request | Memory Request | Scalable?
+# -------------------|---------|-------------|----------------|----------
+# Coordinator        | 1       | 1000m       | 2Gi            | No (always 1)
+# Workers            | 2       | 2000m       | 4Gi            | Yes (2-5)
+# -------------------|---------|-------------|----------------|----------
+# Total (initial)    | 3       | 3000m       | 6Gi            | -
+# Total (max scale)  | 6       | 6000m       | 12Gi           | -
+#
+# Scaling Behavior:
+# - Start: 1 coordinator + 2 workers = 3 Trino pods
+# - Under load: Workers scale 2 → 3 → 4 → 5
+# - Coordinator always stays at 1
+#
+# When workers scale:
+# - More parallel query execution
+# - Better performance for large datasets
+# - Handle more concurrent queries
+#
+# ============================================================================
+
+# Updated total cluster requirements with scalable Trino:
+#
+# Service           | CPU Request | Memory Request
+# ------------------|-------------|----------------
+# Frontend (2)      | 150m        | 192Mi
+# Nexus (2)         | 400m        | 768Mi
+# Schema Service    | 750m        | 1536Mi
+# PostgreSQL        | 150m        | 384Mi
+# Trino Coord (1)   | 1000m       | 2Gi
+# Trino Workers (2) | 2000m       | 4Gi
+# ------------------|-------------|----------------
+# TOTAL             | 4.45 CPUs   | 8.85Gi
+#
+# Fits on 2 nodes? Tight, but yes (57% CPU, 69% memory)
+# Scales to 3 nodes? Yes, comfortably
+#
+# With max Trino workers (5):
+# - Trino: 1 coordinator + 5 workers = 6000m CPU, 12Gi RAM
+# - Total cluster: 7.45 CPUs, 14.85Gi RAM
+# - Requires 3 nodes (63% CPU, 77% memory)

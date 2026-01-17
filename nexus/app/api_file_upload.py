@@ -17,7 +17,7 @@ import httpx
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(prefix="/file-uploads", tags=["file-uploads"])  # No /api - frontend adds it
+router = APIRouter(prefix="/api/file-uploads", tags=["file-uploads"])
 
 
 @router.post("/upload")

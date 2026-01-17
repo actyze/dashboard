@@ -3,7 +3,7 @@ import { apiInstance } from './network';
 export const DashboardService = {
   async getDashboards() {
     try {
-      const response = await apiInstance.get('/api/dashboards');
+      const response = await apiInstance.get('/dashboards');
       return {
         success: true,
         dashboards: response.data.dashboards || []
@@ -20,7 +20,7 @@ export const DashboardService = {
     try {
       const { includeTiles = false } = options;
       const params = includeTiles ? '?include_tiles=true' : '';
-      const response = await apiInstance.get(`/api/dashboards/${dashboardId}${params}`);
+      const response = await apiInstance.get(`/dashboards/${dashboardId}${params}`);
       return response.data;
     } catch (error) {
       return { 
@@ -41,7 +41,7 @@ export const DashboardService = {
         tags: dashboardData.tags || []
       };
       
-      const response = await apiInstance.post('/api/dashboards', payload);
+      const response = await apiInstance.post('/dashboards', payload);
       return {
         success: response.data.success,
         dashboard: response.data.dashboard
@@ -66,7 +66,7 @@ export const DashboardService = {
         tags: updates.tags
       };
       
-      const response = await apiInstance.put(`/api/dashboards/${dashboardId}`, payload);
+      const response = await apiInstance.put(`/dashboards/${dashboardId}`, payload);
       return response.data;
     } catch (error) {
       return { 
@@ -78,7 +78,7 @@ export const DashboardService = {
 
   async deleteDashboard(dashboardId) {
     try {
-      await apiInstance.delete(`/api/dashboards/${dashboardId}`);
+      await apiInstance.delete(`/dashboards/${dashboardId}`);
       return { success: true };
     } catch (error) {
       return { 
@@ -91,7 +91,7 @@ export const DashboardService = {
   async publishDashboard(dashboardId, versionNotes = null) {
     try {
       const payload = versionNotes ? { version_notes: versionNotes } : {};
-      const response = await apiInstance.post(`/api/dashboards/${dashboardId}/publish`, payload);
+      const response = await apiInstance.post(`/dashboards/${dashboardId}/publish`, payload);
       return response.data;
     } catch (error) {
       return { 
@@ -103,7 +103,7 @@ export const DashboardService = {
 
   async getTiles(dashboardId) {
     try {
-      const response = await apiInstance.get(`/api/dashboards/${dashboardId}/tiles`);
+      const response = await apiInstance.get(`/dashboards/${dashboardId}/tiles`);
       return {
         success: true,
         tiles: response.data.tiles || []
@@ -118,7 +118,7 @@ export const DashboardService = {
 
   async getTile(dashboardId, tileId) {
     try {
-      const response = await apiInstance.get(`/api/dashboards/${dashboardId}/tiles/${tileId}`);
+      const response = await apiInstance.get(`/dashboards/${dashboardId}/tiles/${tileId}`);
       return {
         success: true,
         tile: response.data.tile
@@ -147,7 +147,7 @@ export const DashboardService = {
         refresh_interval_seconds: tileData.refresh_interval_seconds || null
       };
       
-      const response = await apiInstance.post(`/api/dashboards/${dashboardId}/tiles`, payload);
+      const response = await apiInstance.post(`/dashboards/${dashboardId}/tiles`, payload);
       return {
         success: true,
         tile: response.data
@@ -213,7 +213,7 @@ export const DashboardService = {
 
   async deleteTile(dashboardId, tileId) {
     try {
-      await apiInstance.delete(`/api/dashboards/${dashboardId}/tiles/${tileId}`);
+      await apiInstance.delete(`/dashboards/${dashboardId}/tiles/${tileId}`);
       return { success: true };
     } catch (error) {
       return { 
@@ -257,7 +257,7 @@ export const DashboardService = {
       if (userId) params.append('user_id', userId);
       if (groupId) params.append('group_id', groupId);
       
-      await apiInstance.delete(`/api/dashboards/${dashboardId}/permissions?${params.toString()}`);
+      await apiInstance.delete(`/dashboards/${dashboardId}/permissions?${params.toString()}`);
       return { success: true };
     } catch (error) {
       return { 
@@ -269,7 +269,7 @@ export const DashboardService = {
 
   async getPublicDashboards() {
     try {
-      const response = await apiInstance.get('/api/public/dashboards');
+      const response = await apiInstance.get('/public/dashboards');
       return {
         success: true,
         dashboards: response.data.dashboards || []
@@ -284,7 +284,7 @@ export const DashboardService = {
 
   async getPublicDashboard(dashboardId) {
     try {
-      const response = await apiInstance.get(`/api/public/dashboards/${dashboardId}`);
+      const response = await apiInstance.get(`/public/dashboards/${dashboardId}`);
       return response.data;
     } catch (error) {
       return { 
@@ -296,7 +296,7 @@ export const DashboardService = {
 
   async getPublicDashboardTiles(dashboardId) {
     try {
-      const response = await apiInstance.get(`/api/public/dashboards/${dashboardId}/tiles`);
+      const response = await apiInstance.get(`/public/dashboards/${dashboardId}/tiles`);
       return {
         success: true,
         tiles: response.data.tiles || []

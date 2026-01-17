@@ -8,7 +8,7 @@ from app.auth.dependencies import get_current_user
 from app.services.preference_service import preference_service
 
 logger = structlog.get_logger()
-router = APIRouter()
+router = APIRouter(prefix="/api/preferences", tags=["User Preferences"])
 
 
 class PreferenceInput(BaseModel):
@@ -39,7 +39,7 @@ class BoostWeightUpdate(BaseModel):
     boost_weight: float = Field(..., ge=1.0, le=3.0, description="Boost multiplier (1.0-3.0)")
 
 
-@router.get("/preferences", response_model=List[PreferenceResponse])
+@router.get("", response_model=List[PreferenceResponse])
 async def get_user_preferences(current_user: dict = Depends(get_current_user)):
     """Get all schema/table preferences for the current user."""
     try:
@@ -50,7 +50,7 @@ async def get_user_preferences(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="Failed to retrieve preferences")
 
 
-@router.post("/preferences")
+@router.post("")
 async def add_user_preference(
     preference: PreferenceInput,
     current_user: dict = Depends(get_current_user)
@@ -78,7 +78,7 @@ async def add_user_preference(
         raise HTTPException(status_code=500, detail="Failed to add preference")
 
 
-@router.delete("/preferences/{preference_id}")
+@router.delete("/{preference_id}")
 async def delete_user_preference(
     preference_id: str,
     current_user: dict = Depends(get_current_user)
@@ -101,7 +101,7 @@ async def delete_user_preference(
         raise HTTPException(status_code=500, detail="Failed to delete preference")
 
 
-@router.patch("/preferences/{preference_id}/boost")
+@router.patch("/{preference_id}/boost")
 async def update_preference_boost(
     preference_id: str,
     update: BoostWeightUpdate,

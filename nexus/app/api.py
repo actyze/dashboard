@@ -11,11 +11,11 @@ from app.services.dashboard_service import dashboard_service
 from app.auth.dependencies import get_current_user, require_viewer, require_editor, require_admin
 from app.database import get_db
 
-router = APIRouter(prefix="", tags=["REST API"])  # No prefix - frontend adds /api via baseURL
-auth_router = APIRouter(prefix="/auth", tags=["Authentication"])  # No /api - frontend adds it
-explorer_router = APIRouter(prefix="/explorer", tags=["Schema Explorer"])  # No /api - frontend adds it
-dashboard_router = APIRouter(prefix="/dashboards", tags=["Dashboards"])  # No /api - frontend adds it
-public_router = APIRouter(prefix="/public", tags=["Public Access (No Auth)"])  # No /api - frontend adds it
+router = APIRouter(prefix="/api", tags=["REST API"])
+auth_router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+explorer_router = APIRouter(prefix="/api/explorer", tags=["Schema Explorer"])
+dashboard_router = APIRouter(prefix="/api/dashboards", tags=["Dashboards"])
+public_router = APIRouter(prefix="/api/public", tags=["Public Access (No Auth)"])
 
 user_service = UserService()
 schema_service_client = SchemaService()

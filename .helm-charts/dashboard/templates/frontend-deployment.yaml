@@ -15,6 +15,10 @@ spec:
     metadata:
       labels:
         {{- include "dashboard.frontend.selectorLabels" . | nindent 8 }}
+      annotations:
+        # Force rolling restart when values change
+        checksum/config: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+        rollout/timestamp: {{ now | date "20060102150405" | quote }}
     spec:
       containers:
       - name: frontend

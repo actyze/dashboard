@@ -1035,7 +1035,6 @@ def verify_registration_token(x_api_key: Optional[str] = Header(None)):
 @public_router.post("/register", response_model=UserRegistrationResponse)
 async def register_user(
     request: UserRegistrationRequest,
-    db=Depends(get_db),
     _: bool = Depends(verify_registration_token)
 ):
     """
@@ -1064,7 +1063,7 @@ async def register_user(
         logger.info(f"📧 User registration request for: {request.email}")
         
         # Initialize user service
-        user_service = UserService(db)
+        user_service = UserService()
         
         # Check if user already exists
         existing_user = await user_service.get_user_by_username(request.email)

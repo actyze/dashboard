@@ -1,0 +1,18 @@
+{{- if and .Values.services.fastapi .Values.fastapi.storage.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "dashboard.fullname" . }}-model-storage
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.fastapi.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.fastapi.storage.size }}
+  {{- if .Values.fastapi.storage.storageClass }}
+  storageClassName: {{ .Values.fastapi.storage.storageClass }}
+  {{- end }}
+{{- end }}

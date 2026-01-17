@@ -1,0 +1,64 @@
+{{- if .Values.services.fastapi }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dashboard.fullname" . }}-fastapi
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.fastapi.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.fastapi.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "dashboard.fastapi.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "dashboard.fastapi.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: fastapi
+        image: "{{ .Values.fastapi.image.repository }}:{{ .Values.fastapi.image.tag }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        - name: trino
+          containerPort: 8080
+          protocol: TCP
+        env:
+        - name: MODEL_PATH
+          value: "/app/models"
+        - name: PYTHONPATH
+          value: "/app"
+        {{- if .Values.fastapi.storage.enabled }}
+        volumeMounts:
+        - name: model-storage
+          mountPath: /app/models
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: {{ .Values.fastapi.livenessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.fastapi.livenessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.fastapi.livenessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.fastapi.livenessProbe.failureThreshold }}
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: {{ .Values.fastapi.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.fastapi.readinessProbe.periodSeconds }}
+          timeoutSeconds: {{ .Values.fastapi.readinessProbe.timeoutSeconds }}
+          failureThreshold: {{ .Values.fastapi.readinessProbe.failureThreshold }}
+        resources:
+          {{- toYaml .Values.fastapi.resources | nindent 10 }}
+      {{- if .Values.fastapi.storage.enabled }}
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: {{ include "dashboard.fullname" . }}-model-storage
+      {{- end }}
+{{- end }}

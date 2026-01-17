@@ -12,7 +12,7 @@ from app.auth.dependencies import get_current_user, require_viewer, require_edit
 from app.database import get_db
 
 router = APIRouter(prefix="/api", tags=["REST API"])
-auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
+auth_router = APIRouter(prefix="/api/auth", tags=["Authentication"])  # Fixed: Added /api prefix for consistency
 explorer_router = APIRouter(prefix="/api/explorer", tags=["Schema Explorer"])
 dashboard_router = APIRouter(prefix="/api/dashboards", tags=["Dashboards"])
 public_router = APIRouter(prefix="/api/public", tags=["Public Access (No Auth)"])

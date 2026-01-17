@@ -1065,27 +1065,12 @@ async def register_user(
         # Initialize user service
         user_service = UserService()
         
-        # Check if user already exists
-        existing_user = await user_service.get_user_by_username(request.email)
-        
-        if existing_user:
-            logger.info(f"ℹ️  User already exists: {request.email}")
-            
-            # Return friendly message without exposing that user exists (security)
-            return UserRegistrationResponse(
-                success=False,
-                message="An account with this email already exists. Please log in or use password reset.",
-                username=request.email,
-                error="user_exists"
-            )
-        
-        # Create user with VIEWER role (default for self-registered users)
+        # Create user with VIEWER role (duplicate check handled in create_user method)
         result = await user_service.create_user(
             username=request.email,
             email=request.email,
             password=request.password,
-            full_name=request.full_name or request.email.split('@')[0],
-            role="VIEWER"  # Self-registered users start as viewers
+            full_name=request.full_name or request.email.split('@')[0]
         )
         
         if result["success"]:
@@ -1102,12 +1087,20 @@ async def register_user(
                 username=request.email
             )
         else:
-            logger.error(f"❌ Failed to create user: {result.get('error')}")
+            error_msg = result.get("error", "unknown_error")
+            logger.error(f"❌ Failed to create user: {error_msg}")
+            
+            # Provide friendly message for known errors
+            if "already exists" in error_msg.lower():
+                message = "An account with this email already exists. Please log in."
+            else:
+                message = "Unable to create account. Please try again later."
+            
             return UserRegistrationResponse(
                 success=False,
-                message="Unable to create account. Please try again later.",
+                message=message,
                 username=request.email,
-                error=result.get("error", "unknown_error")
+                error=error_msg
             )
     
     except HTTPException:

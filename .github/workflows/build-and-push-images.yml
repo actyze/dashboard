@@ -48,15 +48,18 @@ jobs:
           # Build all if manual dispatch with force_build, or commit message contains [build-all]
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.force_build }}" == "true" ]]; then
             echo "build-all=true" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.event.head_commit.message }}" == *"[build-all]"* ]]; then
+            echo "🚀 Force build all images (workflow_dispatch)"
+          elif echo "${{ github.event.head_commit.message }}" | grep -q "\[build-all\]"; then
             echo "build-all=true" >> $GITHUB_OUTPUT
+            echo "🚀 Build all images ([build-all] flag detected)"
           else
             echo "build-all=false" >> $GITHUB_OUTPUT
+            echo "📦 Conditional build based on file changes"
           fi
       
-      - name: Detect file changes
-        uses: dorny/paths-filter@v2
+      - name: Detect changed files
         id: filter
+        uses: dorny/paths-filter@v2
         with:
           filters: |
             frontend:
@@ -79,43 +82,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install dependencies
-        working-directory: ./frontend
-        run: npm ci
-
-      - name: Build React app
-        run: |
-          cd frontend
-          # Disable ESLint warnings as errors for production build
-          CI=false npm run build
-
-      - name: Obfuscate JavaScript code
-        working-directory: ./frontend
-        run: |
-          # Lightweight JavaScript obfuscation to avoid memory issues
-          echo "Applying lightweight JavaScript obfuscation..."
-          find build/static/js -name "*.js" | while read file; do
-            echo "Processing: $file"
-            # Use terser for lightweight minification and basic obfuscation
-            npx terser "$file" \
-              --compress drop_console=true,drop_debugger=true,pure_funcs=['console.log','console.info','console.warn'] \
-              --mangle \
-              --output "$file"
-          done
-          
-          # Remove source maps for security
-          find build -name "*.map" -delete
-          
-          # Remove console.log statements
-          find build -name "*.js" -exec sed -i 's/console\.log([^;]*);*//g' {} \;
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -135,8 +101,8 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix={{branch}}-
 
       - name: Build and push Docker image
         id: build
@@ -166,35 +132,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Install obfuscation dependencies
-        run: |
-          pip install python-minifier
-
-      - name: Obfuscate Python code
-        working-directory: ./nexus
-        run: |
-          # Minify Python files
-          echo "Minifying Python source code..."
-          
-          # Find all Python files and minify them
-          find . -name "*.py" | while read file; do
-            echo "Minifying: $file"
-            # Create backup
-            cp "$file" "$file.bak"
-            # Minify (remove comments, docstrings, extra whitespace)
-            python-minifier "$file.bak" > "$file" || cp "$file.bak" "$file"
-            # Remove backup
-            rm "$file.bak"
-          done
-          
-          # Add python-minifier to requirements for runtime
-          echo "python-minifier" >> requirements.txt
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -214,8 +151,8 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix={{branch}}-
 
       - name: Build and push Docker image
         id: build
@@ -243,48 +180,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Free up disk space
-        run: |
-          echo "Disk space before cleanup:"
-          df -h
-          # Remove unnecessary packages and files
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo docker system prune -af --volumes
-          echo "Disk space after cleanup:"
-          df -h
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Install obfuscation dependencies
-        run: |
-          pip install python-minifier
-
-      - name: Obfuscate Schema Service code
-        working-directory: ./schema-service
-        run: |
-          # Create backup and minify Python files
-          echo "Minifying Schema Service Python code..."
-          
-          # Find all Python files and minify them
-          find . -name "*.py" | while read file; do
-            echo "Minifying: $file"
-            # Create backup
-            cp "$file" "$file.bak"
-            # Minify (remove comments, docstrings, extra whitespace)
-            python-minifier "$file.bak" > "$file" || cp "$file.bak" "$file"
-            # Remove backup
-            rm "$file.bak"
-          done
-          
-          # Add python-minifier to requirements for runtime
-          echo "python-minifier" >> requirements.txt
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -304,8 +199,8 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix={{branch}}-
 
       - name: Build and push Docker image
         id: build
@@ -319,16 +214,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
-          # Note: Building for both amd64 and arm64 architectures
-          # The schema service image is large (~2-5GB) with ML models
-          # GitHub Actions has sufficient disk space with cleanup step above
 
   update-deployment-configs:
     runs-on: ubuntu-latest
     needs: [build-frontend, build-nexus, build-schema-service]
-    # Run only if on main/develop AND at least one build job ran
     if: |
-      always() &&
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && (
         needs.build-frontend.result == 'success' ||
         needs.build-nexus.result == 'success' ||
@@ -339,7 +229,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-
+      
       - name: Collect built image information
         id: collect-images
         run: |
@@ -366,66 +256,68 @@ jobs:
             IMAGES_BUILT="$IMAGES_BUILT\n- Schema Service: $SCHEMA_TAG"
             echo "✅ Schema Service: $SCHEMA_TAG"
           fi
-          
-          echo -e "$IMAGES_BUILT" > /tmp/images-built.txt
+          echo "images-built=$IMAGES_BUILT" >> $GITHUB_OUTPUT
+      
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        if: steps.collect-images.outputs.images-built != ''
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update deployment configs with new Docker images"
+          title: "Update deployment configs with new Docker images"
+          body: |
+            This PR updates the deployment configurations with newly built Docker images:
+            ${{ steps.collect-images.outputs.images-built }}
+            
+            Note: Trino uses the official trinodb/trino image (not built by this workflow)
+            
+            Auto-generated by GitHub Actions.
+          branch: update-docker-images-${{ github.run_number }}
+          delete-branch: true
 
-      - name: Create deployment update notification
-        run: |
-          echo "📝 New Docker images are available on Docker Hub:"
-          cat /tmp/images-built.txt
-          echo ""
-          echo "To use these images:"
-          echo "  1. Update your Helm values or docker-compose files"
-          echo "  2. Deploy using: helm upgrade or docker-compose up"
-          echo ""
-          echo "Note: Helm charts in .helm-charts/ use 'latest' tag by default"
   security-scan:
     runs-on: ubuntu-latest
     needs: [build-frontend, build-nexus, build-schema-service]
-    # Run only if at least one build job ran (not skipped)
     if: |
       always() && (
         needs.build-frontend.result == 'success' ||
         needs.build-nexus.result == 'success' ||
         needs.build-schema-service.result == 'success'
       )
+    continue-on-error: true
     steps:
-      - name: Extract and validate image tags
+      - name: Extract single image tags for scanning
         id: extract-tags
         run: |
-          # Only extract tags for builds that actually succeeded
+          # Extract first tag from multi-line output for each service
+          # Only extract if the build job succeeded
+          FRONTEND_TAG=""
+          NEXUS_TAG=""
+          SCHEMA_TAG=""
+          
           if [[ "${{ needs.build-frontend.result }}" == "success" ]]; then
             FRONTEND_TAG=$(echo "${{ needs.build-frontend.outputs.image-tag }}" | head -n1 | tr -d '\n')
-            echo "frontend-tag=$FRONTEND_TAG" >> $GITHUB_OUTPUT
-            echo "scan-frontend=true" >> $GITHUB_OUTPUT
-            echo "✅ Frontend built: $FRONTEND_TAG"
-          else
-            echo "scan-frontend=false" >> $GITHUB_OUTPUT
-            echo "⏭️  Frontend: skipped"
           fi
           
           if [[ "${{ needs.build-nexus.result }}" == "success" ]]; then
             NEXUS_TAG=$(echo "${{ needs.build-nexus.outputs.image-tag }}" | head -n1 | tr -d '\n')
-            echo "nexus-tag=$NEXUS_TAG" >> $GITHUB_OUTPUT
-            echo "scan-nexus=true" >> $GITHUB_OUTPUT
-            echo "✅ Nexus built: $NEXUS_TAG"
-          else
-            echo "scan-nexus=false" >> $GITHUB_OUTPUT
-            echo "⏭️  Nexus: skipped"
           fi
           
           if [[ "${{ needs.build-schema-service.result }}" == "success" ]]; then
             SCHEMA_TAG=$(echo "${{ needs.build-schema-service.outputs.image-tag }}" | head -n1 | tr -d '\n')
-            echo "schema-tag=$SCHEMA_TAG" >> $GITHUB_OUTPUT
-            echo "scan-schema=true" >> $GITHUB_OUTPUT
-            echo "✅ Schema Service built: $SCHEMA_TAG"
-          else
-            echo "scan-schema=false" >> $GITHUB_OUTPUT
-            echo "⏭️  Schema Service: skipped"
           fi
+          
+          echo "frontend-tag=$FRONTEND_TAG" >> $GITHUB_OUTPUT
+          echo "nexus-tag=$NEXUS_TAG" >> $GITHUB_OUTPUT
+          echo "schema-tag=$SCHEMA_TAG" >> $GITHUB_OUTPUT
+          
+          echo "Extracted tags for security scanning:"
+          echo "Frontend: ${FRONTEND_TAG:-SKIPPED}"
+          echo "Nexus: ${NEXUS_TAG:-SKIPPED}"
+          echo "Schema: ${SCHEMA_TAG:-SKIPPED}"
 
       - name: Run Trivy vulnerability scanner - Frontend
-        if: steps.extract-tags.outputs.scan-frontend == 'true'
+        if: steps.extract-tags.outputs.frontend-tag != ''
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.extract-tags.outputs.frontend-tag }}
@@ -433,7 +325,7 @@ jobs:
           output: 'trivy-frontend.sarif'
 
       - name: Run Trivy vulnerability scanner - Nexus
-        if: steps.extract-tags.outputs.scan-nexus == 'true'
+        if: steps.extract-tags.outputs.nexus-tag != ''
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.extract-tags.outputs.nexus-tag }}
@@ -441,7 +333,7 @@ jobs:
           output: 'trivy-nexus.sarif'
 
       - name: Run Trivy vulnerability scanner - Schema Service
-        if: steps.extract-tags.outputs.scan-schema == 'true'
+        if: steps.extract-tags.outputs.schema-tag != ''
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.extract-tags.outputs.schema-tag }}
@@ -449,10 +341,12 @@ jobs:
           output: 'trivy-schema.sarif'
 
       - name: Upload Trivy scan results to GitHub Security tab
-        if: always()  # Upload even if some scans were skipped
-        uses: github/codeql-action/upload-sarif@v2
+        if: success()
+        uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
         with:
           sarif_file: '.'
+  
   # Final job to ensure workflow is marked as success if builds succeeded
   # This prevents deployment workflow from being skipped due to optional job failures
   build-complete:

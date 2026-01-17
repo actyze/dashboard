@@ -1,12 +1,15 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Header
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
+import os
+import logging
 from app.services.orchestration_service import orchestration_service
 from app.services.user_service import UserService
 from app.services.schema_service import SchemaService
 from app.services.dashboard_service import dashboard_service
 from app.auth.dependencies import get_current_user, require_viewer, require_editor, require_admin
+from app.database import get_db
 
 router = APIRouter(prefix="/api", tags=["REST API"])
 auth_router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -959,3 +962,180 @@ async def get_public_dashboard_tiles(dashboard_id: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# USER REGISTRATION API (Public - for marketing site and self-registration)
+# ============================================================================
+
+logger = logging.getLogger(__name__)
+
+# API Token for external systems (e.g., marketing site)
+REGISTRATION_API_TOKEN = os.getenv("REGISTRATION_API_TOKEN", "")
+
+
+class UserRegistrationRequest(BaseModel):
+    """Public user registration request"""
+    email: EmailStr
+    password: str
+    full_name: Optional[str] = None
+    company: Optional[str] = None
+    metadata: Optional[dict] = None
+
+
+class UserRegistrationResponse(BaseModel):
+    """User registration response"""
+    success: bool
+    message: str
+    user_id: Optional[str] = None
+    username: str
+    error: Optional[str] = None
+
+
+def verify_registration_token(x_api_key: Optional[str] = Header(None)):
+    """
+    Verify API key for external user registration.
+    
+    Can be provided as:
+    - x-api-key header (recommended)
+    - Authorization: Bearer <token> header
+    
+    Returns True if token is valid or if ALLOW_SELF_REGISTRATION is enabled.
+    """
+    # Check if self-registration is openly allowed (no token needed)
+    allow_self_registration = os.getenv("ALLOW_SELF_REGISTRATION", "false").lower() == "true"
+    
+    if allow_self_registration:
+        logger.info("✅ Self-registration is enabled (no API key required)")
+        return True
+    
+    # If self-registration is disabled, require API token
+    if not REGISTRATION_API_TOKEN:
+        raise HTTPException(
+            status_code=503,
+            detail="User registration is currently disabled. Please contact support."
+        )
+    
+    if not x_api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="API key required. Provide x-api-key header."
+        )
+    
+    if x_api_key != REGISTRATION_API_TOKEN:
+        logger.warning(f"❌ Invalid registration API key attempt")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API key"
+        )
+    
+    return True
+
+
+@public_router.post("/register", response_model=UserRegistrationResponse)
+async def register_user(
+    request: UserRegistrationRequest,
+    db=Depends(get_db),
+    _: bool = Depends(verify_registration_token)
+):
+    """
+    Register a new user account.
+    
+    **Authentication Options:**
+    1. API Key (for marketing site): Provide `x-api-key` header
+    2. Open registration: Enable `ALLOW_SELF_REGISTRATION=true` (no key needed)
+    
+    **Request Body:**
+    - email: User's email (used as username)
+    - password: User's password or license key
+    - full_name: User's full name (optional)
+    - company: User's company (optional)
+    - metadata: Additional info like UTM params (optional)
+    
+    **Response:**
+    - success: Whether registration succeeded
+    - message: Human-readable message
+    - user_id: Created user ID
+    - username: Username (email)
+    
+    **New users are created with VIEWER role by default.**
+    """
+    try:
+        logger.info(f"📧 User registration request for: {request.email}")
+        
+        # Initialize user service
+        user_service = UserService(db)
+        
+        # Check if user already exists
+        existing_user = await user_service.get_user_by_username(request.email)
+        
+        if existing_user:
+            logger.info(f"ℹ️  User already exists: {request.email}")
+            
+            # Return friendly message without exposing that user exists (security)
+            return UserRegistrationResponse(
+                success=False,
+                message="An account with this email already exists. Please log in or use password reset.",
+                username=request.email,
+                error="user_exists"
+            )
+        
+        # Create user with VIEWER role (default for self-registered users)
+        result = await user_service.create_user(
+            username=request.email,
+            email=request.email,
+            password=request.password,
+            full_name=request.full_name or request.email.split('@')[0],
+            role="VIEWER"  # Self-registered users start as viewers
+        )
+        
+        if result["success"]:
+            logger.info(f"✅ User registered successfully: {request.email}")
+            
+            # Log metadata for analytics
+            if request.metadata:
+                logger.info(f"📊 Registration metadata: {request.metadata}")
+            
+            return UserRegistrationResponse(
+                success=True,
+                message="Account created successfully! You can now log in.",
+                user_id=result["user"]["id"],
+                username=request.email
+            )
+        else:
+            logger.error(f"❌ Failed to create user: {result.get('error')}")
+            return UserRegistrationResponse(
+                success=False,
+                message="Unable to create account. Please try again later.",
+                username=request.email,
+                error=result.get("error", "unknown_error")
+            )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"💥 Error during user registration: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred during registration. Please try again later."
+        )
+
+
+@public_router.get("/registration/health")
+async def registration_health():
+    """
+    Check if user registration is available.
+    
+    Used by frontend/marketing site to check registration status.
+    """
+    allow_self_registration = os.getenv("ALLOW_SELF_REGISTRATION", "false").lower() == "true"
+    has_api_token = bool(REGISTRATION_API_TOKEN)
+    
+    is_available = allow_self_registration or has_api_token
+    
+    return {
+        "available": is_available,
+        "self_registration_enabled": allow_self_registration,
+        "api_key_configured": has_api_token,
+        "message": "Registration is available" if is_available else "Registration is disabled"
+    }

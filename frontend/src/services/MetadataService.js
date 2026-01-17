@@ -10,7 +10,7 @@ const MetadataService = {
    */
   async getDescriptions(catalog = null) {
     const params = catalog ? { catalog } : {};
-    const response = await apiInstance.get('/api/metadata/descriptions', { params });
+    const response = await apiInstance.get('/metadata/descriptions', { params });
     return response.data;
   },
 
@@ -18,7 +18,7 @@ const MetadataService = {
    * Get a specific description by ID
    */
   async getDescriptionById(id) {
-    const response = await apiInstance.get(`/api/metadata/descriptions/${id}`);
+    const response = await apiInstance.get(`/metadata/descriptions/${id}`);
     return response.data;
   },
 
@@ -26,7 +26,7 @@ const MetadataService = {
    * Add or update a metadata description
    */
   async addDescription(data) {
-    const response = await apiInstance.post('/api/metadata/descriptions', data);
+    const response = await apiInstance.post('/metadata/descriptions', data);
     return response.data;
   },
 
@@ -34,7 +34,7 @@ const MetadataService = {
    * Update an existing description
    */
   async updateDescription(id, description) {
-    const response = await apiInstance.put(`/api/metadata/descriptions/${id}`, {
+    const response = await apiInstance.put(`/metadata/descriptions/${id}`, {
       description
     });
     return response.data;
@@ -44,7 +44,7 @@ const MetadataService = {
    * Delete a metadata description
    */
   async deleteDescription(id) {
-    const response = await apiInstance.delete(`/api/metadata/descriptions/${id}`);
+    const response = await apiInstance.delete(`/metadata/descriptions/${id}`);
     return response.data;
   }
 };

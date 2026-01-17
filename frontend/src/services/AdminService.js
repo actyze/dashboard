@@ -12,7 +12,7 @@ const AdminService = {
   
   async listUsers(page = 1, pageSize = 50, search = '') {
     try {
-      const response = await apiInstance.get(`/api/admin/users`, {
+      const response = await apiInstance.get(`/admin/users`, {
         params: { page, page_size: pageSize, search }
       });
       return response.data;
@@ -24,7 +24,7 @@ const AdminService = {
   
   async createUser(userData) {
     try {
-      const response = await apiInstance.post(`/api/admin/users`, userData);
+      const response = await apiInstance.post(`/admin/users`, userData);
       return response.data;
     } catch (error) {
       console.error('Failed to create user:', error);
@@ -34,7 +34,7 @@ const AdminService = {
   
   async setUserRole(userId, role) {
     try {
-      const response = await apiInstance.put(`/api/admin/users/${userId}/role`, { role });
+      const response = await apiInstance.put(`/admin/users/${userId}/role`, { role });
       return response.data;
     } catch (error) {
       console.error('Failed to set user role:', error);
@@ -44,7 +44,7 @@ const AdminService = {
   
   async deactivateUser(userId) {
     try {
-      const response = await apiInstance.delete(`/api/admin/users/${userId}`);
+      const response = await apiInstance.delete(`/admin/users/${userId}`);
       return response.data;
     } catch (error) {
       console.error('Failed to deactivate user:', error);
@@ -58,7 +58,7 @@ const AdminService = {
   
   async getUserDataAccess(userId) {
     try {
-      const response = await apiInstance.get(`/api/admin/users/${userId}/access`);
+      const response = await apiInstance.get(`/admin/users/${userId}/access`);
       return response.data;
     } catch (error) {
       console.error('Failed to get user data access:', error);
@@ -68,7 +68,7 @@ const AdminService = {
   
   async addUserDataAccess(userId, accessRule) {
     try {
-      const response = await apiInstance.post(`/api/admin/users/${userId}/access`, accessRule);
+      const response = await apiInstance.post(`/admin/users/${userId}/access`, accessRule);
       return response.data;
     } catch (error) {
       console.error('Failed to add user data access:', error);
@@ -78,7 +78,7 @@ const AdminService = {
   
   async removeUserDataAccess(userId, ruleId) {
     try {
-      const response = await apiInstance.delete(`/api/admin/users/${userId}/access/${ruleId}`);
+      const response = await apiInstance.delete(`/admin/users/${userId}/access/${ruleId}`);
       return response.data;
     } catch (error) {
       console.error('Failed to remove user data access:', error);
@@ -92,7 +92,7 @@ const AdminService = {
   
   async listRoles() {
     try {
-      const response = await apiInstance.get(`/api/admin/roles`);
+      const response = await apiInstance.get(`/admin/roles`);
       return response.data;
     } catch (error) {
       console.error('Failed to list roles:', error);

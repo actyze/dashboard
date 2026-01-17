@@ -11,7 +11,7 @@ const PreferencesService = {
    */
   async getUserPreferences() {
     try {
-      const response = await apiInstance.get(`/api/preferences`);
+      const response = await apiInstance.get(`/preferences`);
       return response.data;
     } catch (error) {
       console.error('Failed to get user preferences:', error);
@@ -24,7 +24,7 @@ const PreferencesService = {
    */
   async addUserPreference(preferenceData) {
     try {
-      const response = await apiInstance.post(`/api/preferences`, preferenceData);
+      const response = await apiInstance.post(`/preferences`, preferenceData);
       return response.data;
     } catch (error) {
       console.error('Failed to add user preference:', error);
@@ -37,7 +37,7 @@ const PreferencesService = {
    */
   async deleteUserPreference(preferenceId) {
     try {
-      const response = await apiInstance.delete(`/api/preferences/${preferenceId}`);
+      const response = await apiInstance.delete(`/preferences/${preferenceId}`);
       return response.data;
     } catch (error) {
       console.error('Failed to delete user preference:', error);
@@ -50,7 +50,7 @@ const PreferencesService = {
    */
   async updatePreferenceBoost(preferenceId, boostWeight) {
     try {
-      const response = await apiInstance.patch(`/api/preferences/${preferenceId}/boost`, { boost_weight: boostWeight });
+      const response = await apiInstance.patch(`/preferences/${preferenceId}/boost`, { boost_weight: boostWeight });
       return response.data;
     } catch (error) {
       console.error('Failed to update preference boost:', error);

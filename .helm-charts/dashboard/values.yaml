@@ -177,10 +177,6 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     
-    # URL Rewriting - Strip /api prefix when forwarding to Nexus
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    
     # Request limits
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"  # For large file uploads
     nginx.ingress.kubernetes.io/proxy-read-timeout: "600"

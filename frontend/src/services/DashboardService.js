@@ -177,7 +177,7 @@ export const DashboardService = {
       };
       
       const response = await apiInstance.put(
-        `/api/dashboards/${dashboardId}/tiles/${tileId}`, 
+        `/dashboards/${dashboardId}/tiles/${tileId}`, 
         payload
       );
       return response.data;
@@ -199,7 +199,7 @@ export const DashboardService = {
       };
       
       const response = await apiInstance.put(
-        `/api/dashboards/${dashboardId}/tiles/${tileId}`, 
+        `/dashboards/${dashboardId}/tiles/${tileId}`, 
         payload
       );
       return response.data;
@@ -236,7 +236,7 @@ export const DashboardService = {
       };
       
       const response = await apiInstance.post(
-        `/api/dashboards/${dashboardId}/permissions`, 
+        `/dashboards/${dashboardId}/permissions`, 
         payload
       );
       return {

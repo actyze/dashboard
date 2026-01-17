@@ -18,6 +18,10 @@ spec:
       labels:
         {{- include "dashboard.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: schema-service
+      annotations:
+        # Force rolling restart when values change
+        checksum/config: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+        rollout/timestamp: {{ now | date "20060102150405" | quote }}
     spec:
       containers:
       - name: schema-service

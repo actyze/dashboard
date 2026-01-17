@@ -170,6 +170,8 @@ jobs:
           # Verify Helm chart exists
           ls -la dashboard/
           
+          echo "📦 Deploying with :latest tags (annotations will force pod restart)"
+          
           helm upgrade --install ${{ env.HELM_RELEASE }} ./dashboard \
             --namespace ${{ env.NAMESPACE }} \
             --create-namespace \

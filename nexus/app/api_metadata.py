@@ -14,7 +14,7 @@ import structlog
 import httpx
 import os
 
-router = APIRouter(prefix="/api/metadata", tags=["metadata"])
+router = APIRouter(prefix="/metadata", tags=["metadata"])  # No /api - frontend adds it
 logger = structlog.get_logger(__name__)
 
 

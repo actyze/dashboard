@@ -16,7 +16,7 @@ export class RestService {
    * @returns {Promise} API response containing generated SQL
    */
   static async generateSql(nlQuery, conversationHistory = [], context = {}) {
-    const endpoint = '/api/generate-sql';
+    const endpoint = '/generate-sql';
     const payload = {
       nl_query: nlQuery,
       conversation_history: conversationHistory,
@@ -44,7 +44,7 @@ export class RestService {
    * @returns {Promise} API response containing query results
    */
   static async executeSql(sql, maxResults = 500, timeoutSeconds = 30, nlQuery = null, conversationHistory = [], metadata = {}) {
-    const endpoint = '/api/execute-sql';
+    const endpoint = '/execute-sql';
     const payload = {
       sql,
       max_results: maxResults,
@@ -77,7 +77,7 @@ export class RestService {
    * @returns {Promise} API response containing list of databases
    */
   static async getDatabases() {
-    const endpoint = '/api/explorer/databases';
+    const endpoint = '/explorer/databases';
     
     try {
       const response = await Network.get(endpoint);
@@ -94,7 +94,7 @@ export class RestService {
    * @returns {Promise} API response containing list of schemas
    */
   static async getDatabaseSchemas(database) {
-    const endpoint = `/api/explorer/databases/${database}/schemas`;
+    const endpoint = `/explorer/databases/${database}/schemas`;
     
     try {
       const response = await Network.get(endpoint);
@@ -112,7 +112,7 @@ export class RestService {
    * @returns {Promise} API response containing list of objects
    */
   static async getSchemaObjects(database, schema) {
-    const endpoint = `/api/explorer/databases/${database}/schemas/${schema}/objects`;
+    const endpoint = `/explorer/databases/${database}/schemas/${schema}/objects`;
     
     try {
       const response = await Network.get(endpoint);
@@ -131,7 +131,7 @@ export class RestService {
    * @returns {Promise} API response containing table details
    */
   static async getTableDetails(database, schema, table) {
-    const endpoint = `/api/explorer/databases/${database}/schemas/${schema}/tables/${table}`;
+    const endpoint = `/explorer/databases/${database}/schemas/${schema}/tables/${table}`;
     
     try {
       const response = await Network.get(endpoint);
@@ -151,7 +151,7 @@ export class RestService {
    * @returns {Promise} API response containing search results
    */
   static async searchDatabaseObjects(query, database = null, schema = null, objectType = null) {
-    const endpoint = '/api/explorer/search';
+    const endpoint = '/explorer/search';
     const params = { query };
     
     if (database) params.database = database;

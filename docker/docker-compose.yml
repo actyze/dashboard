@@ -215,12 +215,11 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
+      args:
+        REACT_APP_API_BASE_URL: /api  # Relative path - NGINX proxies to nexus container
     container_name: dashboard-frontend
     ports:
       - "3000:80"
-    environment:
-      REACT_APP_API_BASE_URL: http://localhost:8000/api  # Must include /api to match Kubernetes setup
-      REACT_APP_NEXUS_API_URL: http://localhost:8000
     depends_on:
       nexus:
         condition: service_healthy

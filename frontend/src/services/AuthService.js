@@ -4,8 +4,8 @@ export class AuthService {
   static async login(username, password) {
     const endpoint = '/auth/login';
     
-    // FastAPI OAuth2PasswordRequestForm expects form data
-    const formData = new FormData();
+    // FastAPI OAuth2PasswordRequestForm expects application/x-www-form-urlencoded
+    const formData = new URLSearchParams();
     formData.append('username', username);
     formData.append('password', password);
 
@@ -13,7 +13,7 @@ export class AuthService {
       // Direct axios call to handle form-data
       const response = await apiInstance.post(endpoint, formData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
       });
       return response.data;

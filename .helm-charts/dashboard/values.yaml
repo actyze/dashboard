@@ -177,6 +177,10 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     
+    # URL Rewriting - Strip /api prefix when forwarding to Nexus
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    
     # Request limits
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"  # For large file uploads
     nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
@@ -195,12 +199,12 @@ ingress:
   hosts:
     - host: demo.actyze.ai  # Production domain
       paths:
-        - path: /          # Frontend UI
+        - path: /api(/|$)(.*)  # Backend API (with URL rewriting - strips /api prefix)
+          pathType: ImplementationSpecific
+          service: nexus
+        - path: /          # Frontend UI (must come after /api to avoid conflicts)
           pathType: Prefix
           service: frontend
-        - path: /api       # Backend API
-          pathType: Prefix
-          service: nexus
   
   # 🔒 TLS/SSL Configuration
   # Enable for HTTPS with automatic certificates from cert-manager

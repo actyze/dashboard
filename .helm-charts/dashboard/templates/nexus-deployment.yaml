@@ -15,6 +15,10 @@ spec:
     metadata:
       labels:
         {{- include "dashboard.nexus.selectorLabels" . | nindent 8 }}
+      annotations:
+        # Force rolling restart when values change
+        checksum/config: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+        rollout/timestamp: {{ now | date "20060102150405" | quote }}
     spec:
       containers:
       - name: nexus
@@ -142,6 +146,15 @@ spec:
         # Enable DEBUG logging for OrchestrationService without rebuild
         - name: LOGGING_LEVEL_COM_DASHBOARD_SERVICE_ORCHESTRATIONSERVICE
           value: DEBUG
+        # User Registration API Configuration
+        {{- if .Values.nexus.env.REGISTRATION_API_TOKEN }}
+        - name: REGISTRATION_API_TOKEN
+          value: {{ .Values.nexus.env.REGISTRATION_API_TOKEN | quote }}
+        {{- end }}
+        {{- if .Values.nexus.env.ALLOW_SELF_REGISTRATION }}
+        - name: ALLOW_SELF_REGISTRATION
+          value: {{ .Values.nexus.env.ALLOW_SELF_REGISTRATION | quote }}
+        {{- end }}
         livenessProbe:
           httpGet:
             path: /health

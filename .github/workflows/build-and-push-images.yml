@@ -20,7 +20,52 @@ env:
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
 jobs:
+  # Detect which services have changes to optimize build times
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      nexus: ${{ steps.filter.outputs.nexus }}
+      schema: ${{ steps.filter.outputs.schema }}
+      build-all: ${{ steps.check-build-all.outputs.build-all }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history to detect changes
+      
+      - name: Check for build-all flag
+        id: check-build-all
+        run: |
+          # Build all if manual dispatch with force_build, or commit message contains [build-all]
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.force_build }}" == "true" ]]; then
+            echo "build-all=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event.head_commit.message }}" == *"[build-all]"* ]]; then
+            echo "build-all=true" >> $GITHUB_OUTPUT
+          else
+            echo "build-all=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Detect file changes
+        uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/build-and-push-images.yml'
+            nexus:
+              - 'nexus/**'
+              - '.github/workflows/build-and-push-images.yml'
+            schema:
+              - 'schema-service/**'
+              - '.github/workflows/build-and-push-images.yml'
+
   build-frontend:
+    needs: detect-changes
+    if: |
+      needs.detect-changes.outputs.frontend == 'true' || 
+      needs.detect-changes.outputs.build-all == 'true'
     runs-on: ubuntu-latest
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
@@ -104,6 +149,10 @@ jobs:
             REACT_APP_API_BASE_URL=/api
 
   build-nexus:
+    needs: detect-changes
+    if: |
+      needs.detect-changes.outputs.nexus == 'true' || 
+      needs.detect-changes.outputs.build-all == 'true'
     runs-on: ubuntu-latest
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
@@ -177,6 +226,10 @@ jobs:
           platforms: linux/amd64,linux/arm64
 
   build-schema-service:
+    needs: detect-changes
+    if: |
+      needs.detect-changes.outputs.schema == 'true' || 
+      needs.detect-changes.outputs.build-all == 'true'
     runs-on: ubuntu-latest
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
@@ -268,7 +321,14 @@ jobs:
   update-deployment-configs:
     runs-on: ubuntu-latest
     needs: [build-frontend, build-nexus, build-schema-service]
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    # Run only if on main/develop AND at least one build job ran
+    if: |
+      always() &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && (
+        needs.build-frontend.result == 'success' ||
+        needs.build-nexus.result == 'success' ||
+        needs.build-schema-service.result == 'success'
+      )
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -346,6 +406,13 @@ jobs:
   security-scan:
     runs-on: ubuntu-latest
     needs: [build-frontend, build-nexus, build-schema-service]
+    # Run only if at least one build job ran (not skipped)
+    if: |
+      always() && (
+        needs.build-frontend.result == 'success' ||
+        needs.build-nexus.result == 'success' ||
+        needs.build-schema-service.result == 'success'
+      )
     steps:
       - name: Extract single image tags for scanning
         id: extract-tags

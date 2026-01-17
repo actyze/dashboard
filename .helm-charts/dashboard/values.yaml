@@ -195,10 +195,10 @@ ingress:
   hosts:
     - host: demo.actyze.ai  # Production domain
       paths:
-        - path: /api(/|$)(.*)  # Backend API (with URL rewriting - strips /api prefix)
-          pathType: ImplementationSpecific
+        - path: /api       # Backend API (MUST come before / to avoid being caught by frontend)
+          pathType: Prefix
           service: nexus
-        - path: /          # Frontend UI (must come after /api to avoid conflicts)
+        - path: /          # Frontend UI (catch-all, must be last)
           pathType: Prefix
           service: frontend
   

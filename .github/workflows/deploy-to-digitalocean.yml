@@ -23,11 +23,19 @@ env:
   NAMESPACE: dashboard
   HELM_RELEASE: dashboard
 
+# Grant workflow permission to read actions
+permissions:
+  actions: read
+  contents: read
+
 jobs:
   # Check if builds actually succeeded (not just workflow completion)
   check-build-status:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_run'
+    permissions:
+      actions: read
+      contents: read
     outputs:
       should-deploy: ${{ steps.check.outputs.should-deploy }}
     steps:

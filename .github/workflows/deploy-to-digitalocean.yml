@@ -24,10 +24,48 @@ env:
   HELM_RELEASE: dashboard
 
 jobs:
+  # Check if builds actually succeeded (not just workflow completion)
+  check-build-status:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_run'
+    outputs:
+      should-deploy: ${{ steps.check.outputs.should-deploy }}
+    steps:
+      - name: Check if builds succeeded
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Get the workflow run that triggered this deployment
+            const buildRun = context.payload.workflow_run;
+            
+            // Get all jobs from the build workflow
+            const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: buildRun.id
+            });
+            
+            // Check if the build-complete job succeeded
+            const buildCompleteJob = jobs.jobs.find(job => job.name === 'build-complete');
+            
+            if (buildCompleteJob && buildCompleteJob.conclusion === 'success') {
+              console.log('✅ build-complete job succeeded - deploying!');
+              core.setOutput('should-deploy', 'true');
+            } else {
+              console.log('❌ build-complete job did not succeed - skipping deployment');
+              console.log(`Build complete status: ${buildCompleteJob?.conclusion || 'not found'}`);
+              core.setOutput('should-deploy', 'false');
+            }
+
   deploy:
     runs-on: ubuntu-latest
-    # Only run if the build workflow succeeded (or manual trigger)
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    needs: [check-build-status]
+    if: |
+      always() && (
+        github.event_name == 'workflow_dispatch' || 
+        needs.check-build-status.outputs.should-deploy == 'true'
+      )
     
     steps:
       - name: Checkout dashboard repository
@@ -87,6 +125,8 @@ jobs:
                 ssl: false
                 sslVerification: "NONE"
               schemaServiceKey: "${{ secrets.SCHEMA_SERVICE_KEY }}"
+              REGISTRATION_API_TOKEN: "${{ secrets.REGISTRATION_API_TOKEN }}"
+              ALLOW_SELF_REGISTRATION: "false"
 
           schemaService:
             env:

@@ -26,7 +26,7 @@ class QueryManagementService {
         params.append('query_type', query_type);
       }
       
-      const response = await apiInstance.get(`/api/query-history?${params.toString()}`);
+      const response = await apiInstance.get(`/query-history?${params.toString()}`);
       
       return {
         success: true,
@@ -50,7 +50,7 @@ class QueryManagementService {
    */
   static async renameQuery(queryId, queryName) {
     try {
-      const response = await apiInstance.patch(`/api/query-history/${queryId}/name`, {
+      const response = await apiInstance.patch(`/query-history/${queryId}/name`, {
         query_name: queryName
       });
       
@@ -73,7 +73,7 @@ class QueryManagementService {
    */
   static async deleteQueryFromHistory(queryId) {
     try {
-      await apiInstance.delete(`/api/query-history/${queryId}`);
+      await apiInstance.delete(`/query-history/${queryId}`);
       
       return {
         success: true
@@ -100,7 +100,7 @@ class QueryManagementService {
    */
   static async saveQuery(queryData) {
     try {
-      const response = await apiInstance.post('/api/query-history/save', queryData);
+      const response = await apiInstance.post('/query-history/save', queryData);
       
       return {
         success: true,
@@ -122,7 +122,7 @@ class QueryManagementService {
    */
   static async updateQuery(queryId, queryData) {
     try {
-      const response = await apiInstance.patch(`/api/query-history/${queryId}`, queryData);
+      const response = await apiInstance.patch(`/query-history/${queryId}`, queryData);
       
       return {
         success: true,
@@ -157,7 +157,7 @@ class QueryManagementService {
         favorites_only: 'true'  // Filter for favorites only
       });
       
-      const response = await apiInstance.get(`/api/query-history?${params.toString()}`);
+      const response = await apiInstance.get(`/query-history?${params.toString()}`);
       
       return {
         success: true,
@@ -182,7 +182,7 @@ class QueryManagementService {
   static async toggleFavorite(queryId, favoriteName = null) {
     try {
       const body = favoriteName ? { favorite_name: favoriteName } : {};
-      const response = await apiInstance.post(`/api/query-history/${queryId}/favorite`, body);
+      const response = await apiInstance.post(`/query-history/${queryId}/favorite`, body);
       
       return {
         success: true,

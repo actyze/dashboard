@@ -157,6 +157,12 @@ jobs:
                 connection-url: "${{ secrets.SNOWFLAKE_CONNECTION_URL }}"
                 connection-user: "${{ secrets.SNOWFLAKE_USERNAME }}"
                 connection-password: "${{ secrets.SNOWFLAKE_PASSWORD }}"
+              supabase:
+                connector.name: "postgresql"
+                connection-url: "${{ secrets.SUPABASE_URL }}"
+                connection-user: "${{ secrets.SUPABASE_USERNAME }}"
+                connection-password: "${{ secrets.SUPABASE_PASSWORD }}"
+                postgresql.include-system-tables: "false"
 
           migrations:
             runDML: false

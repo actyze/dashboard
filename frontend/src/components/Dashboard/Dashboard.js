@@ -54,7 +54,8 @@ const Dashboard = ({ isPublic = false }) => {
   
   // Grid container width - simple ref-based measurement
   const gridContainerRef = useRef(null);
-  const [gridWidth, setGridWidth] = useState(0);
+  // Start with a reasonable default width to prevent spinner
+  const [gridWidth, setGridWidth] = useState(1200);
   
   // Refs for preventing duplicates
   const isCreatingRef = useRef(false);
@@ -69,14 +70,22 @@ const Dashboard = ({ isPublic = false }) => {
         const containerWidth = rect.width;
         if (containerWidth > 0) {
           // Account for p-4 padding (16px on each side = 32px total)
-          setGridWidth(containerWidth - 32);
+          const newWidth = containerWidth - 32;
+          setGridWidth(prevWidth => {
+            // Only update if significantly different to prevent unnecessary re-renders
+            if (Math.abs(prevWidth - newWidth) > 5) {
+              return newWidth;
+            }
+            return prevWidth;
+          });
         }
       }
     };
     
-    // Initial measurement with a small delay to ensure DOM is ready
+    // Initial measurement - multiple attempts to ensure it works
     updateWidth();
     const initialTimeout = setTimeout(updateWidth, 100);
+    const fallbackTimeout = setTimeout(updateWidth, 300);
     
     // Use ResizeObserver for responsive updates
     const resizeObserver = new ResizeObserver((entries) => {
@@ -94,6 +103,7 @@ const Dashboard = ({ isPublic = false }) => {
     
     return () => {
       clearTimeout(initialTimeout);
+      clearTimeout(fallbackTimeout);
       resizeObserver.disconnect();
       window.removeEventListener('resize', updateWidth);
     };
@@ -150,21 +160,33 @@ const Dashboard = ({ isPublic = false }) => {
   }, [id, isPublic]);
 
   const handleDragStop = useCallback((layout, oldItem, newItem) => {
-    saveTilePosition(newItem.i, {
-      x: newItem.x,
-      y: newItem.y,
-      width: newItem.w,
-      height: newItem.h,
-    });
+    // Only save if position actually changed (not just a click)
+    const positionChanged = oldItem.x !== newItem.x || oldItem.y !== newItem.y;
+    const sizeChanged = oldItem.w !== newItem.w || oldItem.h !== newItem.h;
+    
+    if (positionChanged || sizeChanged) {
+      saveTilePosition(newItem.i, {
+        x: newItem.x,
+        y: newItem.y,
+        width: newItem.w,
+        height: newItem.h,
+      });
+    }
   }, [saveTilePosition]);
 
   const handleResizeStop = useCallback((layout, oldItem, newItem) => {
-    saveTilePosition(newItem.i, {
-      x: newItem.x,
-      y: newItem.y,
-      width: newItem.w,
-      height: newItem.h,
-    });
+    // Only save if size actually changed
+    const sizeChanged = oldItem.w !== newItem.w || oldItem.h !== newItem.h;
+    const positionChanged = oldItem.x !== newItem.x || oldItem.y !== newItem.y;
+    
+    if (sizeChanged || positionChanged) {
+      saveTilePosition(newItem.i, {
+        x: newItem.x,
+        y: newItem.y,
+        width: newItem.w,
+        height: newItem.h,
+      });
+    }
   }, [saveTilePosition]);
 
   // Load dashboard on mount
@@ -758,8 +780,8 @@ const Dashboard = ({ isPublic = false }) => {
               )}
             </div>
           </div>
-        ) : gridWidth > 0 ? (
-          /* Grid Layout - only render when we have a valid width */
+        ) : (
+          /* Grid Layout */
           <GridLayout
             className="layout"
             layout={layout}
@@ -811,11 +833,6 @@ const Dashboard = ({ isPublic = false }) => {
               </div>
             ))}
           </GridLayout>
-        ) : (
-          /* Loading state while measuring container width */
-          <div className="flex items-center justify-center py-8">
-            <CircularProgress size={24} />
-          </div>
         )}
       </div>
 

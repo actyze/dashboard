@@ -148,9 +148,9 @@ const LoginPage = () => {
         {/* Center content */}
         <div className="relative z-10 flex flex-col items-center justify-center w-full px-12">
           <img 
-            src="/logo.svg" 
+            src="/Logo-A.png" 
             alt="Actyze" 
-            className="h-28 mb-6"
+            className="h-20 mb-6"
             style={{ 
               filter: 'brightness(0) invert(1)',
               dropShadow: '0 4px 30px rgba(0,0,0,0.3)'
@@ -177,7 +177,7 @@ const LoginPage = () => {
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-10">
             <img 
-              src="/logo.svg" 
+              src="/Logo-A.png" 
               alt="Actyze" 
               className="h-10 mx-auto"
             />

@@ -183,6 +183,26 @@ class UserSchemaPreference(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class SchemaExclusion(Base):
+    """Global (org-level) exclusions to hide databases, schemas, or tables from AI recommendations."""
+    __tablename__ = "schema_exclusions"
+    __table_args__ = {'schema': 'nexus'}
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    
+    # Hierarchical structure
+    catalog: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    schema_name: Mapped[Optional[str]] = mapped_column(String(255), index=True)
+    table_name: Mapped[Optional[str]] = mapped_column(String(255))
+    
+    # Reason for exclusion (optional)
+    reason: Mapped[Optional[str]] = mapped_column(Text)
+    
+    # Metadata tracking
+    excluded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class DatabaseManager:
     """Database connection and session management."""
     

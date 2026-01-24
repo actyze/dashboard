@@ -108,11 +108,122 @@ class SchemaService:
         logger.info("Refreshing schemas from Trino...")
         schemas = await self.trino_service.get_all_schemas()
         
+        # Fetch exclusions from Nexus and filter out excluded resources
+        exclusions = await self.fetch_exclusions()
+        schemas_filtered = self.apply_exclusions(schemas, exclusions)
+        logger.info(f"Filtered {len(schemas) - len(schemas_filtered)} excluded schemas")
+        
         # Enrich schemas with user-provided descriptions from Nexus
-        schemas_with_descriptions = await self.enrich_with_descriptions(schemas)
+        schemas_with_descriptions = await self.enrich_with_descriptions(schemas_filtered)
         
         await self.embedder.build_embeddings(schemas_with_descriptions)
         logger.info(f"Refresh complete: {len(schemas_with_descriptions)} schemas embedded")
+    
+    async def fetch_exclusions(self) -> List[Dict[str, Any]]:
+        """
+        Fetch schema exclusions from Nexus database.
+        
+        Returns:
+            List of exclusion dicts with catalog, schema_name, table_name
+        """
+        try:
+            import asyncpg
+            
+            # Connect to Nexus database
+            conn = await asyncpg.connect(
+                host=self.postgres_host,
+                port=self.postgres_port,
+                database=self.postgres_db,
+                user=self.postgres_user,
+                password=self.postgres_password
+            )
+            
+            # Fetch all exclusions
+            rows = await conn.fetch("""
+                SELECT catalog, schema_name, table_name
+                FROM nexus.schema_exclusions
+                ORDER BY catalog, schema_name, table_name
+            """)
+            
+            await conn.close()
+            
+            exclusions = [
+                {
+                    'catalog': row['catalog'],
+                    'schema_name': row['schema_name'],
+                    'table_name': row['table_name']
+                }
+                for row in rows
+            ]
+            
+            logger.info(f"Fetched {len(exclusions)} exclusions from Nexus")
+            return exclusions
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch exclusions from Nexus: {e}")
+            # Return empty list on error - don't block schema refresh
+            return []
+    
+    def apply_exclusions(self, schemas: List[Dict[str, Any]], exclusions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Filter out excluded schemas based on exclusion rules.
+        
+        Exclusion hierarchy:
+        - Database level: Exclude all schemas from that catalog
+        - Schema level: Exclude all tables from that catalog.schema
+        - Table level: Exclude specific catalog.schema.table
+        
+        Args:
+            schemas: List of schema dicts from Trino
+            exclusions: List of exclusion dicts from Nexus
+            
+        Returns:
+            Filtered list of schemas with excluded items removed
+        """
+        if not exclusions:
+            return schemas
+        
+        # Build exclusion sets for efficient lookup
+        excluded_databases = set()  # {catalog}
+        excluded_schemas = set()    # {(catalog, schema)}
+        excluded_tables = set()     # {(catalog, schema, table)}
+        
+        for exc in exclusions:
+            catalog = exc['catalog']
+            schema_name = exc['schema_name']
+            table_name = exc['table_name']
+            
+            if not schema_name:
+                # Database-level exclusion
+                excluded_databases.add(catalog)
+            elif not table_name:
+                # Schema-level exclusion
+                excluded_schemas.add((catalog, schema_name))
+            else:
+                # Table-level exclusion
+                excluded_tables.add((catalog, schema_name, table_name))
+        
+        # Filter schemas
+        filtered = []
+        for schema in schemas:
+            catalog = schema.get('catalog')
+            schema_name = schema.get('schema')
+            table_name = schema.get('table')
+            
+            # Check exclusions in order of specificity
+            if catalog in excluded_databases:
+                continue  # Entire database excluded
+            
+            if (catalog, schema_name) in excluded_schemas:
+                continue  # Entire schema excluded
+            
+            if (catalog, schema_name, table_name) in excluded_tables:
+                continue  # Specific table excluded
+            
+            # Not excluded - keep it
+            filtered.append(schema)
+        
+        return filtered
     
     async def enrich_with_descriptions(self, schemas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """

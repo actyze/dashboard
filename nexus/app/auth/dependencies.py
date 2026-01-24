@@ -108,7 +108,8 @@ class RoleChecker:
         return user
 
 # Pre-configured dependencies
+# System uses 2 roles: ADMIN (full access) and USER (regular access)
 require_admin = RoleChecker(["ADMIN"])
-require_editor = RoleChecker(["ADMIN", "EDITOR"])
-require_viewer = RoleChecker(["ADMIN", "EDITOR", "VIEWER"])
+require_editor = RoleChecker(["ADMIN", "USER"])  # Both ADMIN and USER can edit
+require_viewer = RoleChecker(["ADMIN", "USER"])  # Both ADMIN and USER can view
 

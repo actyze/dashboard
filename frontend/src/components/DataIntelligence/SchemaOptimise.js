@@ -7,8 +7,10 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
+import { useAuth } from '../../contexts/AuthContext';
 import MetadataService from '../../services/MetadataService';
 import PreferencesService from '../../services/PreferencesService';
+import { ExclusionService } from '../../services';
 import { RestService } from '../../services/RestService';
 import { useGetDatabases } from '../../hooks/useRestAPI';
 import ConnectorBadge from '../Common/ConnectorBadge';
@@ -23,6 +25,12 @@ const ChevronRightIcon = () => (
 const ChevronDownIcon = () => (
   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+  </svg>
+);
+
+const EyeSlashIcon = () => (
+  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
   </svg>
 );
 
@@ -58,7 +66,13 @@ const BoostIcon = ({ className }) => (
 
 const DescriptionIcon = ({ className }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 2 0 01-2 2z" />
+  </svg>
+);
+
+const HiddenIcon = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
   </svg>
 );
 
@@ -96,6 +110,10 @@ const StatusIndicators = ({ hasBoost, hasDescription, boostWeight, isDark }) => 
 function SchemaOptimise() {
   const { isDark } = useTheme();
   const { showSuccess, showError } = useToast();
+  const { user } = useAuth();
+  
+  // Check if user is admin
+  const isAdmin = user?.roles?.includes('ADMIN') || false;
   
   // Tree state
   const [expandedDatabases, setExpandedDatabases] = useState(new Set());
@@ -108,12 +126,14 @@ function SchemaOptimise() {
   // Data state
   const [descriptions, setDescriptions] = useState({});
   const [preferences, setPreferences] = useState([]);
+  const [exclusions, setExclusions] = useState([]);
   
   // Edit panel state
   const [editingNode, setEditingNode] = useState(null);
   const [editDescription, setEditDescription] = useState('');
   const [editBoostEnabled, setEditBoostEnabled] = useState(false);
   const [editBoostWeight, setEditBoostWeight] = useState(1.5);
+  const [editExcludeEnabled, setEditExcludeEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
   
   // Use the same hook as other components
@@ -126,7 +146,11 @@ function SchemaOptimise() {
   useEffect(() => {
     loadDescriptions();
     loadPreferences();
-  }, []);
+    // Only load exclusions for admins
+    if (isAdmin) {
+      loadExclusions();
+    }
+  }, [isAdmin]);
 
   const loadDescriptions = async () => {
     try {
@@ -153,6 +177,19 @@ function SchemaOptimise() {
     }
   };
 
+  const loadExclusions = async () => {
+    try {
+      const excl = await ExclusionService.getExclusions();
+      setExclusions(excl || []);
+    } catch (err) {
+      // Silently fail for 403 (not admin), log other errors
+      if (err.response?.status !== 403) {
+        console.error('Failed to load exclusions:', err);
+      }
+      setExclusions([]);
+    }
+  };
+
   const buildKey = (catalog, schema, table, column) => {
     let key = catalog;
     if (schema) key += `.${schema}`;
@@ -168,6 +205,32 @@ function SchemaOptimise() {
       (pref.schema_name || null) === (schemaName || null) &&
       (pref.table_name || null) === (tableName || null)
     );
+  };
+
+  // Find exclusion for a given path
+  const findExclusion = (catalog, schemaName, tableName) => {
+    return exclusions.find(exc => 
+      exc.catalog === catalog &&
+      (exc.schema_name || null) === (schemaName || null) &&
+      (exc.table_name || null) === (tableName || null)
+    );
+  };
+
+  // Check if a resource is excluded (including parent-level exclusions)
+  const isExcluded = (catalog, schemaName, tableName) => {
+    // Check database-level exclusion
+    if (exclusions.some(exc => exc.catalog === catalog && !exc.schema_name)) {
+      return true;
+    }
+    // Check schema-level exclusion
+    if (schemaName && exclusions.some(exc => exc.catalog === catalog && exc.schema_name === schemaName && !exc.table_name)) {
+      return true;
+    }
+    // Check table-level exclusion
+    if (tableName && exclusions.some(exc => exc.catalog === catalog && exc.schema_name === schemaName && exc.table_name === tableName)) {
+      return true;
+    }
+    return false;
   };
 
   // Tree expansion handlers
@@ -241,19 +304,28 @@ function SchemaOptimise() {
     const key = buildKey(catalog, schema, table, column);
     const existingDesc = descriptions[key];
     const existingPref = column ? null : findPreference(catalog, schema, table); // No boost for columns
+    const existingExcl = column ? null : findExclusion(catalog, schema, table); // No exclusion for columns
     
-    setEditingNode({ catalog, schema, table, column, key });
+    setEditingNode({ 
+      catalog, 
+      schema, 
+      table, 
+      column, 
+      key,
+      exclusion: existingExcl
+    });
     setEditDescription(existingDesc?.description || '');
     setEditBoostEnabled(!!existingPref);
     setEditBoostWeight(existingPref?.boost_weight || 1.5);
+    setEditExcludeEnabled(!!existingExcl);
   };
 
-  // Save both description and boost preference
+  // Save description, boost preference, and exclusion state
   const handleSave = async () => {
     if (!editingNode) return;
     setSaving(true);
 
-    const { catalog, schema, table, column, key } = editingNode;
+    const { catalog, schema, table, column, key, exclusion } = editingNode;
     const existingDesc = descriptions[key];
     const existingPref = column ? null : findPreference(catalog, schema, table);
 
@@ -295,14 +367,39 @@ function SchemaOptimise() {
           // Remove boost
           await PreferencesService.deleteUserPreference(existingPref.id);
         }
+
+        // Handle exclusion (visibility) - only for non-columns
+        if (editExcludeEnabled && !exclusion) {
+          // User wants to hide, and it's not already hidden
+          try {
+            await ExclusionService.addExclusion({
+              catalog,
+              schema_name: schema || null,
+              table_name: table || null,
+              reason: null
+            });
+          } catch (addErr) {
+            // If already excluded, reload exclusions and show info message
+            if (addErr.response?.data?.detail?.includes('already excluded')) {
+              await loadExclusions();
+              showError('This resource is already hidden. The exclusion list has been refreshed.');
+              return;
+            }
+            throw addErr; // Re-throw other errors
+          }
+        } else if (!editExcludeEnabled && exclusion) {
+          // User wants to show, and it's currently hidden
+          await ExclusionService.removeExclusion(exclusion.id);
+        }
       }
 
       showSuccess('Changes saved successfully');
-      await Promise.all([loadDescriptions(), loadPreferences()]);
+      await Promise.all([loadDescriptions(), loadPreferences(), loadExclusions()]);
       setEditingNode(null);
     } catch (err) {
       console.error('Failed to save:', err);
-      showError(err.response?.data?.detail || 'Failed to save changes');
+      const errorMessage = err.response?.data?.detail || err.message || 'Failed to save changes';
+      showError(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -335,9 +432,15 @@ function SchemaOptimise() {
     const hasDescription = descriptions[nodeKey];
     const preference = findPreference(dbName, schemaName, table.name);
     const tableDetails = tableDetailsCache[tableKey];
+    const isExcluded = !!findExclusion(dbName, schemaName, table.name);
+
+    // For non-admin users, hide excluded tables entirely
+    if (isExcluded && !isAdmin) {
+      return null;
+    }
 
     return (
-      <div key={table.name} className="ml-0">
+      <div key={table.name} className={`ml-0 ${isExcluded ? 'opacity-50' : ''}`}>
         <div 
           className={`flex items-center gap-2 px-3 py-2 group ${
             isDark ? 'hover:bg-[#1c1d1f]' : 'hover:bg-gray-50'
@@ -363,6 +466,17 @@ function SchemaOptimise() {
               </span>
             )}
           </span>
+          {isExcluded && isAdmin && (
+            <span 
+              className={`flex items-center gap-1 px-1.5 py-0.5 text-xs rounded ${
+                isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700'
+              }`}
+              title="Hidden from regular users"
+            >
+              <EyeSlashIcon />
+              Hidden
+            </span>
+          )}
           <StatusIndicators 
             hasBoost={!!preference}
             hasDescription={!!hasDescription}
@@ -395,9 +509,15 @@ function SchemaOptimise() {
     const hasDescription = descriptions[nodeKey];
     const preference = findPreference(dbName, schema.name, null);
     const objects = objectsCache[schemaKey];
+    const isExcluded = !!findExclusion(dbName, schema.name, null);
+
+    // For non-admin users, hide excluded schemas entirely
+    if (isExcluded && !isAdmin) {
+      return null;
+    }
 
     return (
-      <div key={schema.name} className="ml-0">
+      <div key={schema.name} className={`ml-0 ${isExcluded ? 'opacity-50' : ''}`}>
         <div 
           className={`flex items-center gap-2 px-3 py-2 group ${
             isDark ? 'hover:bg-[#1c1d1f]' : 'hover:bg-gray-50'
@@ -423,6 +543,17 @@ function SchemaOptimise() {
               </span>
             )}
           </span>
+          {isExcluded && isAdmin && (
+            <span 
+              className={`flex items-center gap-1 px-1.5 py-0.5 text-xs rounded ${
+                isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700'
+              }`}
+              title="Hidden from regular users"
+            >
+              <EyeSlashIcon />
+              Hidden
+            </span>
+          )}
           <StatusIndicators 
             hasBoost={!!preference}
             hasDescription={!!hasDescription}
@@ -517,8 +648,22 @@ function SchemaOptimise() {
       }`}>
         <div>
           <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-            Click on any schema or table to add descriptions and boost priority
+            Click on any schema or table to add descriptions, boost priority, or hide from AI
           </p>
+          <div className="flex items-center gap-4 mt-2">
+            <span className={`flex items-center gap-1.5 text-xs ${isDark ? 'text-gray-600' : 'text-gray-500'}`}>
+              <span className={`px-2 py-0.5 rounded ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
+                Global
+              </span>
+              = Applies to all users
+            </span>
+            <span className={`flex items-center gap-1.5 text-xs ${isDark ? 'text-gray-600' : 'text-gray-500'}`}>
+              <span className={`px-2 py-0.5 rounded ${isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'}`}>
+                User-level
+              </span>
+              = Only affects you
+            </span>
+          </div>
         </div>
       </div>
 
@@ -579,9 +724,14 @@ function SchemaOptimise() {
             <div className="px-5 py-4 space-y-5">
               {/* Description Section */}
               <div>
-                <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                  Description
-                </label>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Description
+                  </label>
+                  <span className={`text-xs px-2 py-0.5 rounded ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
+                    Global
+                  </span>
+                </div>
                 <textarea
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
@@ -594,7 +744,7 @@ function SchemaOptimise() {
                   } focus:outline-none focus:ring-1 focus:ring-[#5d6ad3]`}
                 />
                 <p className={`text-xs mt-1.5 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
-                  Descriptions help AI understand what this data represents and when to use it.
+                  Descriptions help AI understand what this data represents and when to use it. <strong>Visible to all users.</strong>
                 </p>
               </div>
 
@@ -606,6 +756,9 @@ function SchemaOptimise() {
                       <BoostIcon className={`w-4 h-4 ${editBoostEnabled ? (isDark ? 'text-white' : 'text-gray-700') : isDark ? 'text-gray-600' : 'text-gray-400'}`} />
                       <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
                         Priority Boost
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded ${isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'}`}>
+                        User-level
                       </span>
                     </div>
                     <button
@@ -626,7 +779,7 @@ function SchemaOptimise() {
                   
                   <p className={`text-xs mb-3 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
                     When enabled, AI will <strong>prioritize this {getNodeTypeName().toLowerCase()}</strong> when generating SQL queries. 
-                    Use this for frequently used or important data sources.
+                    Use this for frequently used or important data sources. <strong>Only affects your recommendations.</strong>
                   </p>
 
                   {editBoostEnabled && (
@@ -654,6 +807,55 @@ function SchemaOptimise() {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Hide/Show Section - Only show for non-columns and admins */}
+              {!editingNode.column && isAdmin && (
+                <div className={`p-4 rounded-lg border ${
+                  editExcludeEnabled 
+                    ? (isDark ? 'bg-red-900/10 border-red-900/30' : 'bg-red-50 border-red-200')
+                    : (isDark ? 'bg-[#0a0a0b] border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200')
+                }`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <HiddenIcon className={`w-4 h-4 ${editExcludeEnabled ? 'text-red-500' : (isDark ? 'text-gray-400' : 'text-gray-600')}`} />
+                      <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Visibility
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded ${isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-100 text-orange-700'}`}>
+                        Global
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setEditExcludeEnabled(!editExcludeEnabled)}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${
+                        editExcludeEnabled 
+                          ? 'bg-red-600' 
+                          : isDark ? 'bg-[#2a2b2e]' : 'bg-gray-300'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
+                          editExcludeEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  
+                  <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                    {editExcludeEnabled ? (
+                      <>
+                        This {getNodeTypeName().toLowerCase()} will be <strong>hidden from all users</strong>. 
+                        It won't appear in AI recommendations or schema suggestions.
+                      </>
+                    ) : (
+                      <>
+                        Hide this {getNodeTypeName().toLowerCase()} from AI recommendations <strong>for all users</strong>. 
+                        Useful for removing test data, deprecated tables, or sensitive information.
+                      </>
+                    )}
+                  </p>
                 </div>
               )}
             </div>

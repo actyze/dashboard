@@ -55,12 +55,12 @@ class UserService:
                 await session.commit()
                 await session.refresh(user)
                 
-                # Assign default VIEWER role
-                viewer_role_result = await session.execute(select(Role).where(Role.name == "VIEWER"))
-                viewer_role = viewer_role_result.scalar_one_or_none()
+                # Assign default USER role
+                user_role_result = await session.execute(select(Role).where(Role.name == "USER"))
+                user_role_obj = user_role_result.scalar_one_or_none()
                 
-                if viewer_role:
-                    user_role = UserRole(user_id=user.id, role_id=viewer_role.id)
+                if user_role_obj:
+                    user_role = UserRole(user_id=user.id, role_id=user_role_obj.id)
                     session.add(user_role)
                     await session.commit()
                 

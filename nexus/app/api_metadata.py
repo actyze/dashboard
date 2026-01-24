@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 
 from app.database import get_db
 from app.auth.dependencies import get_current_user_id, require_viewer
@@ -111,14 +112,12 @@ async def update_description(
     """
     try:
         # Get the description to find out which table it belongs to (for schema service update)
-        existing = await db.execute(
-            """
+        existing_query = text("""
             SELECT catalog, schema_name, table_name 
             FROM nexus.metadata_descriptions 
             WHERE id = :id
-            """,
-            {"id": description_id}
-        )
+        """)
+        existing = await db.execute(existing_query, {"id": description_id})
         existing_row = existing.fetchone()
         
         result = await metadata_description_service.update_description(

@@ -129,6 +129,7 @@ async def execute_sql(
     # Check data access permissions for all tables in the query
     tables = extract_tables_from_sql(request.sql)
     access_denied_tables = []
+    access_denied_reasons = {}
     
     for table in tables:
         access_check = await admin_service.check_user_access(
@@ -139,13 +140,24 @@ async def execute_sql(
         )
         
         if not access_check.get("has_access", False):
-            access_denied_tables.append(f"{table['catalog']}.{table['schema']}.{table['table']}")
+            table_name = f"{table['catalog']}.{table['schema']}.{table['table']}"
+            access_denied_tables.append(table_name)
+            access_denied_reasons[table_name] = access_check.get("reason", "No access")
     
     if access_denied_tables:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Access denied to the following tables: {', '.join(access_denied_tables)}"
-        )
+        # Check if user has NO data access rules at all
+        has_no_rules = all("No matching access rules" in access_denied_reasons.get(t, "") for t in access_denied_tables)
+        
+        if has_no_rules:
+            raise HTTPException(
+                status_code=403,
+                detail="You do not have any data access configured. Please contact an administrator to grant you access to databases and schemas."
+            )
+        else:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Access denied to the following tables: {', '.join(access_denied_tables)}. Please contact an administrator to grant you access."
+            )
     
     # Track execution time and timestamps
     generated_at = datetime.utcnow()
@@ -1057,7 +1069,8 @@ async def register_user(
     - user_id: Created user ID
     - username: Username (email)
     
-    **New users are created with VIEWER role by default.**
+    **New users are created with USER role by default.**
+    **Users must have at least one data access rule configured by an admin to query data.**
     """
     try:
         logger.info(f"📧 User registration request for: {request.email}")
@@ -1065,7 +1078,7 @@ async def register_user(
         # Initialize user service
         user_service = UserService()
         
-        # Create user with VIEWER role (duplicate check handled in create_user method)
+        # Create user with USER role (duplicate check handled in create_user method)
         result = await user_service.create_user(
             username=request.email,
             email=request.email,

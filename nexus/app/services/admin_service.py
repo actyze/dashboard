@@ -55,11 +55,18 @@ class AdminService:
                 
                 users_data = []
                 for user in users:
-                    # Get user's role (should be only 1: ADMIN or USER)
+                    # Get user's roles (users can have multiple roles)
                     role_result = await session.execute(
                         select(Role.name).join(UserRole).where(UserRole.user_id == user.id)
                     )
-                    role = role_result.scalar_one_or_none() or "USER"
+                    roles = [row[0] for row in role_result.fetchall()]
+                    
+                    # Return primary role as single value
+                    # System uses only 2 roles: ADMIN and USER
+                    if "ADMIN" in roles:
+                        primary_role = "ADMIN"
+                    else:
+                        primary_role = roles[0] if roles else "USER"
                     
                     # Count user's data access rules
                     access_count_result = await session.execute(
@@ -75,7 +82,8 @@ class AdminService:
                         "email": user.email,
                         "full_name": user.full_name,
                         "is_active": user.is_active,
-                        "role": role,
+                        "role": primary_role,  # Primary role for backward compatibility
+                        "roles": roles,  # All roles
                         "access_rule_count": access_rule_count,
                         "created_at": user.created_at.isoformat()
                     })

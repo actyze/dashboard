@@ -157,7 +157,9 @@ export class Network {
   static handleError(error) {
     if (error.response) {
       // Server responded with error status
-      const message = error.response.data?.message || 
+      // Check for FastAPI's 'detail' field first (used for 403 access denied messages)
+      const message = error.response.data?.detail || 
+                     error.response.data?.message || 
                      error.response.data?.error || 
                      error.message || 
                      'An error occurred';

@@ -96,6 +96,7 @@ const UsersManagement = forwardRef((props, ref) => {
       setLoadingRules(true);
       const response = await AdminService.getUserDataAccess(userId);
       if (response.success) {
+        console.log('📋 Loaded access rules:', response.rules);
         setAccessRules(response.rules || []);
       }
     } catch (err) {
@@ -145,12 +146,40 @@ const UsersManagement = forwardRef((props, ref) => {
     }
   };
 
-  const handleSetRole = async (userId, newRole) => {
+  const handleSetRole = async (userId, newRole, currentUser) => {
+    // If changing from ADMIN to USER, ensure they have full access by default
+    if (currentUser.role === 'ADMIN' && newRole === 'USER') {
+      try {
+        const rulesResponse = await AdminService.getUserDataAccess(userId);
+        const rules = rulesResponse.rules || [];
+        if (rules.length === 0) {
+          // Grant full access (all databases) when converting from ADMIN to USER
+          const fullAccessRule = {
+            catalog: null,
+            database_name: null, // null = all databases
+            schema_name: null,
+            table_name: null,
+            allowed_columns: []
+          };
+          
+          const addRuleResponse = await AdminService.addUserDataAccess(userId, fullAccessRule);
+          if (!addRuleResponse.success) {
+            showError('Failed to grant full access when converting to USER role');
+            return;
+          }
+          showSuccess('Granted full access (all databases) to user');
+        }
+      } catch (err) {
+        showError('Failed to check/grant access rules: ' + (err.response?.data?.detail || err.message));
+        return;
+      }
+    }
+    
     try {
       const response = await AdminService.setUserRole(userId, newRole);
       if (response.success) {
         showSuccess(`User role updated to ${newRole}`);
-        loadUsers();
+        await loadUsers();
       }
     } catch (err) {
       showError(err.response?.data?.detail || 'Failed to update role');
@@ -177,6 +206,12 @@ const UsersManagement = forwardRef((props, ref) => {
   };
 
   const handleCloseEditDialog = () => {
+    // Validate: Non-admin users must have at least one data access rule
+    if (editingUser && editingUser.role !== 'ADMIN' && accessRules.length === 0) {
+      showError('Non-admin users must have at least one data access rule configured. Please add access rules before closing.');
+      return;
+    }
+    
     setEditingUser(null);
     setAccessRules([]);
   };
@@ -405,13 +440,37 @@ const UsersManagement = forwardRef((props, ref) => {
   };
 
   const handleRemoveAccessRule = async (ruleId) => {
+    // Debug logging
+    console.log('🗑️ Attempting to delete rule with ID:', ruleId, 'Type:', typeof ruleId);
+    console.log('🗑️ Current editing user:', editingUser);
+    console.log('🗑️ All access rules:', accessRules);
+    
+    // Validate ruleId
+    if (!ruleId || ruleId === 'undefined' || typeof ruleId === 'undefined') {
+      console.error('❌ Invalid ruleId:', ruleId);
+      showError('Invalid access rule ID. Please refresh the page and try again.');
+      return;
+    }
+    
+    // Validate editingUser exists
+    if (!editingUser || !editingUser.id) {
+      showError('No user selected. Please try again.');
+      return;
+    }
+    
+    // Prevent deleting the last access rule for non-admin users
+    if (editingUser.role !== 'ADMIN' && accessRules.length === 1) {
+      showError('Cannot delete the last access rule. Non-admin users must have at least one data access rule configured.');
+      return;
+    }
+    
     if (window.confirm('Remove this access rule?')) {
       try {
-        const response = await AdminService.removeUserDataAccess(ruleId);
+        const response = await AdminService.removeUserDataAccess(editingUser.id, ruleId);
         if (response.success) {
           showSuccess('Access rule removed');
-          loadAccessRules(editingUser.id);
-          loadUsers(); // Refresh user list to update access_rule_count
+          await loadAccessRules(editingUser.id);
+          await loadUsers(); // Refresh user list to update access_rule_count
         }
       } catch (err) {
         showError(err.response?.data?.detail || 'Failed to remove access rule');
@@ -514,7 +573,7 @@ const UsersManagement = forwardRef((props, ref) => {
                 <div className="col-span-2 flex items-center">
                   <select
                     value={user.role}
-                    onChange={(e) => handleSetRole(user.id, e.target.value)}
+                    onChange={(e) => handleSetRole(user.id, e.target.value, user)}
                     className={`
                       px-2 py-1 text-xs rounded border cursor-pointer
                       ${isDark 
@@ -826,6 +885,7 @@ const UsersManagement = forwardRef((props, ref) => {
                       </svg>
                       <h4 className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
                         Data Access Rules
+                        <span className="ml-2 text-xs text-red-500">*Required</span>
                       </h4>
                     </div>
                     <button
@@ -851,11 +911,11 @@ const UsersManagement = forwardRef((props, ref) => {
                       <svg className={`w-10 h-10 mb-3 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                       </svg>
-                      <p className={`text-sm font-medium mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                      <p className={`text-sm font-medium mb-1 ${isDark ? 'text-red-400' : 'text-red-600'}`}>
                         No data access configured
                       </p>
-                      <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
-                        This user cannot query any data. Add access rules to grant permissions.
+                      <p className={`text-xs ${isDark ? 'text-red-500/70' : 'text-red-500'}`}>
+                        ⚠️ Required: This user cannot query any data. Add at least one access rule to grant permissions.
                       </p>
                     </div>
                   ) : (

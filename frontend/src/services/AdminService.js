@@ -52,6 +52,26 @@ const AdminService = {
     }
   },
   
+  async enableUser(userId) {
+    try {
+      const response = await apiInstance.put(`/admin/users/${userId}/enable`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to enable user:', error);
+      throw error;
+    }
+  },
+
+  async disableUser(userId, reason) {
+    try {
+      const response = await apiInstance.put(`/admin/users/${userId}/disable`, { reason });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to disable user:', error);
+      throw error;
+    }
+  },
+  
   // ============================================================================
   // USER DATA ACCESS MANAGEMENT (DIRECT USER-LEVEL)
   // ============================================================================

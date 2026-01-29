@@ -186,16 +186,22 @@ const UsersManagement = forwardRef((props, ref) => {
     }
   };
 
-  const handleDeactivate = async (userId, username) => {
-    if (window.confirm(`Are you sure you want to deactivate ${username}?`)) {
+  const handleToggleUserStatus = async (user) => {
+    const action = user.is_active ? 'disable' : 'enable';
+    const actionPastTense = user.is_active ? 'disabled' : 'enabled';
+    
+    if (window.confirm(`Are you sure you want to ${action} ${user.username}?`)) {
       try {
-        const response = await AdminService.deactivateUser(userId);
+        const response = user.is_active 
+          ? await AdminService.deactivateUser(user.id)
+          : await AdminService.enableUser(user.id);
+          
         if (response.success) {
-          showSuccess(`User ${username} deactivated`);
+          showSuccess(`User ${user.username} ${actionPastTense} successfully`);
           loadUsers();
         }
       } catch (err) {
-        showError(err.response?.data?.detail || 'Failed to deactivate user');
+        showError(err.response?.data?.detail || `Failed to ${action} user`);
       }
     }
   };
@@ -549,10 +555,19 @@ const UsersManagement = forwardRef((props, ref) => {
                 `}
               >
                 {/* Username */}
-                <div className="col-span-2 flex items-center">
+                <div className="col-span-2 flex items-center gap-2">
                   <span className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
                     {user.username}
                   </span>
+                  {!user.is_active && (
+                    <span className={`px-1.5 py-0.5 text-xs rounded ${
+                      isDark 
+                        ? 'bg-gray-700 text-gray-400' 
+                        : 'bg-gray-200 text-gray-600'
+                    }`}>
+                      Inactive
+                    </span>
+                  )}
                 </div>
                 
                 {/* Email */}
@@ -634,19 +649,31 @@ const UsersManagement = forwardRef((props, ref) => {
                     </svg>
                   </button>
                   
-                  {/* Deactivate Button */}
+                  {/* Enable/Disable Toggle Button */}
                   <button
-                    onClick={() => handleDeactivate(user.id, user.username)}
+                    onClick={() => handleToggleUserStatus(user)}
                     className={`p-1 rounded transition-colors ${
-                      isDark 
-                        ? 'text-gray-600 hover:text-red-400 hover:bg-[#2a2b2e]' 
-                        : 'text-gray-400 hover:text-red-500 hover:bg-gray-100'
+                      user.is_active
+                        ? isDark 
+                          ? 'text-gray-600 hover:text-orange-400 hover:bg-[#2a2b2e]' 
+                          : 'text-gray-400 hover:text-orange-500 hover:bg-gray-100'
+                        : isDark 
+                          ? 'text-gray-600 hover:text-green-400 hover:bg-[#2a2b2e]' 
+                          : 'text-gray-400 hover:text-green-500 hover:bg-gray-100'
                     }`}
-                    title="Deactivate user"
+                    title={user.is_active ? 'Disable user' : 'Enable user'}
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
+                    {user.is_active ? (
+                      // Ban/Disable icon
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                      </svg>
+                    ) : (
+                      // Check/Enable icon
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    )}
                   </button>
                 </div>
               </div>

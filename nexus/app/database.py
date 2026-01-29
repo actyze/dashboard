@@ -2,8 +2,9 @@
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import String, Text, DateTime, JSON, Integer, Boolean, ForeignKey, Numeric
+from sqlalchemy import String, Text, DateTime, JSON, Integer, Boolean, ForeignKey, Numeric, Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
+import enum
 from datetime import datetime
 import uuid
 from typing import Optional, Dict, Any, List
@@ -29,6 +30,9 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[Optional[str]] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    user_state: Mapped[str] = mapped_column(String(20), default='ENABLED', index=True)  # ENABLED or DISABLED
+    disabled_reason: Mapped[Optional[str]] = mapped_column(String(500))
+    disabled_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -201,6 +205,59 @@ class SchemaExclusion(Base):
     # Metadata tracking
     excluded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+# ============================================================================
+# Licensing System Models
+# ============================================================================
+
+class PlanType(str, enum.Enum):
+    """Subscription plan types."""
+    FREE = "FREE"
+    SMALL = "SMALL"
+    MEDIUM = "MEDIUM"
+    LARGE_ENTERPRISE = "LARGE_ENTERPRISE"
+    MANAGED_SERVICE = "MANAGED_SERVICE"
+
+
+class LicenseStatus(str, enum.Enum):
+    """License status values."""
+    ACTIVE = "ACTIVE"
+    DISABLED = "DISABLED"
+    EXPIRED = "EXPIRED"
+
+
+class SubscriptionPlan(Base):
+    """Subscription plans reference table."""
+    __tablename__ = "subscription_plans"
+    
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    plan_name: Mapped[PlanType] = mapped_column(SQLEnum(PlanType, name="plan_type", schema="nexus"), unique=True, nullable=False)
+    monthly_cost_usd: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    max_users: Mapped[Optional[int]] = mapped_column(Integer)  # NULL = unlimited
+    support_model: Mapped[str] = mapped_column(String(100), nullable=False)
+    features: Mapped[Dict[str, Any]] = mapped_column(JSONB, default={})
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class TenantLicense(Base):
+    """Tenant licenses for platform access."""
+    __tablename__ = "tenant_licenses"
+    
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    license_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    status: Mapped[LicenseStatus] = mapped_column(SQLEnum(LicenseStatus, name="license_status", schema="nexus"), default=LicenseStatus.ACTIVE)
+    plan_type: Mapped[PlanType] = mapped_column(SQLEnum(PlanType, name="plan_type", schema="nexus"), nullable=False)
+    max_users: Mapped[Optional[int]] = mapped_column(Integer)  # NULL = unlimited, overrides plan default
+    issued_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime)  # NULL = perpetual
+    last_validated_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    validation_grace_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    license_metadata: Mapped[Dict[str, Any]] = mapped_column(JSONB, default={})
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class DatabaseManager:

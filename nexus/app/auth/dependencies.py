@@ -34,16 +34,20 @@ async def get_current_user(
     user_id: str = payload.get("sub")
     if user_id is None:
         raise credentials_exception
-        
+    
     # Fetch user from DB to ensure valid and active
-    # We could use the payload data for stateless auth, but DB check is safer for "is_active"
     user_result = await user_service.get_user(user_id)
     if not user_result.get("success"):
         raise credentials_exception
         
     user_data = user_result.get("user")
+    
+    # Check if user is active
     if not user_data.get("is_active"):
-        raise HTTPException(status_code=400, detail="Inactive user")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive"
+        )
         
     # Fetch fresh roles to ensure immediate revocation effect
     async with db_manager.get_session() as session:

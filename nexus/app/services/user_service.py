@@ -166,6 +166,9 @@ class UserService:
                         "email": user.email,
                         "full_name": user.full_name,
                         "is_active": user.is_active,
+                        "user_state": user.user_state if hasattr(user, 'user_state') else 'ENABLED',
+                        "disabled_reason": user.disabled_reason if hasattr(user, 'disabled_reason') else None,
+                        "disabled_at": user.disabled_at.isoformat() if hasattr(user, 'disabled_at') and user.disabled_at else None,
                         "created_at": user.created_at.isoformat()
                     }
                 }

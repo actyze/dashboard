@@ -6,6 +6,7 @@ export { Network, apiInstance } from './network';
 export { default as QueryManagementService } from './QueryManagementService';
 export { default as DashboardService } from './DashboardService';
 export { default as ExclusionService } from './ExclusionService';
+export { default as LicenseService } from './LicenseService';
 
 // Service configuration
 export const SERVICES_CONFIG = {

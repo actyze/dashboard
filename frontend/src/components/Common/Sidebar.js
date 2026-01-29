@@ -121,28 +121,47 @@ const Sidebar = ({ isCollapsed, onToggle }) => {
     `}>
       {/* Header */}
       <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} px-3 py-3`}>
-        {!isCollapsed && (
-          <div className="flex items-center space-x-2">
-            <div className="w-6 h-6 bg-[#5d6ad3] rounded flex items-center justify-center">
-              <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-              </svg>
-            </div>
-            <span className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              Actyze
-            </span>
-          </div>
+        {isCollapsed ? (
+          <a 
+            href="https://actyze.ai" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="w-6 h-6 bg-[#5d6ad3] rounded flex items-center justify-center hover:opacity-80 transition-opacity"
+            title="Go to Actyze website"
+          >
+            <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+          </a>
+        ) : (
+          <>
+            <a 
+              href="https://actyze.ai" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center space-x-2 hover:opacity-80 transition-opacity"
+            >
+              <div className="w-6 h-6 bg-[#5d6ad3] rounded flex items-center justify-center">
+                <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+              </div>
+              <span className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                Actyze
+              </span>
+            </a>
+            <button
+              onClick={onToggle}
+              className={`p-1 rounded transition-colors ${
+                isDark 
+                  ? 'text-gray-500 hover:text-gray-300 hover:bg-[#1c1d1f]' 
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <ChevronIcon />
+            </button>
+          </>
         )}
-        <button
-          onClick={onToggle}
-          className={`p-1 rounded transition-colors ${
-            isDark 
-              ? 'text-gray-500 hover:text-gray-300 hover:bg-[#1c1d1f]' 
-              : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          <ChevronIcon />
-        </button>
       </div>
 
       {/* Navigation */}

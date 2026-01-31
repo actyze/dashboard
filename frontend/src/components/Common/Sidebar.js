@@ -120,21 +120,37 @@ const Sidebar = ({ isCollapsed, onToggle }) => {
       border-r ${isDark ? 'border-[#1c1d1f]' : 'border-gray-200'}
     `}>
       {/* Header */}
-      <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} px-3 py-3`}>
+      <div className={`flex flex-col ${isCollapsed ? 'items-center' : ''} px-3 py-3`}>
         {isCollapsed ? (
-          <button 
-            onClick={() => navigate('/')}
-            className="hover:opacity-80 transition-opacity"
-            title="Go to Home"
-          >
-            <img 
-              src={isDark ? "/logo-light.png" : "/logo-dark.png"} 
-              alt="Actyze" 
-              className="w-5 h-5 object-contain"
-            />
-          </button>
-        ) : (
           <>
+            <button 
+              onClick={() => navigate('/')}
+              className="hover:opacity-80 transition-opacity"
+              title="Go to Home"
+            >
+              <img 
+                src={isDark ? "/logo-light.png" : "/logo-dark.png"} 
+                alt="Actyze" 
+                className="w-5 h-5 object-contain"
+              />
+            </button>
+            {/* Expand button when collapsed */}
+            <button
+              onClick={onToggle}
+              className={`mt-3 p-1.5 rounded transition-colors ${
+                isDark 
+                  ? 'text-gray-500 hover:text-gray-300 hover:bg-[#1c1d1f]' 
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+              }`}
+              title="Expand sidebar"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </>
+        ) : (
+          <div className="flex items-center justify-between w-full">
             <button 
               onClick={() => navigate('/')}
               className="flex items-center space-x-2 hover:opacity-80 transition-opacity"
@@ -155,10 +171,11 @@ const Sidebar = ({ isCollapsed, onToggle }) => {
                   ? 'text-gray-500 hover:text-gray-300 hover:bg-[#1c1d1f]' 
                   : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
               }`}
+              title="Collapse sidebar"
             >
               <ChevronIcon />
             </button>
-          </>
+          </div>
         )}
       </div>
 

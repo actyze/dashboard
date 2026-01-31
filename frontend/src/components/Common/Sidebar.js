@@ -122,34 +122,32 @@ const Sidebar = ({ isCollapsed, onToggle }) => {
       {/* Header */}
       <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} px-3 py-3`}>
         {isCollapsed ? (
-          <a 
-            href="https://actyze.ai" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="w-6 h-6 bg-[#5d6ad3] rounded flex items-center justify-center hover:opacity-80 transition-opacity"
-            title="Go to Actyze website"
+          <button 
+            onClick={() => navigate('/')}
+            className="hover:opacity-80 transition-opacity"
+            title="Go to Home"
           >
-            <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-            </svg>
-          </a>
+            <img 
+              src={isDark ? "/logo-light.png" : "/logo-dark.png"} 
+              alt="Actyze" 
+              className="w-5 h-5 object-contain"
+            />
+          </button>
         ) : (
           <>
-            <a 
-              href="https://actyze.ai" 
-              target="_blank" 
-              rel="noopener noreferrer"
+            <button 
+              onClick={() => navigate('/')}
               className="flex items-center space-x-2 hover:opacity-80 transition-opacity"
             >
-              <div className="w-6 h-6 bg-[#5d6ad3] rounded flex items-center justify-center">
-                <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                </svg>
-              </div>
+              <img 
+                src={isDark ? "/logo-light.png" : "/logo-dark.png"} 
+                alt="Actyze" 
+                className="w-5 h-5 object-contain"
+              />
               <span className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
                 Actyze
               </span>
-            </a>
+            </button>
             <button
               onClick={onToggle}
               className={`p-1 rounded transition-colors ${

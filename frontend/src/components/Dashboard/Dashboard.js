@@ -131,33 +131,22 @@ const Dashboard = ({ isPublic = false }) => {
     });
   }, [tiles]);
 
-  // Handle layout change from grid (just update local state)
-  const handleLayoutChange = useCallback((newLayout) => {
-    if (isPublic || !newLayout || newLayout.length === 0) return;
-    
-    setTiles(prevTiles => {
-      return prevTiles.map(tile => {
-        const layoutItem = newLayout.find(item => item.i === String(tile.id));
-        if (layoutItem) {
-          return {
-            ...tile,
-            position: {
-              x: layoutItem.x,
-              y: layoutItem.y,
-              width: layoutItem.w,
-              height: layoutItem.h,
-            },
-          };
-        }
-        return tile;
-      });
-    });
-  }, [isPublic]);
-
   const saveTilePosition = useCallback(async (tileId, newPosition) => {
     if (isPublic) return;
     await DashboardService.updateTilePosition(id, tileId, newPosition);
   }, [id, isPublic]);
+
+  // Update local tile position and save to API
+  const updateTilePosition = useCallback((tileId, newPosition) => {
+    // Update local state
+    setTiles(prevTiles => prevTiles.map(tile => 
+      String(tile.id) === String(tileId) 
+        ? { ...tile, position: newPosition }
+        : tile
+    ));
+    // Save to API
+    saveTilePosition(tileId, newPosition);
+  }, [saveTilePosition]);
 
   const handleDragStop = useCallback((layout, oldItem, newItem) => {
     // Only save if position actually changed (not just a click)
@@ -165,14 +154,14 @@ const Dashboard = ({ isPublic = false }) => {
     const sizeChanged = oldItem.w !== newItem.w || oldItem.h !== newItem.h;
     
     if (positionChanged || sizeChanged) {
-      saveTilePosition(newItem.i, {
+      updateTilePosition(newItem.i, {
         x: newItem.x,
         y: newItem.y,
         width: newItem.w,
         height: newItem.h,
       });
     }
-  }, [saveTilePosition]);
+  }, [updateTilePosition]);
 
   const handleResizeStop = useCallback((layout, oldItem, newItem) => {
     // Only save if size actually changed
@@ -180,14 +169,14 @@ const Dashboard = ({ isPublic = false }) => {
     const positionChanged = oldItem.x !== newItem.x || oldItem.y !== newItem.y;
     
     if (sizeChanged || positionChanged) {
-      saveTilePosition(newItem.i, {
+      updateTilePosition(newItem.i, {
         x: newItem.x,
         y: newItem.y,
         width: newItem.w,
         height: newItem.h,
       });
     }
-  }, [saveTilePosition]);
+  }, [updateTilePosition]);
 
   // Load dashboard on mount
   useEffect(() => {
@@ -790,7 +779,7 @@ const Dashboard = ({ isPublic = false }) => {
             rowHeight={GRID_ROW_HEIGHT}
             margin={GRID_MARGIN}
             containerPadding={[0, 0]}
-            onLayoutChange={handleLayoutChange}
+            compactType={null}
             onDragStop={handleDragStop}
             onResizeStop={handleResizeStop}
             isDraggable={!isPublic}

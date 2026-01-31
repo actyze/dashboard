@@ -7,6 +7,7 @@ import React, { useRef } from 'react';
 import { Link, useLocation } from 'react-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import UsersManagement from './UsersManagement';
+import LicenseManagement from './LicenseManagement';
 
 function Admin() {
   const { isDark } = useTheme();
@@ -98,6 +99,7 @@ function Admin() {
       {/* Content */}
       <div className="flex-1 overflow-auto">
         {location.pathname === '/admin' && <UsersManagement ref={usersRef} />}
+        {location.pathname === '/admin/license' && <LicenseManagement />}
       </div>
     </div>
   );

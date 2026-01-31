@@ -150,7 +150,7 @@ export const DashboardService = {
       const response = await apiInstance.post(`/dashboards/${dashboardId}/tiles`, payload);
       return {
         success: true,
-        tile: response.data
+        tile: response.data.tile
       };
     } catch (error) {
       return { 

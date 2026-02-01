@@ -23,14 +23,38 @@ async def check_license_status():
     Check if any license exists in the system.
     PUBLIC endpoint - no authentication required.
     Used on app startup (before login) to determine if license dialog should be shown.
+    Returns complete license information including pricing.
     """
     try:
         result = await license_service.get_active_license()
         
-        return {
-            "has_license": result["success"],
-            "license": result.get("license") if result["success"] else None
-        }
+        if result["success"] and result.get("license"):
+            license_data = result["license"]
+            
+            # Map plan types to monthly costs
+            plan_pricing = {
+                "FREE": 0,
+                "SMALL": 100,
+                "MEDIUM": 500,
+                "LARGE_ENTERPRISE": 2000,
+                "MANAGED_SERVICE": 0
+            }
+            
+            plan_type = license_data.get("plan_type", "FREE")
+            monthly_cost = plan_pricing.get(plan_type, 0)
+            
+            # Add monthly cost to license data
+            license_data["monthly_cost_usd"] = monthly_cost
+            
+            return {
+                "has_license": True,
+                "license": license_data
+            }
+        else:
+            return {
+                "has_license": False,
+                "license": None
+            }
         
     except Exception as e:
         logger.error("Failed to check license status", error=str(e))

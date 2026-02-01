@@ -130,7 +130,7 @@ const UsersManagement = forwardRef((props, ref) => {
         handleCloseCreateDialog();
         await loadUsers();
         
-        // Automatically open data access dialog for non-admin users
+        // Automatically open data access dialog for non-admin users (USER and READONLY)
         if (formData.role !== 'ADMIN' && response.user) {
           setEditingUser({
             id: response.user.id,
@@ -147,13 +147,13 @@ const UsersManagement = forwardRef((props, ref) => {
   };
 
   const handleSetRole = async (userId, newRole, currentUser) => {
-    // If changing from ADMIN to USER, ensure they have full access by default
-    if (currentUser.role === 'ADMIN' && newRole === 'USER') {
+    // If changing from ADMIN to USER or READONLY, ensure they have full access by default
+    if (currentUser.role === 'ADMIN' && (newRole === 'USER' || newRole === 'READONLY')) {
       try {
         const rulesResponse = await AdminService.getUserDataAccess(userId);
         const rules = rulesResponse.rules || [];
         if (rules.length === 0) {
-          // Grant full access (all databases) when converting from ADMIN to USER
+          // Grant full access (all databases) when converting from ADMIN to USER/READONLY
           const fullAccessRule = {
             catalog: null,
             database_name: null, // null = all databases
@@ -164,7 +164,7 @@ const UsersManagement = forwardRef((props, ref) => {
           
           const addRuleResponse = await AdminService.addUserDataAccess(userId, fullAccessRule);
           if (!addRuleResponse.success) {
-            showError('Failed to grant full access when converting to USER role');
+            showError(`Failed to grant full access when converting to ${newRole} role`);
             return;
           }
           showSuccess('Granted full access (all databases) to user');
@@ -212,9 +212,9 @@ const UsersManagement = forwardRef((props, ref) => {
   };
 
   const handleCloseEditDialog = () => {
-    // Validate: Non-admin users must have at least one data access rule
+    // Validate: Non-admin users (USER and READONLY) must have at least one data access rule
     if (editingUser && editingUser.role !== 'ADMIN' && accessRules.length === 0) {
-      showError('Non-admin users must have at least one data access rule configured. Please add access rules before closing.');
+      showError('USER and READONLY users must have at least one data access rule configured. Please add access rules before closing.');
       return;
     }
     
@@ -464,9 +464,9 @@ const UsersManagement = forwardRef((props, ref) => {
       return;
     }
     
-    // Prevent deleting the last access rule for non-admin users
+    // Prevent deleting the last access rule for non-admin users (USER and READONLY)
     if (editingUser.role !== 'ADMIN' && accessRules.length === 1) {
-      showError('Cannot delete the last access rule. Non-admin users must have at least one data access rule configured.');
+      showError('Cannot delete the last access rule. USER and READONLY users must have at least one data access rule configured.');
       return;
     }
     
@@ -600,6 +600,7 @@ const UsersManagement = forwardRef((props, ref) => {
                   >
                     <option value="ADMIN">ADMIN</option>
                     <option value="USER">USER</option>
+                    <option value="READONLY">READONLY</option>
                   </select>
                 </div>
                 
@@ -815,6 +816,7 @@ const UsersManagement = forwardRef((props, ref) => {
                   >
                     <option value="USER">USER</option>
                     <option value="ADMIN">ADMIN</option>
+                    <option value="READONLY">READONLY</option>
                   </select>
                 </div>
               </div>

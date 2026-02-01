@@ -8,7 +8,7 @@ import structlog
 from datetime import datetime
 
 from app.database import (
-    db_manager, TenantLicense, SubscriptionPlan,
+    db_manager, TenantLicense,
     LicenseStatus, PlanType
 )
 
@@ -184,7 +184,7 @@ class LicenseService:
     async def get_plan_limits(self) -> Dict[str, Any]:
         """
         Get current plan limits from the active license.
-        Returns plan details including max users, monthly cost, and support model.
+        All limits are stored directly in the license record.
         """
         async with db_manager.get_session() as session:
             try:
@@ -201,32 +201,16 @@ class LicenseService:
                         "error": "No active license found"
                     }
                 
-                # Get plan details from subscription_plans table
-                plan_result = await session.execute(
-                    select(SubscriptionPlan)
-                    .where(SubscriptionPlan.plan_name == license.plan_type)
-                )
-                plan = plan_result.scalar_one_or_none()
-                
-                if not plan:
-                    # Fallback to license data
-                    return {
-                        "success": True,
-                        "plan": {
-                            "plan_type": license.plan_type.value,
-                            "max_users": license.max_users,
-                            "monthly_cost_usd": 0,
-                            "support_model": "Unknown"
-                        }
-                    }
-                
+                # Return license limits directly (no more subscription_plans table)
                 return {
                     "success": True,
                     "plan": {
-                        "plan_type": plan.plan_name.value,
-                        "max_users": plan.max_users,
-                        "monthly_cost_usd": float(plan.monthly_cost_usd),
-                        "support_model": plan.support_model
+                        "plan_type": license.plan_type.value,
+                        "max_users": license.max_users,
+                        "max_dashboards": license.max_dashboards,
+                        "max_data_sources": license.max_data_sources,
+                        "expires_at": license.expires_at.isoformat() if license.expires_at else None,
+                        "is_valid": not (license.expires_at and license.expires_at < datetime.utcnow())
                     }
                 }
                 
@@ -251,6 +235,8 @@ class LicenseService:
             "status": license.status.value,
             "plan_type": license.plan_type.value,
             "max_users": license.max_users,
+            "max_dashboards": license.max_dashboards,
+            "max_data_sources": license.max_data_sources,
             "issued_at": license.issued_at.isoformat() if license.issued_at else None,
             "expires_at": license.expires_at.isoformat() if license.expires_at else None,
             "last_validated_at": license.last_validated_at.isoformat() if license.last_validated_at else None,

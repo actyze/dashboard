@@ -113,37 +113,20 @@ const LicenseService = {
   },
 
   /**
-   * Validate license key with marketing dashboard API (external validation)
+   * Validate license key with Actyze.ai (via backend proxy)
+   * Backend makes server-to-server call to actyze.ai with hardcoded API key
    * @param {string} licenseKey - 64-character license key
-   * @returns {Promise<Object>} Full license and plan details from marketing dashboard
+   * @returns {Promise<Object>} Full license and plan details from Actyze
    */
   async validateLicenseWithMarketingAPI(licenseKey) {
     try {
-      // Marketing dashboard API URL - should be set in env variables
-      const API_URL = process.env.REACT_APP_LICENSE_API_URL || 'https://actyze.ai/api/validate-license';
-      const API_KEY = process.env.REACT_APP_LICENSE_API_KEY || '8f3a7c2e9b4d6f1a5c8e3b7d2f9a4c6e1b8d3f7a5c2e9b6d4f1a8c7e3b5d2f9a';
-
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': API_KEY
-        },
-        body: JSON.stringify({
-          license_key: licenseKey,
-          increment_usage: false // Don't increment usage count for validation
-        })
+      // Call our backend, which will proxy to actyze.ai with the hardcoded API key
+      const response = await apiInstance.post('/v1/license/validate-external', {
+        license_key: licenseKey
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data;
+      return response.data || response;
     } catch (error) {
-      console.error('Failed to validate license with marketing API:', error);
+      console.error('Failed to validate license with Actyze.ai:', error);
       throw error;
     }
   }

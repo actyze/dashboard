@@ -148,7 +148,7 @@ class AdminService:
                 await session.flush()
                 
                 # Assign role (default to USER)
-                role_name = role.upper() if role.upper() in ["ADMIN", "USER"] else "USER"
+                role_name = role.upper() if role.upper() in ["ADMIN", "USER", "READONLY"] else "USER"
                 role_result = await session.execute(
                     select(Role).where(Role.name == role_name)
                 )
@@ -184,11 +184,11 @@ class AdminService:
         role: str,
         admin_id: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Set user's role (ADMIN or USER). Can only have ONE role."""
+        """Set user's role (ADMIN, USER, or READONLY). Can only have ONE role."""
         async with db_manager.get_session() as session:
             try:
                 # Validate role
-                role_name = role.upper() if role.upper() in ["ADMIN", "USER"] else "USER"
+                role_name = role.upper() if role.upper() in ["ADMIN", "USER", "READONLY"] else "USER"
                 
                 # Get role ID
                 role_result = await session.execute(

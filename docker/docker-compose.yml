@@ -217,8 +217,6 @@ services:
       dockerfile: Dockerfile
       args:
         REACT_APP_API_BASE_URL: /api  # Relative path - NGINX proxies to nexus container
-        REACT_APP_LICENSE_API_URL: ${LICENSE_API_URL:-https://actyze.ai/api/validate-license}
-        REACT_APP_LICENSE_API_KEY: ${LICENSE_API_KEY:-8f3a7c2e9b4d6f1a5c8e3b7d2f9a4c6e1b8d3f7a5c2e9b6d4f1a8c7e3b5d2f9a}
     container_name: dashboard-frontend
     ports:
       - "3000:80"

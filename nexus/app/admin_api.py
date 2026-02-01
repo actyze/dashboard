@@ -20,10 +20,10 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: Optional[str] = None
-    role: str = "USER"  # "ADMIN" or "USER"
+    role: str = "USER"  # "ADMIN", "USER", or "READONLY"
 
 class UserRoleUpdate(BaseModel):
-    role: str  # "ADMIN" or "USER"
+    role: str  # "ADMIN", "USER", or "READONLY"
 
 class UserDataAccessCreate(BaseModel):
     """Create a data access rule for a user."""

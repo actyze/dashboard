@@ -111,6 +111,19 @@ class RoleChecker:
             )
         return user
 
+# Helper to explicitly block READONLY users with a clear message
+def require_write_access(user: dict = Depends(get_current_user)):
+    """
+    Explicitly block READONLY users from write operations with a user-friendly message.
+    """
+    user_roles = user.get("roles", [])
+    if "READONLY" in user_roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operation not permitted as read-only user. Contact admin for write access."
+        )
+    return user
+
 # Pre-configured dependencies
 # System uses 3 roles:
 # - ADMIN: Full access (user management, license management, schema visibility)

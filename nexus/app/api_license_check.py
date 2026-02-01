@@ -23,38 +23,15 @@ async def check_license_status():
     Check if any license exists in the system.
     PUBLIC endpoint - no authentication required.
     Used on app startup (before login) to determine if license dialog should be shown.
-    Returns complete license information including pricing.
+    Returns complete license information including pricing from database (cached, validated every 6 hours).
     """
     try:
         result = await license_service.get_active_license()
         
-        if result["success"] and result.get("license"):
-            license_data = result["license"]
-            
-            # Map plan types to monthly costs
-            plan_pricing = {
-                "FREE": 0,
-                "SMALL": 100,
-                "MEDIUM": 500,
-                "LARGE_ENTERPRISE": 2000,
-                "MANAGED_SERVICE": 0
-            }
-            
-            plan_type = license_data.get("plan_type", "FREE")
-            monthly_cost = plan_pricing.get(plan_type, 0)
-            
-            # Add monthly cost to license data
-            license_data["monthly_cost_usd"] = monthly_cost
-            
-            return {
-                "has_license": True,
-                "license": license_data
-            }
-        else:
-            return {
-                "has_license": False,
-                "license": None
-            }
+        return {
+            "has_license": result["success"],
+            "license": result.get("license") if result["success"] else None
+        }
         
     except Exception as e:
         logger.error("Failed to check license status", error=str(e))
@@ -70,16 +47,15 @@ async def add_initial_license(
     license_input: LicenseInput
 ):
     """
-    Add the first license to the system.
+    Add or replace a license in the system.
     PUBLIC endpoint - no authentication required (bootstrap case).
-    Only works if no license exists (prevents unauthorized changes).
+    Works for both initial setup and license upgrades/changes.
     
     Workflow:
-    1. Check if any license already exists
-    2. If exists, reject
-    3. Validate license key with actyze.ai API
-    4. Save license details to database
-    5. Activate the license
+    1. Validate license key with actyze.ai API
+    2. Deactivate any existing active license
+    3. Save new license details to database
+    4. Activate the new license
     """
     
     # Actyze's API key - hardcoded, same for all customers (server-side only)
@@ -88,15 +64,7 @@ async def add_initial_license(
     ACTYZE_API_URL = "https://app.actyze.ai/api/validate-license"
     
     try:
-        # Step 1: Check if license already exists
-        existing = await license_service.get_active_license()
-        if existing["success"]:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="A license already exists. Contact admin to manage licenses."
-            )
-        
-        # Step 2: Validate license with Actyze.ai API
+        # Step 1: Validate license with Actyze.ai API
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 logger.info(
@@ -186,7 +154,7 @@ async def add_initial_license(
                 detail=f"Invalid license: {error_msg}"
             )
         
-        # Step 3: Insert license record into database
+        # Step 2: Insert or update license record in database
         from app.database import TenantLicense, PlanType, LicenseStatus, db_manager
         from datetime import datetime, timedelta
         
@@ -215,6 +183,7 @@ async def add_initial_license(
         max_users = license_info.get("max_users")
         max_dashboards = license_info.get("max_dashboards")
         max_data_sources = license_info.get("max_data_sources")
+        monthly_cost_usd = license_info.get("monthly_price_usd", 0)
         
         async with db_manager.get_session() as session:
             try:
@@ -232,6 +201,15 @@ async def add_initial_license(
                         actor_user_id=None  # No user context in public endpoint
                     )
                 else:
+                    # Before creating new license, deactivate any existing ACTIVE licenses
+                    from sqlalchemy import update
+                    await session.execute(
+                        update(TenantLicense)
+                        .where(TenantLicense.status == LicenseStatus.ACTIVE)
+                        .values(status=LicenseStatus.DISABLED)
+                    )
+                    await session.commit()
+                    
                     # Create new license record
                     # Note: license_info already extracted above
                     
@@ -254,6 +232,7 @@ async def add_initial_license(
                         max_users=max_users,
                         max_dashboards=max_dashboards,
                         max_data_sources=max_data_sources,
+                        monthly_cost_usd=monthly_cost_usd,
                         # Timestamps
                         issued_at=issued_at,
                         expires_at=expires_at,

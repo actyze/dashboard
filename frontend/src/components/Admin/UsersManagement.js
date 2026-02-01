@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
+import { usePaywall } from '../../contexts/PaywallContext';
 import AdminService from '../../services/AdminService';
 import { RestService } from '../../services/RestService';
 import { useGetDatabases } from '../../hooks/useRestAPI';
@@ -13,6 +14,7 @@ import { useGetDatabases } from '../../hooks/useRestAPI';
 const UsersManagement = forwardRef((props, ref) => {
   const { isDark } = useTheme();
   const { showSuccess, showError } = useToast();
+  const { wouldExceedLimit, getLimit, isUnlimited, openUpgrade } = usePaywall();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -123,6 +125,24 @@ const UsersManagement = forwardRef((props, ref) => {
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
+    
+    // Check if adding a new user would exceed the license limit
+    const currentUserCount = users.length;
+    if (wouldExceedLimit('users', currentUserCount)) {
+      const limit = getLimit('users');
+      const limitText = isUnlimited('users') ? 'Unlimited' : limit;
+      showError(
+        `Cannot create user: Your current plan allows a maximum of ${limitText} users. ` +
+        `You currently have ${currentUserCount} users. Please upgrade your plan to add more users.`
+      );
+      
+      // Optionally, prompt user to upgrade
+      if (window.confirm('Would you like to view upgrade options?')) {
+        openUpgrade();
+      }
+      return;
+    }
+    
     try {
       const response = await AdminService.createUser(formData);
       if (response.success) {

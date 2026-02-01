@@ -21,13 +21,15 @@ const LicenseService = {
   },
 
   /**
-   * Activate a license key (Admin only)
+   * Activate a license key
+   * Works for both initial setup and license upgrades/changes
    * @param {string} licenseKey - 64-character license key
    * @returns {Promise<Object>} Activation result
    */
   async activateLicense(licenseKey) {
     try {
-      const response = await apiInstance.post('/v1/license/activate', {
+      // Unified endpoint that handles all cases
+      const response = await apiInstance.post('/v1/license-check/add-initial', {
         license_key: licenseKey
       });
       return response.data || response;

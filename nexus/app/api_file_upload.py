@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any
 import structlog
 import json
 
-from app.auth.dependencies import get_current_user_id
+from app.auth.dependencies import get_current_user_id, require_write_access, get_current_user
 from app.database import get_db
 from app.services.file_upload_service import FileUploadService
 import httpx
@@ -31,7 +31,8 @@ async def upload_file(
     column_types: Optional[str] = Form(None),
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
-    background_tasks: BackgroundTasks = None
+    background_tasks: BackgroundTasks = None,
+    _: dict = Depends(require_write_access)
 ):
     """
     Upload CSV or Excel file and create table or insert into existing table

@@ -140,8 +140,8 @@ async def validate_license_external(
     """
     # Actyze's API key - hardcoded, same for all customers (server-side only)
     ACTYZE_API_KEY = "REDACTED_API_KEY"
-    # Production API URL
-    ACTYZE_API_URL = "https://actyze.ai/api/validate-license"
+    # Production API URL (app.actyze.ai hosts the Next.js marketing dashboard with API routes)
+    ACTYZE_API_URL = "https://app.actyze.ai/api/validate-license"
     
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:

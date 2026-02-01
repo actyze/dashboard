@@ -201,6 +201,17 @@ class LicenseService:
                         "error": "No active license found"
                     }
                 
+                # Map plan types to monthly costs
+                plan_pricing = {
+                    PlanType.FREE: 0,
+                    PlanType.SMALL: 100,
+                    PlanType.MEDIUM: 500,
+                    PlanType.LARGE_ENTERPRISE: 2000,
+                    PlanType.MANAGED_SERVICE: 0  # Custom pricing
+                }
+                
+                monthly_cost_usd = plan_pricing.get(license.plan_type, 0)
+                
                 # Return license limits directly (no more subscription_plans table)
                 return {
                     "success": True,
@@ -209,6 +220,7 @@ class LicenseService:
                         "max_users": license.max_users,
                         "max_dashboards": license.max_dashboards,
                         "max_data_sources": license.max_data_sources,
+                        "monthly_cost_usd": monthly_cost_usd,
                         "expires_at": license.expires_at.isoformat() if license.expires_at else None,
                         "is_valid": not (license.expires_at and license.expires_at < datetime.utcnow())
                     }

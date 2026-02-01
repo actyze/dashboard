@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
 from pydantic import BaseModel, Field
 import structlog
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_write_access
 from app.services.preference_service import preference_service
 
 logger = structlog.get_logger()
@@ -53,7 +53,7 @@ async def get_user_preferences(current_user: dict = Depends(get_current_user)):
 @router.post("")
 async def add_user_preference(
     preference: PreferenceInput,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_write_access)
 ):
     """Add a new schema/table preference for the current user."""
     try:
@@ -81,7 +81,7 @@ async def add_user_preference(
 @router.delete("/{preference_id}")
 async def delete_user_preference(
     preference_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_write_access)
 ):
     """Delete a schema/table preference."""
     try:
@@ -105,7 +105,7 @@ async def delete_user_preference(
 async def update_preference_boost(
     preference_id: str,
     update: BoostWeightUpdate,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_write_access)
 ):
     """Update the boost weight for a preference."""
     try:

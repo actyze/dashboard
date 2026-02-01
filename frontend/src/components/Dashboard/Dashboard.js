@@ -6,6 +6,7 @@ import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { Button } from '../ui';
 import { useTheme } from '../../contexts/ThemeContext';
+import { usePaywall } from '../../contexts/PaywallContext';
 import SqlTileModal from './SqlTileModal';
 import ShareModal from './ShareModal';
 import { QueryResults } from '../QueryExplorer';
@@ -27,6 +28,7 @@ const Dashboard = ({ isPublic = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isDark } = useTheme();
+  const { wouldExceedLimit, getLimit, isUnlimited, openUpgrade } = usePaywall();
   
   // Dashboard state
   const [dashboard, setDashboard] = useState(null);
@@ -211,6 +213,35 @@ const Dashboard = ({ isPublic = false }) => {
 
   const createNewDashboard = async () => {
     setLoadingDashboard(true);
+    
+    // Check if creating a new dashboard would exceed the license limit
+    try {
+      const dashboardsRes = await DashboardService.getDashboards();
+      const currentDashboardCount = dashboardsRes.success ? (dashboardsRes.dashboards || []).length : 0;
+      
+      if (wouldExceedLimit('dashboards', currentDashboardCount)) {
+        const limit = getLimit('dashboards');
+        const limitText = isUnlimited('dashboards') ? 'Unlimited' : limit;
+        
+        alert(
+          `Cannot create dashboard: Your current plan allows a maximum of ${limitText} dashboards. ` +
+          `You currently have ${currentDashboardCount} dashboards. Please upgrade your plan to add more dashboards.`
+        );
+        
+        if (window.confirm('Would you like to view upgrade options?')) {
+          openUpgrade();
+        }
+        
+        setLoadingDashboard(false);
+        isCreatingRef.current = false;
+        navigate('/home', { replace: true });
+        return;
+      }
+    } catch (err) {
+      console.error('Error checking dashboard limit:', err);
+      // Continue with creation if check fails (fail open)
+    }
+    
     const response = await DashboardService.createDashboard({
       title: 'Untitled Dashboard',
       description: '',

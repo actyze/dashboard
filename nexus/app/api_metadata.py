@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 from app.database import get_db
-from app.auth.dependencies import get_current_user_id, require_viewer
+from app.auth.dependencies import get_current_user_id, require_viewer, require_write_access
 from app.services.metadata_description_service import metadata_description_service
 import structlog
 import httpx
@@ -51,7 +51,7 @@ async def add_description(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     background_tasks: BackgroundTasks = None,
-    current_user: dict = Depends(require_viewer)
+    current_user: dict = Depends(require_write_access)
 ):
     """
     Add or update a metadata description at any hierarchy level.
@@ -105,7 +105,7 @@ async def update_description(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     background_tasks: BackgroundTasks = None,
-    current_user: dict = Depends(require_viewer)
+    current_user: dict = Depends(require_write_access)
 ):
     """
     Update an existing metadata description.
@@ -158,7 +158,7 @@ async def delete_description(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     background_tasks: BackgroundTasks = None,
-    current_user: dict = Depends(require_viewer)
+    current_user: dict = Depends(require_write_access)
 ):
     """
     Delete a metadata description.

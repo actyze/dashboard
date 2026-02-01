@@ -112,8 +112,11 @@ class RoleChecker:
         return user
 
 # Pre-configured dependencies
-# System uses 2 roles: ADMIN (full access) and USER (regular access)
+# System uses 3 roles:
+# - ADMIN: Full access (user management, license management, schema visibility)
+# - USER: Regular access (can create/edit/delete dashboards, upload CSVs, query data)
+# - READONLY: View-only access (can only view data intelligence, no create/edit/delete/upload)
 require_admin = RoleChecker(["ADMIN"])
-require_editor = RoleChecker(["ADMIN", "USER"])  # Both ADMIN and USER can edit
-require_viewer = RoleChecker(["ADMIN", "USER"])  # Both ADMIN and USER can view
+require_editor = RoleChecker(["ADMIN", "USER"])  # READONLY cannot edit
+require_viewer = RoleChecker(["ADMIN", "USER", "READONLY"])  # All can view
 

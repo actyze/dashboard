@@ -157,7 +157,7 @@ async def execute_sql(
             raise HTTPException(
                 status_code=403,
                 detail=f"Access denied to the following tables: {', '.join(access_denied_tables)}. Please contact an administrator to grant you access."
-            )
+        )
     
     # Track execution time and timestamps
     generated_at = datetime.utcnow()

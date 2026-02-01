@@ -36,6 +36,9 @@ typing-extensions==4.8.0
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 
+# Background Tasks & Scheduling
+apscheduler==3.10.4
+
 # File Processing
 pandas==2.1.4
 openpyxl==3.1.2

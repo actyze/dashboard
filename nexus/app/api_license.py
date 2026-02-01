@@ -2,9 +2,10 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
 import structlog
+import httpx
 
 from app.auth.dependencies import get_current_user, require_admin
 from app.services.license_service import LicenseService
@@ -22,6 +23,11 @@ license_service = LicenseService()
 class LicenseActivate(BaseModel):
     """Request model for activating a license."""
     license_key: str = Field(..., description="64-character license key", min_length=64, max_length=64)
+
+
+class LicenseValidateExternal(BaseModel):
+    """Request model for external license validation."""
+    license_key: str = Field(..., description="64-character license key")
 
 
 class LicenseResponse(BaseModel):
@@ -116,6 +122,66 @@ async def validate_license(
         
     except Exception as e:
         logger.error("Failed to validate license", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to validate license: {str(e)}"
+        )
+
+
+@router.post("/validate-external", dependencies=[Depends(require_admin)])
+async def validate_license_external(
+    request: LicenseValidateExternal,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Validate a license key with Actyze.ai (server-to-server).
+    Makes API call to actyze.ai with hardcoded API key (never exposed to frontend).
+    Admin only.
+    """
+    # Actyze's API key - hardcoded, same for all customers (server-side only)
+    ACTYZE_API_KEY = "REDACTED_API_KEY"
+    # Production API URL
+    ACTYZE_API_URL = "https://actyze.ai/api/validate-license"
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                ACTYZE_API_URL,
+                json={
+                    "license_key": request.license_key,
+                    "increment_usage": False
+                },
+                headers={
+                    "Content-Type": "application/json",
+                    "X-API-Key": ACTYZE_API_KEY
+                }
+            )
+            
+            if response.status_code != 200:
+                error_detail = response.json() if response.text else {}
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=error_detail.get("error", f"Validation failed with status {response.status_code}")
+                )
+            
+            return response.json()
+            
+    except httpx.TimeoutException:
+        logger.error("Timeout validating license with Actyze.ai")
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Timeout connecting to Actyze.ai"
+        )
+    except httpx.RequestError as e:
+        logger.error("Network error validating license with Actyze.ai", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to connect to Actyze.ai: {str(e)}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to validate license with Actyze.ai", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to validate license: {str(e)}"

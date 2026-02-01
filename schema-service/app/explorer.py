@@ -3,58 +3,16 @@ Database Explorer API Routes (DBeaver-style hierarchy).
 Provides hierarchical navigation: Databases → Schemas → Objects → Details
 """
 
-import os
 import logging
 from typing import Optional
 from fastapi import APIRouter, HTTPException
-import psycopg2
-from psycopg2.extras import RealDictCursor
 
 router = APIRouter(prefix="/explorer", tags=["Database Explorer"])
 logger = logging.getLogger("explorer")
 
 
-def get_license_limits():
-    """
-    Fetch license limits from the Nexus database.
-    Returns max_data_sources limit or -1 for unlimited.
-    """
-    try:
-        conn = psycopg2.connect(
-            host=os.getenv("POSTGRES_HOST", "dashboard-postgres"),
-            port=int(os.getenv("POSTGRES_PORT", "5432")),
-            database=os.getenv("POSTGRES_DB", "dashboard"),
-            user=os.getenv("POSTGRES_USER", "dashboard_user"),
-            password=os.getenv("POSTGRES_PASSWORD", "")
-        )
-        
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("""
-            SELECT max_data_sources 
-            FROM nexus.tenant_licenses 
-            WHERE status = 'ACTIVE' 
-            ORDER BY last_validated_at DESC 
-            LIMIT 1
-        """)
-        
-        result = cursor.fetchone()
-        cursor.close()
-        conn.close()
-        
-        if result and result['max_data_sources'] is not None:
-            return result['max_data_sources']
-        
-        # Default to 1 if no license found
-        return 1
-        
-    except Exception as e:
-        logger.error(f"Failed to fetch license limits: {e}")
-        # On error, default to unlimited to avoid blocking users
-        return -1
-
-
 def get_databases_list(raw_schema_cache, last_updated):
-    """Get list of all databases with statistics, limited by license."""
+    """Get list of all databases with statistics."""
     databases = {}
     
     for schema_obj in raw_schema_cache:
@@ -78,49 +36,11 @@ def get_databases_list(raw_schema_cache, last_updated):
         )
         databases[db_name]["schema_count"] = len(unique_schemas)
     
-    # Get license limit
-    max_data_sources = get_license_limits()
-    all_databases = list(databases.values())
-    total_available = len(all_databases)
-    
-    # Apply license limit (-1 means unlimited)
-    if max_data_sources > 0:
-        limited_databases = all_databases[:max_data_sources]
-        is_limited = len(all_databases) > max_data_sources
-    else:
-        limited_databases = all_databases
-        is_limited = False
-    
-    response = {
-        "databases": limited_databases,
-        "total_databases": len(limited_databases),
+    return {
+        "databases": list(databases.values()),
+        "total_databases": len(databases),
         "last_updated": last_updated.isoformat() if last_updated else None
     }
-    
-    # Add licensing info
-    if is_limited:
-        response["license_limit"] = {
-            "max_data_sources": max_data_sources,
-            "available_total": total_available,
-            "showing": len(limited_databases),
-            "message": f"License limit: {max_data_sources} of {total_available} databases shown. Upgrade to access more."
-        }
-    elif max_data_sources == -1:
-        response["license_limit"] = {
-            "max_data_sources": -1,
-            "available_total": total_available,
-            "showing": total_available,
-            "message": "Unlimited databases"
-        }
-    else:
-        response["license_limit"] = {
-            "max_data_sources": max_data_sources,
-            "available_total": total_available,
-            "showing": total_available,
-            "message": f"Using {total_available} of {max_data_sources} allowed databases"
-        }
-    
-    return response
 
 
 def get_database_schemas_list(database: str, raw_schema_cache, last_updated):

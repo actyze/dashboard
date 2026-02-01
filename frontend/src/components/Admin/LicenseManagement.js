@@ -14,7 +14,6 @@ const LicenseManagement = () => {
   const { showSuccess, showError, showWarning } = useToast();
   
   const [currentLicense, setCurrentLicense] = useState(null);
-  const [currentPlan, setCurrentPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activating, setActivating] = useState(false);
   const [validating, setValidating] = useState(false);
@@ -29,17 +28,11 @@ const LicenseManagement = () => {
     setLoading(true);
     
     try {
-      const [licenseResp, planResp] = await Promise.all([
-        LicenseService.getCurrentLicense().catch(() => null),
-        LicenseService.getCurrentPlan().catch(() => null)
-      ]);
+      const licenseResp = await LicenseService.getCurrentLicense().catch(() => null);
 
       if (licenseResp?.success) {
         setCurrentLicense(licenseResp.license);
-      }
-
-      if (planResp?.success) {
-        setCurrentPlan(planResp.plan);
+        // Note: monthly_cost_usd is now included in license response
       }
     } catch (error) {
       console.error('Failed to load license data:', error);
@@ -336,14 +329,12 @@ const LicenseManagement = () => {
               </div>
 
               {/* Monthly Cost */}
-              {currentPlan && (
-                <div className={`grid grid-cols-12 gap-4 px-4 py-3 border-t ${isDark ? 'border-[#2a2b2e]' : 'border-gray-100'}`}>
-                  <div className={`col-span-3 text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Monthly Cost</div>
-                  <div className={`col-span-9 text-sm font-semibold ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
-                    {currentPlan.monthly_cost_usd !== undefined ? formatCurrency(currentPlan.monthly_cost_usd) : 'Contact Sales'}
-                  </div>
+              <div className={`grid grid-cols-12 gap-4 px-4 py-3 border-t ${isDark ? 'border-[#2a2b2e]' : 'border-gray-100'}`}>
+                <div className={`col-span-3 text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Monthly Cost</div>
+                <div className={`col-span-9 text-sm font-semibold ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
+                  {currentLicense.monthly_cost_usd !== undefined ? formatCurrency(currentLicense.monthly_cost_usd) : '$NaN'}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         ) : (

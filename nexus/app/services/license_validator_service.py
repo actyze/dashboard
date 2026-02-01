@@ -83,45 +83,75 @@ class LicenseValidatorService:
                 if validation_result.get("valid"):
                     # License is valid
                     license_data = validation_result.get("license", {})
-                    plan_data = validation_result.get("plan", {})
                     
-                    # Update last_validated_at timestamp
+                    # Extract and cache license details from API
+                    max_users = license_data.get("max_users")
+                    max_dashboards = license_data.get("max_dashboards")
+                    max_data_sources = license_data.get("max_data_sources")
+                    monthly_cost_usd = license_data.get("monthly_price_usd", 0)
+                    
+                    # Update license with latest data from API (cached for 6 hours)
+                    update_values = {
+                        "last_validated_at": datetime.utcnow(),
+                        "status": LicenseStatus.ACTIVE
+                    }
+                    
+                    # Only update if values are provided in response
+                    if max_users is not None:
+                        update_values["max_users"] = max_users
+                    if max_dashboards is not None:
+                        update_values["max_dashboards"] = max_dashboards
+                    if max_data_sources is not None:
+                        update_values["max_data_sources"] = max_data_sources
+                    if monthly_cost_usd is not None:
+                        update_values["monthly_cost_usd"] = monthly_cost_usd
+                    
                     await session.execute(
                         update(TenantLicense)
                         .where(TenantLicense.id == license.id)
-                        .values(
-                            last_validated_at=datetime.utcnow(),
-                            status=LicenseStatus.ACTIVE
-                        )
+                        .values(**update_values)
                     )
                     await session.commit()
                     
                     self.logger.info(
                         "License validation successful",
                         license_id=str(license.id),
-                        plan_type=plan_data.get("type"),
+                        plan_type=license.plan_type.value if license.plan_type else None,
                         status=license_data.get("status"),
-                        max_users=plan_data.get("max_users")
+                        max_users=max_users
                     )
                 else:
-                    # License is invalid or expired
+                    # License is invalid, expired, or revoked
                     error = validation_result.get("error", "Unknown error")
+                    error_code = validation_result.get("code", "UNKNOWN")
                     
-                    # Mark as expired
+                    # Determine appropriate status based on error code
+                    if error_code == "EXPIRED_LICENSE":
+                        new_status = LicenseStatus.EXPIRED
+                    elif error_code == "INACTIVE_LICENSE":
+                        # License was revoked or disabled
+                        new_status = LicenseStatus.DISABLED
+                    else:
+                        # Default to EXPIRED for other errors
+                        new_status = LicenseStatus.EXPIRED
+                    
+                    # Update license status
                     await session.execute(
                         update(TenantLicense)
                         .where(TenantLicense.id == license.id)
                         .values(
                             last_validated_at=datetime.utcnow(),
-                            status=LicenseStatus.EXPIRED
+                            status=new_status
                         )
                     )
                     await session.commit()
                     
                     self.logger.error(
-                        "License validation failed - license marked as EXPIRED",
+                        "License validation failed",
                         license_id=str(license.id),
-                        error=error
+                        error=error,
+                        error_code=error_code,
+                        new_status=new_status.value
                     )
                     
         except Exception as e:

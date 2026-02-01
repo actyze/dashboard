@@ -24,15 +24,38 @@ const LicenseManagement = () => {
     loadLicenseData();
   }, []);
 
-  const loadLicenseData = async () => {
+  const loadLicenseData = async (forceRefresh = false) => {
     setLoading(true);
     
     try {
+      // Check cache first (valid for 5 minutes)
+      const cacheKey = 'actyze_license_data';
+      const cacheTimestampKey = 'actyze_license_timestamp';
+      const cacheValidityMs = 5 * 60 * 1000; // 5 minutes
+      
+      if (!forceRefresh) {
+        const cachedData = localStorage.getItem(cacheKey);
+        const cachedTimestamp = localStorage.getItem(cacheTimestampKey);
+        
+        if (cachedData && cachedTimestamp) {
+          const age = Date.now() - parseInt(cachedTimestamp, 10);
+          if (age < cacheValidityMs) {
+            // Use cached data
+            setCurrentLicense(JSON.parse(cachedData));
+            setLoading(false);
+            return;
+          }
+        }
+      }
+      
+      // Fetch fresh data from API
       const licenseResp = await LicenseService.getCurrentLicense().catch(() => null);
 
       if (licenseResp?.success) {
         setCurrentLicense(licenseResp.license);
-        // Note: monthly_cost_usd is now included in license response
+        // Cache the data
+        localStorage.setItem(cacheKey, JSON.stringify(licenseResp.license));
+        localStorage.setItem(cacheTimestampKey, Date.now().toString());
       }
     } catch (error) {
       console.error('Failed to load license data:', error);
@@ -57,7 +80,7 @@ const LicenseManagement = () => {
       showSuccess('License activated successfully!');
       setLicenseKey('');
       setShowActivateForm(false);
-      await loadLicenseData();
+      await loadLicenseData(true); // Force refresh
     } catch (error) {
       console.error('Failed to activate license:', error);
       showError(error.response?.data?.detail || 'Failed to activate license');
@@ -78,7 +101,7 @@ const LicenseManagement = () => {
         showWarning(result.error || 'License validation failed');
       }
 
-      await loadLicenseData();
+      await loadLicenseData(true); // Force refresh
     } catch (error) {
       console.error('Failed to validate license:', error);
       showError('Failed to validate license');

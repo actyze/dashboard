@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import text
 import structlog
 from datetime import datetime
+import httpx
 
 from app.database import (
     db_manager, TenantLicense,
@@ -32,6 +33,7 @@ class LicenseService:
     ) -> Dict[str, Any]:
         """
         Activate a license key (atomically disable any previous active license).
+        If license doesn't exist locally, fetches from marketing dashboard first.
         """
         async with db_manager.get_session() as session:
             try:
@@ -41,11 +43,100 @@ class LicenseService:
                 )
                 new_license = result.scalar_one_or_none()
                 
+                # If license doesn't exist, fetch from marketing dashboard and create it
                 if not new_license:
-                    return {
-                        "success": False,
-                        "error": "Invalid license key"
-                    }
+                    self.logger.info("License not found in database, fetching from marketing dashboard")
+                    
+                    # Fetch from marketing dashboard
+                    ACTYZE_API_KEY = "REDACTED_API_KEY"
+                    ACTYZE_API_URL = "https://app.actyze.ai/api/validate-license"
+                    
+                    try:
+                        async with httpx.AsyncClient(timeout=30.0) as client:
+                            response = await client.post(
+                                ACTYZE_API_URL,
+                                json={
+                                    "license_key": license_key,
+                                    "increment_usage": False
+                                },
+                                headers={
+                                    "Content-Type": "application/json",
+                                    "X-API-Key": ACTYZE_API_KEY
+                                }
+                            )
+                            
+                            if response.status_code != 200:
+                                return {
+                                    "success": False,
+                                    "error": "Invalid license key"
+                                }
+                            
+                            license_data = response.json()
+                            if not license_data.get("success"):
+                                return {
+                                    "success": False,
+                                    "error": license_data.get("error", "License validation failed")
+                                }
+                            
+                            license_info = license_data.get("license", {})
+                            
+                            # Parse datetime values and convert to timezone-naive
+                            issued_at = None
+                            if license_info.get("issued_at"):
+                                issued_at = datetime.fromisoformat(license_info["issued_at"].replace('Z', '+00:00')).replace(tzinfo=None)
+                            else:
+                                issued_at = datetime.utcnow()
+                            
+                            expires_at = None
+                            if license_info.get("expires_at"):
+                                expires_at = datetime.fromisoformat(license_info["expires_at"].replace('Z', '+00:00')).replace(tzinfo=None)
+                            
+                            # Map plan_name to PlanType enum
+                            plan_name = license_info.get("plan_name", "")
+                            plan_type_map = {
+                                "FREE": PlanType.FREE,
+                                "SMALL": PlanType.SMALL,
+                                "MEDIUM": PlanType.MEDIUM,
+                                "LARGE": PlanType.LARGE,
+                                "LARGE ENTERPRISE": PlanType.LARGE_ENTERPRISE,
+                                "MANAGED SERVICE": PlanType.MANAGED_SERVICE
+                            }
+                            plan_type = plan_type_map.get(plan_name, PlanType.FREE)
+                            
+                            # Create new license record
+                            new_license = TenantLicense(
+                                license_key=license_key,
+                                status=LicenseStatus.PENDING,  # Will be activated below
+                                plan_type=plan_type,
+                                max_users=license_info.get("max_users"),
+                                max_dashboards=license_info.get("max_dashboards"),
+                                max_data_sources=license_info.get("max_data_sources"),
+                                monthly_cost_usd=license_data.get("license", {}).get("monthly_price_usd"),
+                                issued_at=issued_at,
+                                expires_at=expires_at,
+                                last_validated_at=datetime.utcnow()
+                            )
+                            
+                            session.add(new_license)
+                            await session.flush()  # Get the ID
+                            
+                            self.logger.info(
+                                "New license fetched and created",
+                                license_id=str(new_license.id),
+                                plan_type=plan_type.value
+                            )
+                            
+                    except httpx.TimeoutException:
+                        return {
+                            "success": False,
+                            "error": "License validation service timeout"
+                        }
+                    except Exception as e:
+                        self.logger.error("Failed to fetch license from marketing dashboard", error=str(e))
+                        return {
+                            "success": False,
+                            "error": f"Failed to validate license: {str(e)}"
+                        }
                 
                 # Check if already active
                 if new_license.status == LicenseStatus.ACTIVE:
@@ -128,40 +219,65 @@ class LicenseService:
     async def validate_license(self, force: bool = False) -> Dict[str, Any]:
         """
         Validate the current license and refresh its details.
+        If force=True, calls marketing dashboard API to get latest status.
         """
+        # Import here to avoid circular dependency
+        from app.services.license_validator_service import license_validator_service
+        
+        # If force is True, trigger full validation with marketing dashboard API
+        if force:
+            self.logger.info("Force validation requested - calling marketing dashboard API")
+            await license_validator_service.validate_active_license()
+        
         async with db_manager.get_session() as session:
             try:
-                # Get active license
+                # Get the active license (force validation may have just updated its status)
                 result = await session.execute(
                     select(TenantLicense)
                     .where(TenantLicense.status == LicenseStatus.ACTIVE)
+                    .order_by(TenantLicense.last_validated_at.desc())
+                    .limit(1)
                 )
                 license = result.scalar_one_or_none()
                 
                 if not license:
-                    return {
-                        "success": False,
-                        "error": "No active license found"
-                    }
+                    # No active license found - check if there's a disabled/expired one to show
+                    result = await session.execute(
+                        select(TenantLicense)
+                        .order_by(TenantLicense.last_validated_at.desc())
+                        .limit(1)
+                    )
+                    license = result.scalar_one_or_none()
+                    
+                    if not license:
+                        return {
+                            "success": False,
+                            "error": "No license found"
+                        }
                 
-                # Check if expired
-                is_valid = True
-                validation_message = "License is valid"
+                # Determine validity based on status
+                is_valid = license.status == LicenseStatus.ACTIVE
                 
-                if license.expires_at and license.expires_at < datetime.utcnow():
+                if license.status == LicenseStatus.DISABLED:
+                    validation_message = "License has been revoked or disabled"
+                elif license.status == LicenseStatus.EXPIRED:
+                    validation_message = "License has expired"
+                elif license.expires_at and license.expires_at < datetime.utcnow():
                     is_valid = False
                     validation_message = "License has expired"
-                    # Mark as expired
-                    license.status = LicenseStatus.EXPIRED
-                
-                # Update last validated timestamp
-                license.last_validated_at = datetime.utcnow()
-                await session.commit()
+                    # Don't change status here if force validation was done
+                    if not force:
+                        license.status = LicenseStatus.EXPIRED
+                        await session.commit()
+                else:
+                    validation_message = "License is valid"
                 
                 self.logger.info(
                     "License validated",
                     license_id=str(license.id),
-                    is_valid=is_valid
+                    is_valid=is_valid,
+                    status=license.status.value,
+                    forced=force
                 )
                 
                 return {
@@ -249,6 +365,7 @@ class LicenseService:
             "max_users": license.max_users,
             "max_dashboards": license.max_dashboards,
             "max_data_sources": license.max_data_sources,
+            "monthly_cost_usd": float(license.monthly_cost_usd) if license.monthly_cost_usd is not None else 0,
             "issued_at": license.issued_at.isoformat() if license.issued_at else None,
             "expires_at": license.expires_at.isoformat() if license.expires_at else None,
             "last_validated_at": license.last_validated_at.isoformat() if license.last_validated_at else None,

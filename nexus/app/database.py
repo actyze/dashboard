@@ -14,6 +14,12 @@ from app.config import settings
 logger = structlog.get_logger()
 
 
+class UserState(str, enum.Enum):
+    """User state enum."""
+    ENABLED = "ENABLED"
+    DISABLED = "DISABLED"
+
+
 class Base(DeclarativeBase):
     """Base class for all database models."""
     # Use nexus schema for all Nexus service tables
@@ -30,7 +36,11 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[Optional[str]] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    user_state: Mapped[str] = mapped_column(String(20), default='ENABLED', index=True)  # ENABLED or DISABLED
+    user_state: Mapped[UserState] = mapped_column(
+        SQLEnum(UserState, name='user_state', schema='nexus', create_type=False),
+        default=UserState.ENABLED,
+        index=True
+    )
     disabled_reason: Mapped[Optional[str]] = mapped_column(String(500))
     disabled_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -240,6 +250,7 @@ class TenantLicense(Base):
     max_users: Mapped[Optional[int]] = mapped_column(Integer)  # Maximum users allowed
     max_dashboards: Mapped[Optional[int]] = mapped_column(Integer)  # Maximum dashboards allowed
     max_data_sources: Mapped[Optional[int]] = mapped_column(Integer)  # Maximum data sources allowed
+    monthly_cost_usd: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), default=0)  # Monthly cost cached from API
     
     issued_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime)  # NULL = perpetual

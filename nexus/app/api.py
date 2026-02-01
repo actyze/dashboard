@@ -8,7 +8,7 @@ from app.services.orchestration_service import orchestration_service
 from app.services.user_service import UserService
 from app.services.schema_service import SchemaService
 from app.services.dashboard_service import dashboard_service
-from app.auth.dependencies import get_current_user, require_viewer, require_editor, require_admin
+from app.auth.dependencies import get_current_user, require_viewer, require_editor, require_admin, require_write_access
 from app.database import get_db
 
 router = APIRouter(prefix="/api", tags=["REST API"])
@@ -250,7 +250,7 @@ class UpdateQueryRequest(BaseModel):
 @router.post("/query-history/save")
 async def save_query(
     request: SaveQueryRequest,
-    current_user: dict = Depends(require_viewer)
+    current_user: dict = Depends(require_write_access)
 ):
     """Save a new query - explicit user action (Save As New button)."""
     user_id = current_user.get("id")
@@ -272,7 +272,7 @@ async def save_query(
 async def update_query_by_id(
     query_id: int,
     request: UpdateQueryRequest,
-    current_user: dict = Depends(require_viewer)
+    current_user: dict = Depends(require_write_access)
 ):
     """Update an existing query - explicit user action (Save button)."""
     user_id = current_user.get("id")
@@ -296,7 +296,7 @@ async def update_query_by_id(
 @router.delete("/query-history/{query_id}")
 async def delete_query_by_id(
     query_id: int,
-    current_user: dict = Depends(require_viewer)
+    current_user: dict = Depends(require_write_access)
 ):
     """Delete a saved query."""
     user_id = current_user.get("id")
@@ -515,7 +515,7 @@ async def get_dashboard(
 @dashboard_router.post("")
 async def create_dashboard(
     request: CreateDashboardRequest,
-    current_user: dict = Depends(require_viewer)
+    current_user: dict = Depends(require_write_access)
 ):
     """Create new dashboard."""
     try:
@@ -541,7 +541,7 @@ async def create_dashboard(
 async def update_dashboard(
     dashboard_id: str,
     request: UpdateDashboardRequest,
-    current_user: dict = Depends(require_viewer)
+    current_user: dict = Depends(require_write_access)
 ):
     """Update dashboard (requires edit permission). Returns updated dashboard."""
     try:
@@ -580,7 +580,7 @@ async def update_dashboard(
 @dashboard_router.delete("/{dashboard_id}")
 async def delete_dashboard(
     dashboard_id: str,
-    current_user: dict = Depends(require_viewer)
+    current_user: dict = Depends(require_write_access)
 ):
     """Delete dashboard (requires delete permission)."""
     try:
@@ -654,7 +654,7 @@ async def get_tile(
 async def create_tile(
     dashboard_id: str,
     request: CreateTileRequest,
-    current_user: dict = Depends(require_viewer)
+    current_user: dict = Depends(require_write_access)
 ):
     """Create new tile in dashboard (requires edit permission)."""
     try:
@@ -689,7 +689,7 @@ async def update_tile(
     dashboard_id: str,
     tile_id: str,
     request: UpdateTileRequest,
-    current_user: dict = Depends(require_viewer)
+    current_user: dict = Depends(require_write_access)
 ):
     """Update tile (requires edit permission on dashboard). Returns updated tile."""
     try:

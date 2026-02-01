@@ -125,14 +125,16 @@ export const usePaywall = () => {
 export const PaywallProvider = ({ children }) => {
   const { user, loading: authLoading } = useAuth();
   const [currentPlan, setCurrentPlan] = useState(null);
+  const [licenseLimits, setLicenseLimits] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch current plan only when user is authenticated
+  // Fetch current license only when user is authenticated
   const fetchPlan = useCallback(async () => {
     // Don't fetch if not authenticated
     if (!user) {
       setCurrentPlan({ plan_type: 'FREE' });
+      setLicenseLimits({ max_users: 1, max_dashboards: 1, max_data_sources: 1 });
       setLoading(false);
       return;
     }
@@ -140,18 +142,30 @@ export const PaywallProvider = ({ children }) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await LicenseService.getCurrentPlan();
-      if (response?.success && response?.plan) {
-        setCurrentPlan(response.plan);
+      // Fetch license which now includes plan_type AND limits
+      const response = await LicenseService.getCurrentLicense();
+      if (response?.success && response?.license) {
+        const license = response.license;
+        setCurrentPlan({ 
+          plan_type: license.plan_type,
+          monthly_cost_usd: license.monthly_cost_usd 
+        });
+        setLicenseLimits({
+          max_users: license.max_users,
+          max_dashboards: license.max_dashboards,
+          max_data_sources: license.max_data_sources
+        });
       } else {
         // Default to FREE if no plan found
         setCurrentPlan({ plan_type: 'FREE' });
+        setLicenseLimits({ max_users: 1, max_dashboards: 1, max_data_sources: 1 });
       }
     } catch (err) {
-      console.error('Failed to fetch plan:', err);
+      console.error('Failed to fetch license:', err);
       setError(err);
       // Default to FREE on error
       setCurrentPlan({ plan_type: 'FREE' });
+      setLicenseLimits({ max_users: 1, max_dashboards: 1, max_data_sources: 1 });
     } finally {
       setLoading(false);
     }
@@ -212,8 +226,53 @@ export const PaywallProvider = ({ children }) => {
     window.open('https://actyze.ai/pricing', '_blank');
   }, []);
 
+  /**
+   * Check if a limit would be exceeded
+   * @param {string} limitType - 'users', 'dashboards', or 'data_sources'
+   * @param {number} currentCount - Current usage count
+   * @returns {boolean} - Whether the limit would be exceeded
+   */
+  const wouldExceedLimit = useCallback((limitType, currentCount) => {
+    if (!licenseLimits) return false;
+    
+    const limitKey = `max_${limitType}`;
+    const limit = licenseLimits[limitKey];
+    
+    // -1 or null means unlimited
+    if (limit === -1 || limit === null) return false;
+    
+    return currentCount >= limit;
+  }, [licenseLimits]);
+
+  /**
+   * Get the limit for a specific resource type
+   * @param {string} limitType - 'users', 'dashboards', or 'data_sources'
+   * @returns {number} - The limit (-1 = unlimited, null = unlimited)
+   */
+  const getLimit = useCallback((limitType) => {
+    if (!licenseLimits) return 1; // Default to 1 if not loaded
+    
+    const limitKey = `max_${limitType}`;
+    return licenseLimits[limitKey] || 1;
+  }, [licenseLimits]);
+
+  /**
+   * Check if a specific limit is unlimited
+   * @param {string} limitType - 'users', 'dashboards', or 'data_sources'
+   * @returns {boolean} - Whether the limit is unlimited
+   */
+  const isUnlimited = useCallback((limitType) => {
+    if (!licenseLimits) return false;
+    
+    const limitKey = `max_${limitType}`;
+    const limit = licenseLimits[limitKey];
+    
+    return limit === -1 || limit === null;
+  }, [licenseLimits]);
+
   const value = {
     currentPlan,
+    licenseLimits,
     loading,
     error,
     isFeatureEnabled,
@@ -221,6 +280,9 @@ export const PaywallProvider = ({ children }) => {
     getFeatureName,
     refreshPlan,
     openUpgrade,
+    wouldExceedLimit,
+    getLimit,
+    isUnlimited,
     planFeatures: PLAN_FEATURES,
     featureNames: FEATURE_NAMES,
     featureRequirements: FEATURE_REQUIREMENTS,

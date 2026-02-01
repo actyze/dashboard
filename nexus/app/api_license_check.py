@@ -175,14 +175,16 @@ async def add_initial_license(
         
         # Map plan name to PlanType enum
         plan_type_mapping = {
-            "Free": PlanType.FREE,
-            "Small": PlanType.SMALL,
-            "Medium": PlanType.MEDIUM,
-            "Large Enterprise": PlanType.LARGE_ENTERPRISE,
-            "Managed Service": PlanType.MANAGED_SERVICE
+            "FREE": PlanType.FREE,
+            "SMALL": PlanType.SMALL,
+            "MEDIUM": PlanType.MEDIUM,
+            "LARGE": PlanType.LARGE_ENTERPRISE,
+            "LARGE ENTERPRISE": PlanType.LARGE_ENTERPRISE,
+            "MANAGED SERVICE": PlanType.MANAGED_SERVICE
         }
         
-        plan_type = plan_type_mapping.get(plan_name, PlanType.FREE)
+        # Normalize plan_name to uppercase for case-insensitive matching
+        plan_type = plan_type_mapping.get(plan_name.upper() if plan_name else "", PlanType.FREE)
         
         # Extract license limits from license data (not from plan)
         license_info = license_data.get("license", {})

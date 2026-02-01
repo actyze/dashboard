@@ -291,7 +291,23 @@ const LicenseManagement = () => {
               <div className={`grid grid-cols-12 gap-4 px-4 py-3 border-t ${isDark ? 'border-[#2a2b2e]' : 'border-gray-100'}`}>
                 <div className={`col-span-3 text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Max Users</div>
                 <div className={`col-span-9 text-sm font-semibold ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
-                  {currentLicense.max_users || 'Unlimited'}
+                  {currentLicense.max_users === -1 || currentLicense.max_users === null ? 'Unlimited' : currentLicense.max_users}
+                </div>
+              </div>
+
+              {/* Max Dashboards */}
+              <div className={`grid grid-cols-12 gap-4 px-4 py-3 border-t ${isDark ? 'border-[#2a2b2e]' : 'border-gray-100'}`}>
+                <div className={`col-span-3 text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Max Dashboards</div>
+                <div className={`col-span-9 text-sm font-semibold ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
+                  {currentLicense.max_dashboards === -1 || currentLicense.max_dashboards === null ? 'Unlimited' : currentLicense.max_dashboards}
+                </div>
+              </div>
+
+              {/* Max Data Sources */}
+              <div className={`grid grid-cols-12 gap-4 px-4 py-3 border-t ${isDark ? 'border-[#2a2b2e]' : 'border-gray-100'}`}>
+                <div className={`col-span-3 text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Max Data Sources</div>
+                <div className={`col-span-9 text-sm font-semibold ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
+                  {currentLicense.max_data_sources === -1 || currentLicense.max_data_sources === null ? 'Unlimited' : currentLicense.max_data_sources}
                 </div>
               </div>
 
@@ -324,7 +340,7 @@ const LicenseManagement = () => {
                 <div className={`grid grid-cols-12 gap-4 px-4 py-3 border-t ${isDark ? 'border-[#2a2b2e]' : 'border-gray-100'}`}>
                   <div className={`col-span-3 text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Monthly Cost</div>
                   <div className={`col-span-9 text-sm font-semibold ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
-                    {formatCurrency(currentPlan.monthly_cost_usd)}
+                    {currentPlan.monthly_cost_usd !== undefined ? formatCurrency(currentPlan.monthly_cost_usd) : 'Contact Sales'}
                   </div>
                 </div>
               )}

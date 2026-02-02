@@ -1,6 +1,6 @@
 /**
  * Paywall Context
- * Manages feature access based on the current license/plan
+ * Manages resource limits based on the current license/plan
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
@@ -9,109 +9,18 @@ import { useAuth } from './AuthContext';
 
 const PaywallContext = createContext();
 
-// Feature definitions by plan type
-// Features are unlocked cumulatively - higher plans include all lower plan features
-const PLAN_FEATURES = {
-  FREE: [
-    'basic_queries',
-    'view_results',
-  ],
-  SMALL: [
-    'basic_queries',
-    'view_results',
-    'save_queries',
-    'export_csv',
-    'query_history',
-  ],
-  MEDIUM: [
-    'basic_queries',
-    'view_results',
-    'save_queries',
-    'export_csv',
-    'query_history',
-    'advanced_analytics',
-    'custom_dashboards',
-    'data_intelligence',
-    'scheduled_queries',
-  ],
-  LARGE_ENTERPRISE: [
-    'basic_queries',
-    'view_results',
-    'save_queries',
-    'export_csv',
-    'query_history',
-    'advanced_analytics',
-    'custom_dashboards',
-    'data_intelligence',
-    'scheduled_queries',
-    'api_access',
-    'team_collaboration',
-    'audit_logs',
-    'sso_integration',
-    'priority_support',
-  ],
-  MANAGED_SERVICE: [
-    // All features unlocked
-    'basic_queries',
-    'view_results',
-    'save_queries',
-    'export_csv',
-    'query_history',
-    'advanced_analytics',
-    'custom_dashboards',
-    'data_intelligence',
-    'scheduled_queries',
-    'api_access',
-    'team_collaboration',
-    'audit_logs',
-    'sso_integration',
-    'priority_support',
-    'unlimited_queries',
-    'dedicated_support',
-    'custom_integrations',
-  ],
+// Map resource type to backend field name
+const LIMIT_FIELDS = {
+  user: 'max_users',
+  dashboard: 'max_dashboards',
+  data_source: 'max_data_sources',
 };
 
-// Feature display names for UI
-export const FEATURE_NAMES = {
-  basic_queries: 'Basic Queries',
-  view_results: 'View Results',
-  save_queries: 'Save Queries',
-  export_csv: 'Export to CSV',
-  query_history: 'Query History',
-  advanced_analytics: 'Advanced Analytics',
-  custom_dashboards: 'Custom Dashboards',
-  data_intelligence: 'Data Intelligence',
-  scheduled_queries: 'Scheduled Queries',
-  api_access: 'API Access',
-  team_collaboration: 'Team Collaboration',
-  audit_logs: 'Audit Logs',
-  sso_integration: 'SSO Integration',
-  priority_support: 'Priority Support',
-  unlimited_queries: 'Unlimited Queries',
-  dedicated_support: 'Dedicated Support',
-  custom_integrations: 'Custom Integrations',
-};
-
-// Minimum plan required for each feature
-export const FEATURE_REQUIREMENTS = {
-  basic_queries: 'FREE',
-  view_results: 'FREE',
-  save_queries: 'SMALL',
-  export_csv: 'SMALL',
-  query_history: 'SMALL',
-  advanced_analytics: 'MEDIUM',
-  custom_dashboards: 'MEDIUM',
-  data_intelligence: 'MEDIUM',
-  scheduled_queries: 'MEDIUM',
-  api_access: 'LARGE_ENTERPRISE',
-  team_collaboration: 'LARGE_ENTERPRISE',
-  audit_logs: 'LARGE_ENTERPRISE',
-  sso_integration: 'LARGE_ENTERPRISE',
-  priority_support: 'LARGE_ENTERPRISE',
-  unlimited_queries: 'MANAGED_SERVICE',
-  dedicated_support: 'MANAGED_SERVICE',
-  custom_integrations: 'MANAGED_SERVICE',
+// Display names for resource types
+const TYPE_DISPLAY_NAMES = {
+  user: 'User',
+  dashboard: 'Dashboard',
+  data_source: 'Data Source',
 };
 
 export const usePaywall = () => {
@@ -125,16 +34,14 @@ export const usePaywall = () => {
 export const PaywallProvider = ({ children }) => {
   const { user, loading: authLoading } = useAuth();
   const [currentPlan, setCurrentPlan] = useState(null);
-  const [licenseLimits, setLicenseLimits] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch current license only when user is authenticated
+  // Fetch current plan only when user is authenticated
   const fetchPlan = useCallback(async () => {
     // Don't fetch if not authenticated
     if (!user) {
-      setCurrentPlan({ plan_type: 'FREE' });
-      setLicenseLimits({ max_users: 1, max_dashboards: 1, max_data_sources: 1 });
+      setCurrentPlan({ plan_type: 'FREE', max_users: 1, max_dashboards: 1, max_data_sources: 1 });
       setLoading(false);
       return;
     }
@@ -142,30 +49,18 @@ export const PaywallProvider = ({ children }) => {
     try {
       setLoading(true);
       setError(null);
-      // Fetch license which now includes plan_type AND limits
-      const response = await LicenseService.getCurrentLicense();
-      if (response?.success && response?.license) {
-        const license = response.license;
-        setCurrentPlan({ 
-          plan_type: license.plan_type,
-          monthly_cost_usd: license.monthly_cost_usd 
-        });
-        setLicenseLimits({
-          max_users: license.max_users,
-          max_dashboards: license.max_dashboards,
-          max_data_sources: license.max_data_sources
-        });
+      const response = await LicenseService.getCurrentPlan();
+      if (response?.success && response?.plan) {
+        setCurrentPlan(response.plan);
       } else {
-        // Default to FREE if no plan found
-        setCurrentPlan({ plan_type: 'FREE' });
-        setLicenseLimits({ max_users: 1, max_dashboards: 1, max_data_sources: 1 });
+        // Default to FREE with minimal limits if no plan found
+        setCurrentPlan({ plan_type: 'FREE', max_users: 1, max_dashboards: 1, max_data_sources: 1 });
       }
     } catch (err) {
-      console.error('Failed to fetch license:', err);
+      console.error('Failed to fetch plan:', err);
       setError(err);
-      // Default to FREE on error
-      setCurrentPlan({ plan_type: 'FREE' });
-      setLicenseLimits({ max_users: 1, max_dashboards: 1, max_data_sources: 1 });
+      // Default to FREE with minimal limits on error
+      setCurrentPlan({ plan_type: 'FREE', max_users: 1, max_dashboards: 1, max_data_sources: 1 });
     } finally {
       setLoading(false);
     }
@@ -181,35 +76,50 @@ export const PaywallProvider = ({ children }) => {
   }, [fetchPlan, authLoading]);
 
   /**
-   * Check if a feature is enabled for the current plan
-   * @param {string} featureKey - The feature key to check
-   * @returns {boolean} - Whether the feature is enabled
+   * Get the limit for a specific resource type
+   * @param {string} type - The resource type (user, dashboard, data_source)
+   * @returns {number|null} - The limit, or null if unlimited
    */
-  const isFeatureEnabled = useCallback((featureKey) => {
-    if (loading || !currentPlan) return false;
-    
-    const planType = currentPlan.plan_type || 'FREE';
-    const planFeatures = PLAN_FEATURES[planType] || PLAN_FEATURES.FREE;
-    
-    return planFeatures.includes(featureKey);
-  }, [currentPlan, loading]);
+  const getLimit = useCallback((type) => {
+    if (!currentPlan) return null;
+    const field = LIMIT_FIELDS[type];
+    return field ? currentPlan[field] : null;
+  }, [currentPlan]);
 
   /**
-   * Get the minimum required plan for a feature
-   * @param {string} featureKey - The feature key
-   * @returns {string} - The minimum plan type required
+   * Check if the current count is within the limit for a resource type
+   * @param {string} type - The resource type (user, dashboard, data_source)
+   * @param {number} currentCount - The current count of resources
+   * @returns {Object} - { allowed, limit, current, remaining }
    */
-  const getRequiredPlan = useCallback((featureKey) => {
-    return FEATURE_REQUIREMENTS[featureKey] || 'MANAGED_SERVICE';
-  }, []);
+  const checkLimit = useCallback((type, currentCount) => {
+    const limit = getLimit(type);
+    
+    // If no limit defined or null, allow unlimited
+    if (limit === null || limit === undefined) {
+      return { 
+        allowed: true, 
+        limit: null, 
+        current: currentCount,
+        remaining: Infinity
+      };
+    }
+    
+    return {
+      allowed: currentCount < limit,
+      limit,
+      current: currentCount,
+      remaining: Math.max(0, limit - currentCount)
+    };
+  }, [getLimit]);
 
   /**
-   * Get human-readable feature name
-   * @param {string} featureKey - The feature key
+   * Get the display name for a resource type
+   * @param {string} type - The resource type
    * @returns {string} - Human-readable name
    */
-  const getFeatureName = useCallback((featureKey) => {
-    return FEATURE_NAMES[featureKey] || featureKey;
+  const getTypeName = useCallback((type) => {
+    return TYPE_DISPLAY_NAMES[type] || type;
   }, []);
 
   /**
@@ -223,69 +133,29 @@ export const PaywallProvider = ({ children }) => {
    * Open the upgrade page
    */
   const openUpgrade = useCallback(() => {
-    window.open('https://actyze.ai/pricing', '_blank');
+    window.open('https://actyze.ai/#pricing', '_blank');
   }, []);
 
   /**
-   * Check if a limit would be exceeded
-   * @param {string} limitType - 'users', 'dashboards', or 'data_sources'
-   * @param {number} currentCount - Current usage count
-   * @returns {boolean} - Whether the limit would be exceeded
+   * Check if the license is valid
+   * @returns {boolean} - Whether the license is valid
    */
-  const wouldExceedLimit = useCallback((limitType, currentCount) => {
-    if (!licenseLimits) return false;
-    
-    const limitKey = `max_${limitType}`;
-    const limit = licenseLimits[limitKey];
-    
-    // -1 or null means unlimited
-    if (limit === -1 || limit === null) return false;
-    
-    return currentCount >= limit;
-  }, [licenseLimits]);
-
-  /**
-   * Get the limit for a specific resource type
-   * @param {string} limitType - 'users', 'dashboards', or 'data_sources'
-   * @returns {number} - The limit (-1 = unlimited, null = unlimited)
-   */
-  const getLimit = useCallback((limitType) => {
-    if (!licenseLimits) return 1; // Default to 1 if not loaded
-    
-    const limitKey = `max_${limitType}`;
-    return licenseLimits[limitKey] || 1;
-  }, [licenseLimits]);
-
-  /**
-   * Check if a specific limit is unlimited
-   * @param {string} limitType - 'users', 'dashboards', or 'data_sources'
-   * @returns {boolean} - Whether the limit is unlimited
-   */
-  const isUnlimited = useCallback((limitType) => {
-    if (!licenseLimits) return false;
-    
-    const limitKey = `max_${limitType}`;
-    const limit = licenseLimits[limitKey];
-    
-    return limit === -1 || limit === null;
-  }, [licenseLimits]);
+  const isLicenseValid = useCallback(() => {
+    return currentPlan?.is_valid ?? false;
+  }, [currentPlan]);
 
   const value = {
     currentPlan,
-    licenseLimits,
     loading,
     error,
-    isFeatureEnabled,
-    getRequiredPlan,
-    getFeatureName,
+    getLimit,
+    checkLimit,
+    getTypeName,
     refreshPlan,
     openUpgrade,
-    wouldExceedLimit,
-    getLimit,
-    isUnlimited,
-    planFeatures: PLAN_FEATURES,
-    featureNames: FEATURE_NAMES,
-    featureRequirements: FEATURE_REQUIREMENTS,
+    isLicenseValid,
+    limitFields: LIMIT_FIELDS,
+    typeDisplayNames: TYPE_DISPLAY_NAMES,
   };
 
   return (

@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useTheme } from '../../contexts/ThemeContext';
-import { usePaywall } from '../../contexts/PaywallContext';
 import { QueryManagementService, DashboardService } from '../../services';
 import { getQueryDisplayTitle } from '../../utils/queryTitleGenerator';
+import Paywall from '../Common/Paywall';
 
 const Home = () => {
   const { isDark } = useTheme();
   const navigate = useNavigate();
-  const { wouldExceedLimit, getLimit, isUnlimited, openUpgrade } = usePaywall();
   
   const [recentQueries, setRecentQueries] = useState([]);
   const [recentDashboards, setRecentDashboards] = useState([]);
@@ -43,29 +42,6 @@ const Home = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleCreateNewDashboard = () => {
-    // Check if creating a new dashboard would exceed the license limit
-    const currentDashboardCount = recentDashboards.length;
-    
-    if (wouldExceedLimit('dashboards', currentDashboardCount)) {
-      const limit = getLimit('dashboards');
-      const limitText = isUnlimited('dashboards') ? 'Unlimited' : limit;
-      
-      alert(
-        `Cannot create dashboard: Your current plan allows a maximum of ${limitText} dashboards. ` +
-        `You currently have ${currentDashboardCount} dashboards. Please upgrade your plan to add more dashboards.`
-      );
-      
-      if (window.confirm('Would you like to view upgrade options?')) {
-        openUpgrade();
-      }
-      return;
-    }
-    
-    // Proceed with navigation if limit not exceeded
-    navigate('/dashboard/new');
   };
 
   const formatDate = (dateString) => {
@@ -149,33 +125,35 @@ const Home = () => {
             </div>
           </button>
           
-          <button
-            onClick={handleCreateNewDashboard}
-            className={`group relative p-5 rounded-xl text-left transition-all duration-200 overflow-hidden ${
-              isDark 
-                ? 'bg-[#1c1d1f] border border-[#2a2b2e] hover:border-[#3a3b3e]' 
-                : 'bg-white border border-gray-200 hover:border-gray-300'
-            }`}
-          >
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${
-              isDark ? 'bg-[#2a2b2e]' : 'bg-gray-100'
-            }`}>
-              <svg className={`w-5 h-5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 12a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1v-7z" />
-              </svg>
-            </div>
-            <div className={`text-sm font-medium mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              New Dashboard
-            </div>
-            <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-              Create visualizations and charts
-            </p>
-            <div className="absolute top-4 right-4">
-              <svg className={`w-4 h-4 transition-transform group-hover:translate-x-0.5 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
-          </button>
+          <Paywall type="dashboard" currentCount={recentDashboards.length} mode="disable">
+            <button
+              onClick={() => navigate('/dashboard/new')}
+              className={`group relative p-5 rounded-xl text-left transition-all duration-200 overflow-hidden w-full ${
+                isDark 
+                  ? 'bg-[#1c1d1f] border border-[#2a2b2e] hover:border-[#3a3b3e]' 
+                  : 'bg-white border border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${
+                isDark ? 'bg-[#2a2b2e]' : 'bg-gray-100'
+              }`}>
+                <svg className={`w-5 h-5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 12a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1v-7z" />
+                </svg>
+              </div>
+              <div className={`text-sm font-medium mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                New Dashboard
+              </div>
+              <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                Create visualizations and charts
+              </p>
+              <div className="absolute top-4 right-4">
+                <svg className={`w-4 h-4 transition-transform group-hover:translate-x-0.5 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </button>
+          </Paywall>
         </div>
 
         {/* Tabs */}

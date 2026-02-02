@@ -3,16 +3,34 @@
  * Users and License Management
  */
 
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import UsersManagement from './UsersManagement';
 import LicenseManagement from './LicenseManagement';
+import AdminService from '../../services/AdminService';
+import Paywall from '../Common/Paywall';
 
 function Admin() {
   const { isDark } = useTheme();
   const location = useLocation();
   const usersRef = useRef(null);
+  const [userCount, setUserCount] = useState(0);
+
+  // Fetch user count for paywall
+  useEffect(() => {
+    const fetchUserCount = async () => {
+      try {
+        const response = await AdminService.listUsers();
+        if (response.success) {
+          setUserCount(response.users?.length || 0);
+        }
+      } catch (err) {
+        console.error('Failed to fetch user count:', err);
+      }
+    };
+    fetchUserCount();
+  }, []);
 
   const tabs = [
     { name: 'Users', href: '/admin', icon: 'users' },
@@ -50,19 +68,21 @@ function Admin() {
             Admin Panel
           </h1>
           {location.pathname === '/admin' && (
-            <button
-              onClick={() => usersRef.current?.openCreateDialog()}
-              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded transition-colors ${
-                isDark 
-                  ? 'text-gray-300 hover:bg-[#1c1d1f]' 
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Create User
-            </button>
+            <Paywall type="user" currentCount={userCount} mode="disable">
+              <button
+                onClick={() => usersRef.current?.openCreateDialog()}
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+                  isDark 
+                    ? 'text-gray-300 hover:bg-[#1c1d1f]' 
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Create User
+              </button>
+            </Paywall>
           )}
         </div>
         

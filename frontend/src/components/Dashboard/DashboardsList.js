@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { DashboardService } from '../../services';
 import { formatDistanceToNowStrict, parseISO } from 'date-fns';
+import Paywall from '../Common/Paywall';
 
 const DashboardsList = () => {
   const { isDark } = useTheme();
@@ -223,19 +224,21 @@ const DashboardsList = () => {
           )}
         </div>
         
-        <button
-          onClick={() => navigate('/dashboard/new')}
-          className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded transition-colors ${
-            isDark 
-              ? 'text-gray-300 hover:bg-[#1c1d1f]' 
-              : 'text-gray-700 hover:bg-gray-100'
-          }`}
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          New dashboard
-        </button>
+        <Paywall type="dashboard" currentCount={dashboards.length} mode="disable">
+          <button
+            onClick={() => navigate('/dashboard/new')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+              isDark 
+                ? 'text-gray-300 hover:bg-[#1c1d1f]' 
+                : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New dashboard
+          </button>
+        </Paywall>
       </div>
 
       {/* Table */}
@@ -299,12 +302,14 @@ const DashboardsList = () => {
             <p className={`text-xs mb-1 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
               No dashboards yet
             </p>
-            <button
-              onClick={() => navigate('/dashboard/new')}
-              className="text-[#5d6ad3] hover:text-[#4f5bc4] text-xs mt-1"
-            >
-              Create your first dashboard
-            </button>
+            <Paywall type="dashboard" currentCount={0} mode="disable">
+              <button
+                onClick={() => navigate('/dashboard/new')}
+                className="text-[#5d6ad3] hover:text-[#4f5bc4] text-xs mt-1"
+              >
+                Create your first dashboard
+              </button>
+            </Paywall>
           </div>
         ) : sortedDashboards.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">

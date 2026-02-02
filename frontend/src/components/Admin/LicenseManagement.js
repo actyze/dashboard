@@ -111,7 +111,7 @@ const LicenseManagement = () => {
   };
 
   const handleUpgrade = () => {
-    window.open('https://actyze.ai/pricing', '_blank');
+    window.open('https://actyze.ai/#pricing', '_blank');
   };
 
   const formatDate = (dateString) => {

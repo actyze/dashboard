@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router';
 import { Layout, ToastContainer } from './components/Common';
 import { LoginPage, Signup } from './components/Auth';
@@ -10,70 +10,7 @@ import { DataIntelligence } from './components/DataIntelligence';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { PaywallProvider } from './contexts/PaywallContext';
-import LicenseCheckDialog from './components/Common/LicenseCheckDialog';
-import axios from 'axios';
-
-// License Check Wrapper - Runs BEFORE authentication
-const LicenseCheckWrapper = ({ children }) => {
-  const [checkingLicense, setCheckingLicense] = useState(true);
-  const [showLicenseDialog, setShowLicenseDialog] = useState(false);
-  const [hasLicense, setHasLicense] = useState(false);
-
-  useEffect(() => {
-    checkLicense();
-  }, []);
-
-  const checkLicense = async () => {
-    setCheckingLicense(true);
-    try {
-      // Check license without authentication
-      const response = await axios.get('/api/v1/license-check/status');
-      if (response.data.has_license) {
-        setHasLicense(true);
-      } else {
-        setShowLicenseDialog(true);
-      }
-    } catch (err) {
-      console.error('Error checking license:', err);
-      // If endpoint doesn't exist or fails, show dialog
-      setShowLicenseDialog(true);
-    } finally {
-      setCheckingLicense(false);
-    }
-  };
-
-  const handleLicenseAdded = (licenseData) => {
-    console.log('License added successfully:', licenseData);
-    setShowLicenseDialog(false);
-    setHasLicense(true);
-  };
-
-  if (checkingLicense) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Checking license...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (showLicenseDialog) {
-    return (
-      <LicenseCheckDialog 
-        onLicenseAdded={handleLicenseAdded}
-        onClose={null}  // Cannot be closed without adding license
-      />
-    );
-  }
-
-  if (hasLicense) {
-    return children;
-  }
-
-  return null;
-};
+import { LicenseProvider } from './contexts/LicenseContext';
 
 // Private Route Wrapper
 const PrivateRoutes = () => {
@@ -92,9 +29,9 @@ const PrivateRoutes = () => {
 
 function App() {
   return (
-    <LicenseCheckWrapper>
-      <AuthProvider>
-        <ToastProvider>
+    <AuthProvider>
+      <ToastProvider>
+        <LicenseProvider>
           <PaywallProvider>
             <BrowserRouter>
               <Routes>
@@ -128,9 +65,9 @@ function App() {
               <ToastContainer />
             </BrowserRouter>
           </PaywallProvider>
-        </ToastProvider>
-      </AuthProvider>
-    </LicenseCheckWrapper>
+        </LicenseProvider>
+      </ToastProvider>
+    </AuthProvider>
   );
 }
 

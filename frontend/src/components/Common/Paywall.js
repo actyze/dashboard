@@ -1,10 +1,10 @@
 /**
  * Paywall Component
- * Wrapper component that blocks access to features based on the current plan
+ * Wrapper component that blocks access based on resource limits from the license
  * 
  * Usage:
- * <Paywall featureKey="advanced_analytics">
- *   <YourProtectedComponent />
+ * <Paywall type="dashboard" currentCount={dashboards.length}>
+ *   <CreateDashboardButton />
  * </Paywall>
  */
 
@@ -15,7 +15,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import LicenseService from '../../services/LicenseService';
 
 const Paywall = ({ 
-  featureKey, 
+  type, // 'user' | 'dashboard' | 'data_source'
+  currentCount = 0,
   children,
   // Optional: Custom message to display
   message,
@@ -29,9 +30,8 @@ const Paywall = ({
   const { isDark } = useTheme();
   const navigate = useNavigate();
   const { 
-    isFeatureEnabled, 
-    getRequiredPlan, 
-    getFeatureName, 
+    checkLimit,
+    getTypeName,
     loading,
     currentPlan
   } = usePaywall();
@@ -41,11 +41,10 @@ const Paywall = ({
   const modalRef = useRef(null);
   const containerRef = useRef(null);
 
-  // Check if feature is enabled
-  const enabled = isFeatureEnabled(featureKey);
-  const requiredPlan = getRequiredPlan(featureKey);
-  const featureName = getFeatureName(featureKey);
-  const requiredPlanName = LicenseService.formatPlanName(requiredPlan);
+  // Check if within limit
+  const limitResult = checkLimit(type, currentCount);
+  const allowed = limitResult.allowed;
+  const typeName = getTypeName(type);
 
   // Close modal when clicking outside
   useEffect(() => {
@@ -93,8 +92,8 @@ const Paywall = ({
     );
   }
 
-  // Feature is enabled, render children normally
-  if (enabled) {
+  // Within limit, render children normally
+  if (allowed) {
     return <>{children}</>;
   }
 
@@ -106,6 +105,15 @@ const Paywall = ({
       case 'md':
       default: return 'blur-[4px]';
     }
+  };
+
+  // Format the limit message
+  const getLimitMessage = () => {
+    if (message) return message;
+    if (limitResult.limit === null) {
+      return `${typeName} limit reached. Upgrade to create more.`;
+    }
+    return `${typeName} limit reached (${limitResult.current}/${limitResult.limit}). Upgrade to create more.`;
   };
 
   // Overlay mode - full blocking overlay with upgrade prompt
@@ -154,25 +162,37 @@ const Paywall = ({
             <h3 className={`text-lg font-semibold mb-2 ${
               isDark ? 'text-white' : 'text-gray-900'
             }`}>
-              {featureName}
+              {typeName} Limit Reached
             </h3>
 
             {/* Message */}
             <p className={`text-sm mb-5 ${
               isDark ? 'text-gray-400' : 'text-gray-600'
             }`}>
-              {message || `This feature requires the ${requiredPlanName} plan or higher.`}
+              {getLimitMessage()}
             </p>
 
-            {/* Current Plan Badge */}
-            {currentPlan && (
+            {/* Usage Badge */}
+            {limitResult.limit !== null && (
               <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium mb-4 ${
                 isDark 
                   ? 'bg-gray-800 text-gray-400' 
                   : 'bg-gray-100 text-gray-600'
               }`}>
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                {limitResult.current}/{limitResult.limit} {typeName}s used
+              </div>
+            )}
+
+            {/* Current Plan Badge */}
+            {currentPlan && (
+              <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium mb-4 ml-2 ${
+                isDark 
+                  ? 'bg-gray-800 text-gray-400' 
+                  : 'bg-gray-100 text-gray-600'
+              }`}>
                 <span className="w-1.5 h-1.5 rounded-full bg-current opacity-60"></span>
-                Current: {LicenseService.formatPlanName(currentPlan.plan_type)}
+                Plan: {LicenseService.formatPlanName(currentPlan.plan_type)}
               </div>
             )}
 
@@ -185,7 +205,7 @@ const Paywall = ({
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                Upgrade to {requiredPlanName}
+                Upgrade Plan
               </span>
             </button>
           </div>
@@ -285,11 +305,13 @@ const Paywall = ({
                   </div>
                   <div>
                     <h4 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      Feature Locked
+                      {typeName} Limit Reached
                     </h4>
-                    <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                      {featureName}
-                    </p>
+                    {limitResult.limit !== null && (
+                      <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                        {limitResult.current}/{limitResult.limit} used
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -297,7 +319,7 @@ const Paywall = ({
               {/* Content */}
               <div className="px-4 py-3">
                 <p className={`text-sm mb-4 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                  {message || `This feature requires the ${requiredPlanName} plan or higher.`}
+                  {getLimitMessage()}
                 </p>
 
                 {/* Upgrade Button */}

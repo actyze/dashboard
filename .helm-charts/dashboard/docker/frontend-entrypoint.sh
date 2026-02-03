@@ -8,7 +8,6 @@
 set -e
 
 INDEX_HTML="/usr/share/nginx/html/index.html"
-PLACEHOLDER="<!-- GA_TRACKING_PLACEHOLDER - Replaced at container startup by deployment scripts -->"
 
 echo "🔧 Configuring frontend for deployment..."
 
@@ -16,26 +15,19 @@ echo "🔧 Configuring frontend for deployment..."
 if [ -n "$REACT_APP_GA_TRACKING_ID" ]; then
   echo "✅ Google Analytics enabled - Tracking ID: $REACT_APP_GA_TRACKING_ID"
   
-  # Create GA script snippet in a temp file (avoid all sed escaping issues)
-  TMP_GA="/tmp/ga-script.html"
-  cat > "$TMP_GA" <<EOF
-<script async src="https://www.googletagmanager.com/gtag/js?id=${REACT_APP_GA_TRACKING_ID}"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${REACT_APP_GA_TRACKING_ID}');</script>
-EOF
+  # Create GA scripts
+  GA_SCRIPTS="<script async src=\"https://www.googletagmanager.com/gtag/js?id=${REACT_APP_GA_TRACKING_ID}\"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${REACT_APP_GA_TRACKING_ID}');</script>"
   
-  # Read the GA script and use awk for replacement (no escaping needed)
-  awk -v placeholder="$PLACEHOLDER" -v gafile="$TMP_GA" '
-    BEGIN { while ((getline line < gafile) > 0) ga = ga line }
-    { gsub(placeholder, ga); print }
-  ' "$INDEX_HTML" > "$INDEX_HTML.tmp" && mv "$INDEX_HTML.tmp" "$INDEX_HTML"
+  # Simple replacement - no escaping needed
+  sed -i "s|<meta name=\"ga-placeholder\" content=\"REPLACE_ME_AT_RUNTIME\" />|${GA_SCRIPTS}|g" "$INDEX_HTML"
   
-  rm -f "$TMP_GA"
   echo "✅ Google Analytics tracking code injected into index.html"
 else
   echo "ℹ️  Google Analytics disabled (no tracking ID provided)"
   echo "ℹ️  This is expected for customer deployments"
   
-  # Remove placeholder comment for clean HTML
-  awk -v placeholder="$PLACEHOLDER" '{ gsub(placeholder, ""); print }' "$INDEX_HTML" > "$INDEX_HTML.tmp" && mv "$INDEX_HTML.tmp" "$INDEX_HTML"
+  # Remove placeholder for clean HTML
+  sed -i "s|<meta name=\"ga-placeholder\" content=\"REPLACE_ME_AT_RUNTIME\" />||g" "$INDEX_HTML"
 fi
 
 echo "🚀 Starting nginx..."

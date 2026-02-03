@@ -19,8 +19,11 @@ if [ -n "$REACT_APP_GA_TRACKING_ID" ]; then
   # Create GA script snippet
   GA_SCRIPT="<script async src=\"https://www.googletagmanager.com/gtag/js?id=${REACT_APP_GA_TRACKING_ID}\"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${REACT_APP_GA_TRACKING_ID}');</script>"
   
-  # Use perl for reliable replacement (available in alpine)
-  perl -i -pe "s|\Q${PLACEHOLDER}\E|${GA_SCRIPT}|g" "$INDEX_HTML"
+  # Escape special characters for sed (& / \ and newlines)
+  GA_SCRIPT_ESCAPED=$(printf '%s\n' "$GA_SCRIPT" | sed 's/[&/\]/\\&/g')
+  
+  # Replace placeholder with GA scripts using sed
+  sed "s|${PLACEHOLDER}|${GA_SCRIPT_ESCAPED}|g" "$INDEX_HTML" > "$INDEX_HTML.tmp" && mv "$INDEX_HTML.tmp" "$INDEX_HTML"
   
   echo "✅ Google Analytics tracking code injected into index.html"
 else
@@ -28,7 +31,7 @@ else
   echo "ℹ️  This is expected for customer deployments"
   
   # Remove placeholder comment for clean HTML
-  perl -i -pe "s|\Q${PLACEHOLDER}\E||g" "$INDEX_HTML"
+  sed "s|${PLACEHOLDER}||g" "$INDEX_HTML" > "$INDEX_HTML.tmp" && mv "$INDEX_HTML.tmp" "$INDEX_HTML"
 fi
 
 echo "🚀 Starting nginx..."

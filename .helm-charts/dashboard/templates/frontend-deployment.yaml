@@ -24,6 +24,8 @@ spec:
       - name: frontend
         image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        # Use custom entrypoint for runtime HTML injection (demo features)
+        command: ["/scripts/docker-entrypoint.sh"]
         {{- if .Values.frontend.googleAnalytics.enabled }}
         env:
         - name: REACT_APP_GA_TRACKING_ID
@@ -33,6 +35,10 @@ spec:
         - name: http
           containerPort: 80
           protocol: TCP
+        volumeMounts:
+        - name: entrypoint-script
+          mountPath: /scripts
+          readOnly: true
         livenessProbe:
           httpGet:
             path: /
@@ -47,4 +53,9 @@ spec:
           periodSeconds: 5
         resources:
           {{- toYaml .Values.frontend.resources | nindent 10 }}
+      volumes:
+      - name: entrypoint-script
+        configMap:
+          name: {{ include "dashboard.fullname" . }}-frontend-entrypoint
+          defaultMode: 0755
 {{- end }}

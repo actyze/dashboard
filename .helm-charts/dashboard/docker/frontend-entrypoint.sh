@@ -15,19 +15,27 @@ echo "🔧 Configuring frontend for deployment..."
 if [ -n "$REACT_APP_GA_TRACKING_ID" ]; then
   echo "✅ Google Analytics enabled - Tracking ID: $REACT_APP_GA_TRACKING_ID"
   
-  # Create GA scripts
-  GA_SCRIPTS="<script async src=\"https://www.googletagmanager.com/gtag/js?id=${REACT_APP_GA_TRACKING_ID}\"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${REACT_APP_GA_TRACKING_ID}');</script>"
+  # Create temporary file with GA scripts
+  TMP_FILE=$(mktemp)
+  cat > "$TMP_FILE" <<'EOFGA'
+<script async src="https://www.googletagmanager.com/gtag/js?id=TRACKING_ID_PLACEHOLDER"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','TRACKING_ID_PLACEHOLDER');</script>
+EOFGA
   
-  # Replace placeholder with actual GA scripts (alpine linux compatible)
-  sed -i.bak "s|<!-- GA_TRACKING_PLACEHOLDER - Replaced at container startup by deployment scripts -->|${GA_SCRIPTS}|g" "$INDEX_HTML" && rm -f "$INDEX_HTML.bak"
+  # Replace tracking ID placeholder
+  sed -i "s/TRACKING_ID_PLACEHOLDER/${REACT_APP_GA_TRACKING_ID}/g" "$TMP_FILE"
+  
+  # Read GA scripts from temp file and replace in index.html using awk (more reliable than sed for complex strings)
+  awk -v ga="$(<"$TMP_FILE")" '{gsub(/<!-- GA_TRACKING_PLACEHOLDER - Replaced at container startup by deployment scripts -->/, ga)}1' "$INDEX_HTML" > "$INDEX_HTML.tmp" && mv "$INDEX_HTML.tmp" "$INDEX_HTML"
+  
+  rm -f "$TMP_FILE"
   
   echo "✅ Google Analytics tracking code injected into index.html"
 else
   echo "ℹ️  Google Analytics disabled (no tracking ID provided)"
   echo "ℹ️  This is expected for customer deployments"
   
-  # Remove placeholder comment for clean HTML (alpine linux compatible)
-  sed -i.bak "s|<!-- GA_TRACKING_PLACEHOLDER - Replaced at container startup by deployment scripts -->||g" "$INDEX_HTML" && rm -f "$INDEX_HTML.bak"
+  # Remove placeholder comment for clean HTML using awk
+  awk '{gsub(/<!-- GA_TRACKING_PLACEHOLDER - Replaced at container startup by deployment scripts -->/, "")}1' "$INDEX_HTML" > "$INDEX_HTML.tmp" && mv "$INDEX_HTML.tmp" "$INDEX_HTML"
 fi
 
 echo "🚀 Starting nginx..."

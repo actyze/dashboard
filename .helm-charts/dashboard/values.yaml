@@ -156,6 +156,10 @@ frontend:
     repository: actyze/dashboard-frontend  # Public DockerHub image
     tag: latest
     pullPolicy: Always  # Always pull latest from DockerHub
+  # Google Analytics configuration (demo site only)
+  googleAnalytics:
+    enabled: true  # Set to false for customer deployments
+    trackingId: "G-7DR23KDBE8"  # Demo site tracking ID
   service:
     type: ClusterIP
     port: 80  # Changed from 3000 to match nginx container port

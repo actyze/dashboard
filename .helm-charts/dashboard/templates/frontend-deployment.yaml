@@ -24,6 +24,11 @@ spec:
       - name: frontend
         image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        {{- if .Values.frontend.googleAnalytics.enabled }}
+        env:
+        - name: REACT_APP_GA_TRACKING_ID
+          value: {{ .Values.frontend.googleAnalytics.trackingId | quote }}
+        {{- end }}
         ports:
         - name: http
           containerPort: 80

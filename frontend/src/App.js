@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { PaywallProvider } from './contexts/PaywallContext';
 import LicenseCheckDialog from './components/Common/LicenseCheckDialog';
+import GoogleAnalytics from './components/Common/GoogleAnalytics';
 import axios from 'axios';
 
 // License Check Wrapper - Runs BEFORE authentication
@@ -93,6 +94,7 @@ const PrivateRoutes = () => {
 function App() {
   return (
     <LicenseCheckWrapper>
+      <GoogleAnalytics />
       <AuthProvider>
         <ToastProvider>
           <PaywallProvider>

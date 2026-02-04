@@ -36,6 +36,11 @@ secrets:
   postgres:
     username: ""  # ⚠️  LOADED from values-secrets.yaml
     password: ""  # ⚠️  LOADED from values-secrets.yaml
+  
+  # Account Provisioning API Key - LOADED FROM values-secrets.yaml or GitHub Secrets
+  # Used by external services (e.g., marketing dashboard) to provision user accounts
+  accountProvisioning:
+    apiKey: ""  # ⚠️  LOADED from values-secrets.yaml or GitHub Actions workflow
 
 # ============================================================================
 # MODEL STRATEGY - External LLM Configuration

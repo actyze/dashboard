@@ -8,6 +8,7 @@ from app.services.orchestration_service import orchestration_service
 from app.services.user_service import UserService
 from app.services.schema_service import SchemaService
 from app.services.dashboard_service import dashboard_service
+from app.services.admin_service import AdminService
 from app.auth.dependencies import get_current_user, require_viewer, require_editor, require_admin, require_write_access
 from app.database import get_db
 
@@ -1144,3 +1145,110 @@ async def registration_health():
         "api_key_configured": has_api_token,
         "message": "Registration is available" if is_available else "Registration is disabled"
     }
+
+
+# =============================================================================
+# Demo User Provisioning
+# =============================================================================
+
+class DemoUserRequest(BaseModel):
+    """Request model for demo user provisioning."""
+    email: EmailStr
+
+
+class DemoUserResponse(BaseModel):
+    """Response model for demo user provisioning."""
+    success: bool
+    action: str  # 'created' or 'regenerated'
+    user: Dict[str, Any]
+
+
+@public_router.post("/demo/provision", response_model=DemoUserResponse)
+async def provision_demo_user(
+    request: DemoUserRequest,
+    x_api_key: Optional[str] = Header(None)
+):
+    """
+    Provision demo user with auto-generated password and READONLY role.
+    
+    **Authentication:** Requires X-API-Key header (for marketing dashboard).
+    
+    **Features:**
+    - Creates user with READONLY role (safe, no write access)
+    - Auto-generates secure 16-character password
+    - Returns password ONCE (user must save it)
+    - Lost password? Call this endpoint again to regenerate
+    - No expiration - user keeps access permanently
+    
+    **Request Body:**
+    - email: User's email address
+    
+    **Response:**
+    - success: Whether operation succeeded
+    - action: "created" (new user) or "regenerated" (existing user, new password)
+    - user.email: User's email
+    - user.username: Generated username
+    - user.password: Auto-generated password (SAVE THIS - shown only once!)
+    - user.role: "READONLY" (for new users)
+    
+    **Important:**
+    The password is shown only once in the response. If the user loses it,
+    they can call this endpoint again to regenerate a new password.
+    """
+    # Validate API key
+    if not x_api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="API key required. Provide X-API-Key header."
+        )
+    
+    if not REGISTRATION_API_TOKEN:
+        raise HTTPException(
+            status_code=503,
+            detail="Demo provisioning is currently disabled. REGISTRATION_API_KEY not configured."
+        )
+    
+    if x_api_key != REGISTRATION_API_TOKEN:
+        logger.warning("Invalid demo provision API key attempt")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API key"
+        )
+    
+    if not request.email:
+        raise HTTPException(
+            status_code=400,
+            detail="Email is required"
+        )
+    
+    try:
+        logger.info(f"🎯 Demo user provision request for: {request.email}")
+        
+        # Use AdminService to provision demo user
+        admin_service = AdminService()
+        result = await admin_service.provision_demo_user(email=request.email)
+        
+        if not result["success"]:
+            logger.error(f"❌ Failed to provision demo user: {result.get('error')}")
+            raise HTTPException(
+                status_code=400,
+                detail=result.get("error", "Failed to provision demo user")
+            )
+        
+        action = result["action"]
+        logger.info(f"✅ Demo user {action}: {request.email}")
+        
+        return DemoUserResponse(
+            success=True,
+            action=action,
+            user=result["user"]
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"💥 Error during demo user provisioning: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="An error occurred during demo provisioning. Please try again later."
+        )

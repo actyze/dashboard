@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 from datetime import datetime
 import uuid
+import secrets
 
 from app.database import (
     db_manager, User, Role, UserRole, UserDataAccess
@@ -470,6 +471,142 @@ class AdminService:
             except Exception as e:
                 self.logger.error("Failed to list roles", error=str(e))
                 return {"success": False, "error": str(e)}
+    
+    # =========================================================================
+    # DEMO USER PROVISIONING
+    # =========================================================================
+    
+    def generate_secure_password(self, length: int = 16) -> str:
+        """
+        Generate secure readable password.
+        Excludes confusing characters (0O, 1lI) for better usability.
+        """
+        chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz!@#$%^&*"
+        return ''.join(secrets.choice(chars) for _ in range(length))
+    
+    async def provision_demo_user(self, email: str) -> Dict[str, Any]:
+        """
+        Create or regenerate user with auto-generated password and READONLY role.
+        
+        **Flow:**
+        - If user doesn't exist: Create new user with READONLY role
+        - If user exists: Regenerate password (allows password recovery)
+        
+        **Returns:**
+        Password in plain text (shown once to user).
+        
+        **Security:**
+        - READONLY role prevents any write operations
+        - Password is cryptographically secure (16 chars)
+        - Lost password? Call this endpoint again to regenerate
+        """
+        async with db_manager.get_session() as session:
+            try:
+                # Check if user exists
+                existing = await session.execute(
+                    select(User).where(User.email == email)
+                )
+                user = existing.scalar_one_or_none()
+                
+                # Generate secure password
+                password = self.generate_secure_password()
+                password_hash = get_password_hash(password)
+                
+                if user:
+                    # User exists - regenerate password
+                    user.password_hash = password_hash
+                    await session.commit()
+                    await session.refresh(user)
+                    
+                    self.logger.info(
+                        "Demo user password regenerated",
+                        user_id=str(user.id),
+                        email=email
+                    )
+                    
+                    return {
+                        "success": True,
+                        "action": "regenerated",
+                        "user": {
+                            "id": str(user.id),
+                            "email": user.email,
+                            "username": user.username,
+                            "password": password  # Plain text (shown once)
+                        }
+                    }
+                
+                # Create new user
+                username = email.split('@')[0]
+                
+                # Check if username already exists (edge case)
+                username_check = await session.execute(
+                    select(User).where(User.username == username)
+                )
+                if username_check.scalar_one_or_none():
+                    # Append random suffix if username taken
+                    username = f"{username}_{secrets.token_hex(3)}"
+                
+                new_user = User(
+                    username=username,
+                    email=email,
+                    password_hash=password_hash,
+                    full_name=email.split('@')[0].title(),
+                    is_active=True
+                )
+                session.add(new_user)
+                await session.flush()
+                
+                # Assign READONLY role
+                role_result = await session.execute(
+                    select(Role).where(Role.name == "READONLY")
+                )
+                readonly_role = role_result.scalar_one_or_none()
+                
+                if not readonly_role:
+                    await session.rollback()
+                    self.logger.error("READONLY role not found in database")
+                    return {
+                        "success": False,
+                        "error": "READONLY role not found. Please run migration V023."
+                    }
+                
+                user_role = UserRole(user_id=new_user.id, role_id=readonly_role.id)
+                session.add(user_role)
+                
+                await session.commit()
+                await session.refresh(new_user)
+                
+                self.logger.info(
+                    "Demo user created",
+                    user_id=str(new_user.id),
+                    email=email,
+                    username=username,
+                    role="READONLY"
+                )
+                
+                return {
+                    "success": True,
+                    "action": "created",
+                    "user": {
+                        "id": str(new_user.id),
+                        "email": new_user.email,
+                        "username": new_user.username,
+                        "password": password,  # Plain text (shown once)
+                        "role": "READONLY"
+                    }
+                }
+                
+            except Exception as e:
+                await session.rollback()
+                self.logger.error(
+                    "Failed to provision demo user",
+                    error=str(e),
+                    email=email
+                )
+                return {
+                    "success": False,
+                    "error": f"Failed to provision demo user: {str(e)}"
+                }
 
 
 # Global admin service instance

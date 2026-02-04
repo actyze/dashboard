@@ -9,4 +9,3 @@ export { default as ReasoningBanner } from './ReasoningBanner';
 export { default as SqlEditor } from './SqlEditor';
 export { default as ToastContainer } from './ToastContainer';
 export { default as Paywall } from './Paywall';
-export { default as Intercom } from './Intercom';

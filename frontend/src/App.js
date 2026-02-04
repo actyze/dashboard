@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router';
-import { Layout, ToastContainer, Intercom } from './components/Common';
+import { Layout, ToastContainer } from './components/Common';
 import { LoginPage, Signup } from './components/Auth';
 import { QueryPage, QueriesList } from './components/QueryExplorer';
 import { Dashboard, DashboardsList } from './components/Dashboard';
@@ -126,7 +126,6 @@ function App() {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
               <ToastContainer />
-              <Intercom />
             </BrowserRouter>
           </PaywallProvider>
         </ToastProvider>

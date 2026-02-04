@@ -122,6 +122,8 @@ jobs:
             postgres:
               username: "${{ secrets.POSTGRES_USERNAME }}"
               password: "${{ secrets.POSTGRES_PASSWORD }}"
+            accountProvisioning:
+              apiKey: "${{ secrets.ACCOUNT_PROVISIONING_API_KEY }}"
 
           nexus:
             env:
@@ -133,8 +135,6 @@ jobs:
                 ssl: false
                 sslVerification: "NONE"
               schemaServiceKey: "${{ secrets.SCHEMA_SERVICE_KEY }}"
-              REGISTRATION_API_TOKEN: "${{ secrets.REGISTRATION_API_TOKEN }}"
-              ALLOW_SELF_REGISTRATION: "false"
 
           schemaService:
             env:

@@ -535,16 +535,8 @@ class AdminService:
                         }
                     }
                 
-                # Create new user
-                username = email.split('@')[0]
-                
-                # Check if username already exists (edge case)
-                username_check = await session.execute(
-                    select(User).where(User.username == username)
-                )
-                if username_check.scalar_one_or_none():
-                    # Append random suffix if username taken
-                    username = f"{username}_{secrets.token_hex(3)}"
+                # Create new user - use email as username for simplicity
+                username = email
                 
                 new_user = User(
                     username=username,

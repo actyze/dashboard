@@ -18,16 +18,16 @@ if [ -n "$REACT_APP_GA_TRACKING_ID" ]; then
   # Create GA scripts
   GA_SCRIPTS="<script async src=\"https://www.googletagmanager.com/gtag/js?id=${REACT_APP_GA_TRACKING_ID}\"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${REACT_APP_GA_TRACKING_ID}');</script>"
   
-  # Simple replacement - use @ delimiter to avoid conflicts with || in JavaScript
-  sed -i "s@<meta name=\"ga-placeholder\" content=\"REPLACE_ME_AT_RUNTIME\" />@${GA_SCRIPTS}@g" "$INDEX_HTML"
+  # Simple replacement - no space before /> (React minifies it)
+  sed -i "s@<meta name=\"ga-placeholder\" content=\"REPLACE_ME_AT_RUNTIME\"/>@${GA_SCRIPTS}@g" "$INDEX_HTML"
   
   echo "✅ Google Analytics tracking code injected into index.html"
 else
   echo "ℹ️  Google Analytics disabled (no tracking ID provided)"
   echo "ℹ️  This is expected for customer deployments"
   
-  # Remove placeholder for clean HTML
-  sed -i "s@<meta name=\"ga-placeholder\" content=\"REPLACE_ME_AT_RUNTIME\" />@@g" "$INDEX_HTML"
+  # Remove placeholder for clean HTML - no space before /> (React minifies it)
+  sed -i "s@<meta name=\"ga-placeholder\" content=\"REPLACE_ME_AT_RUNTIME\"/>@@g" "$INDEX_HTML"
 fi
 
 echo "🚀 Starting nginx..."

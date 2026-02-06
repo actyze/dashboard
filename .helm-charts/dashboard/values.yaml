@@ -165,6 +165,12 @@ frontend:
   googleAnalytics:
     enabled: true  # Set to false for customer deployments
     trackingId: "G-7DR23KDBE8"  # Demo site tracking ID
+  # Intercom configuration (demo site only)
+  # ⚠️ DO NOT enable here! Configure via GitHub Actions for demo.actyze.ai
+  # See .github/workflows/deploy-to-digitalocean.yml for demo site config
+  intercom:
+    enabled: false  # ⚠️ DISABLED BY DEFAULT - keeps customer deployments clean
+    appId: ""       # Configured in GitHub Actions (e4rc082n for demo)
   service:
     type: ClusterIP
     port: 80  # Changed from 3000 to match nginx container port

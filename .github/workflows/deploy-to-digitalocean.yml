@@ -125,6 +125,12 @@ jobs:
             accountProvisioning:
               apiKey: "${{ secrets.ACCOUNT_PROVISIONING_API_KEY }}"
 
+          # Enable Intercom for demo.actyze.ai only
+          frontend:
+            intercom:
+              enabled: true
+              appId: "e4rc082n"
+
           nexus:
             env:
               trino:

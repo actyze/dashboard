@@ -90,30 +90,6 @@ const PrivateRoutes = () => {
   return user ? <Outlet /> : <Navigate to="/login" replace />;
 };
 
-// Dynamic Intercom Loader - Only loads Intercom component when enabled via Helm
-const IntercomLoader = () => {
-  const [IntercomComponent, setIntercomComponent] = useState(null);
-
-  useEffect(() => {
-    // Only load Intercom component if explicitly enabled via Helm config
-    if (process.env.REACT_APP_ENABLE_INTERCOM === 'true') {
-      console.log('[IntercomLoader] Loading Intercom component dynamically');
-      import('./components/Common/Intercom')
-        .then(module => {
-          setIntercomComponent(() => module.default);
-        })
-        .catch(err => {
-          console.error('[IntercomLoader] Failed to load Intercom:', err);
-        });
-    } else {
-      console.log('[IntercomLoader] Intercom disabled - component not loaded');
-    }
-  }, []);
-
-  // Render the dynamically loaded component
-  return IntercomComponent ? <IntercomComponent /> : null;
-};
-
 function App() {
   return (
     <LicenseCheckWrapper>
@@ -150,7 +126,6 @@ function App() {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
               <ToastContainer />
-              <IntercomLoader />
             </BrowserRouter>
           </PaywallProvider>
         </ToastProvider>

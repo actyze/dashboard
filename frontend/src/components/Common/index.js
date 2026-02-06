@@ -9,5 +9,5 @@ export { default as ReasoningBanner } from './ReasoningBanner';
 export { default as SqlEditor } from './SqlEditor';
 export { default as ToastContainer } from './ToastContainer';
 export { default as Paywall } from './Paywall';
-// Note: Intercom is NOT exported here - it's dynamically loaded in App.js
-// This ensures the Intercom code is completely excluded from customer bundles
+// Note: Intercom is injected via entrypoint script (like Google Analytics)
+// No React component needed - widget loads directly from injected script tag

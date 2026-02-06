@@ -26,10 +26,22 @@ spec:
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
         # Use custom entrypoint for runtime HTML injection (demo features)
         command: ["/scripts/docker-entrypoint.sh"]
-        {{- if .Values.frontend.googleAnalytics.enabled }}
+        {{- $intercomEnabled := false }}
+        {{- if .Values.frontend.intercom }}
+          {{- $intercomEnabled = .Values.frontend.intercom.enabled }}
+        {{- end }}
+        {{- if or .Values.frontend.googleAnalytics.enabled $intercomEnabled }}
         env:
+        {{- if .Values.frontend.googleAnalytics.enabled }}
         - name: REACT_APP_GA_TRACKING_ID
           value: {{ .Values.frontend.googleAnalytics.trackingId | quote }}
+        {{- end }}
+        {{- if $intercomEnabled }}
+        - name: REACT_APP_ENABLE_INTERCOM
+          value: "true"
+        - name: REACT_APP_INTERCOM_APP_ID
+          value: {{ .Values.frontend.intercom.appId | quote }}
+        {{- end }}
         {{- end }}
         ports:
         - name: http

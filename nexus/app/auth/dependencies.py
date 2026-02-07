@@ -120,7 +120,7 @@ def require_write_access(user: dict = Depends(get_current_user)):
     if "READONLY" in user_roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Operation not permitted as read-only user. Contact admin for write access."
+            detail="You do not have permission to edit or save anything. Please contact Actyze admin to provide you the right access."
         )
     return user
 

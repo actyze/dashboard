@@ -7,7 +7,7 @@ from datetime import datetime
 import structlog
 import httpx
 
-from app.auth.dependencies import get_current_user, require_admin
+from app.auth.dependencies import get_current_user, require_admin, require_viewer
 from app.services.license_service import LicenseService
 from app.database import PlanType
 
@@ -79,11 +79,11 @@ async def activate_license(
         )
 
 
-@router.get("/current", dependencies=[Depends(require_admin)])
+@router.get("/current", dependencies=[Depends(require_viewer)])
 async def get_current_license(current_user: dict = Depends(get_current_user)):
     """
     Get currently active license.
-    Admin only.
+    All authenticated users can view.
     """
     try:
         result = await license_service.get_active_license()

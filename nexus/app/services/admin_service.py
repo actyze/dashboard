@@ -9,7 +9,7 @@ import uuid
 import secrets
 
 from app.database import (
-    db_manager, User, Role, UserRole, UserDataAccess
+    db_manager, User, Role, UserRole, UserDataAccess, QueryHistory
 )
 from app.auth.utils import get_password_hash
 
@@ -580,16 +580,151 @@ class AdminService:
                 )
                 session.add(all_access)
                 
+                # Create 10 sample queries for demo user
+                sample_queries = [
+                    {
+                        "name": "📈 Daily Engagement Trend",
+                        "sql": """SELECT
+    DATE(event_time) AS event_date,
+    COUNT(*) AS daily_events
+FROM postgres.user_uploads.learning_events
+GROUP BY DATE(event_time)
+ORDER BY event_date"""
+                    },
+                    {
+                        "name": "📊 Event Type Distribution",
+                        "sql": """SELECT
+    event_type,
+    COUNT(*) AS event_count
+FROM postgres.user_uploads.learning_events
+GROUP BY event_type
+ORDER BY event_count DESC"""
+                    },
+                    {
+                        "name": "🔥 Top Students by Engagement",
+                        "sql": """SELECT
+    student_id,
+    COUNT(*) AS total_events
+FROM postgres.user_uploads.learning_events
+GROUP BY student_id
+ORDER BY total_events DESC
+LIMIT 10"""
+                    },
+                    {
+                        "name": "📊 Risk Distribution",
+                        "sql": """SELECT
+    CASE
+        WHEN risk_score < 0.3 THEN 'Low Risk'
+        WHEN risk_score < 0.6 THEN 'Medium Risk'
+        ELSE 'High Risk'
+    END AS risk_bucket,
+    COUNT(*) AS student_count
+FROM postgres.user_uploads.student_risk_scores
+GROUP BY 1
+ORDER BY student_count DESC"""
+                    },
+                    {
+                        "name": "📈 Risk vs Engagement Analysis",
+                        "sql": """WITH engagement AS (
+    SELECT
+        student_id,
+        COUNT(*) AS total_events
+    FROM postgres.user_uploads.learning_events
+    GROUP BY student_id
+)
+SELECT
+    r.student_id,
+    r.risk_score,
+    COALESCE(e.total_events, 0) AS total_events
+FROM postgres.user_uploads.student_risk_scores r
+LEFT JOIN engagement e
+    ON r.student_id = e.student_id"""
+                    },
+                    {
+                        "name": "📚 Top Courses by Activity",
+                        "sql": """SELECT
+    course_id,
+    SUM(active_students) AS total_active_students
+FROM postgres.user_uploads.course_activity_daily
+GROUP BY course_id
+ORDER BY total_active_students DESC
+LIMIT 10"""
+                    },
+                    {
+                        "name": "📈 Completion Rate Over Time",
+                        "sql": """SELECT
+    activity_date,
+    AVG(completion_rate) AS avg_completion_rate
+FROM postgres.user_uploads.course_activity_daily
+GROUP BY activity_date
+ORDER BY activity_date"""
+                    },
+                    {
+                        "name": "🧪 Model Accuracy Trend",
+                        "sql": """SELECT
+    project_id,
+    recorded_at,
+    value AS accuracy
+FROM postgres.user_uploads.research_metrics
+WHERE metric = 'accuracy'
+ORDER BY recorded_at"""
+                    },
+                    {
+                        "name": "📊 Avg Metric per Project",
+                        "sql": """SELECT
+    project_id,
+    metric,
+    AVG(value) AS avg_metric
+FROM postgres.user_uploads.research_metrics
+GROUP BY project_id, metric"""
+                    },
+                    {
+                        "name": "🏆 At-Risk Courses",
+                        "sql": """WITH student_engagement AS (
+    SELECT
+        student_id,
+        course_id,
+        COUNT(*) AS events_per_course
+    FROM postgres.user_uploads.learning_events
+    GROUP BY student_id, course_id
+),
+high_risk_students AS (
+    SELECT student_id
+    FROM postgres.user_uploads.student_risk_scores
+    WHERE risk_score >= 0.6
+)
+SELECT
+    se.course_id,
+    COUNT(DISTINCT se.student_id) AS high_risk_students
+FROM student_engagement se
+JOIN high_risk_students hr
+    ON se.student_id = hr.student_id
+GROUP BY se.course_id
+ORDER BY high_risk_students DESC"""
+                    }
+                ]
+                
+                for query_data in sample_queries:
+                    sample_query = QueryHistory(
+                        user_id=new_user.id,
+                        generated_sql=query_data["sql"],
+                        query_name=query_data["name"],
+                        execution_status="NOT_EXECUTED",
+                        is_favorite=False
+                    )
+                    session.add(sample_query)
+                
                 await session.commit()
                 await session.refresh(new_user)
                 
                 self.logger.info(
-                    "Demo user created with full read access",
+                    "Demo user created with full read access and sample queries",
                     user_id=str(new_user.id),
                     email=email,
                     username=username,
                     role="READONLY",
-                    access="ALL_DATABASES"
+                    access="ALL_DATABASES",
+                    sample_queries=len(sample_queries)
                 )
                 
                 return {

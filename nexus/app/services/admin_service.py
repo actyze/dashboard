@@ -565,15 +565,31 @@ class AdminService:
                 user_role = UserRole(user_id=new_user.id, role_id=readonly_role.id)
                 session.add(user_role)
                 
+                # Grant wildcard access to ALL databases (read-only due to READONLY role)
+                # NULL values in hierarchy = wildcard access to all resources
+                all_access = UserDataAccess(
+                    user_id=new_user.id,
+                    catalog=None,  # NULL = all catalogs
+                    database_name=None,  # NULL = all databases
+                    schema_name=None,  # NULL = all schemas
+                    table_name=None,  # NULL = all tables
+                    allowed_columns=None,  # NULL = all columns
+                    can_query=True,
+                    is_visible=True,
+                    created_by=None  # System-created
+                )
+                session.add(all_access)
+                
                 await session.commit()
                 await session.refresh(new_user)
                 
                 self.logger.info(
-                    "Demo user created",
+                    "Demo user created with full read access",
                     user_id=str(new_user.id),
                     email=email,
                     username=username,
-                    role="READONLY"
+                    role="READONLY",
+                    access="ALL_DATABASES"
                 )
                 
                 return {

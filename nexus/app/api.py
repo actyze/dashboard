@@ -213,7 +213,7 @@ async def get_query_history(
 async def update_query_history_name(
     query_id: int,
     request: UpdateQueryNameRequest,
-    current_user: dict = Depends(require_viewer)
+    current_user: dict = Depends(require_write_access)
 ):
     """Update the name of a query in history."""
     user_id = current_user.get("id")
@@ -733,7 +733,7 @@ async def update_tile(
 async def delete_tile(
     dashboard_id: str,
     tile_id: str,
-    current_user: dict = Depends(require_viewer)
+    current_user: dict = Depends(require_write_access)
 ):
     """Delete tile (requires edit permission on dashboard)."""
     try:
@@ -760,7 +760,7 @@ async def delete_tile(
 async def grant_permission(
     dashboard_id: str,
     request: GrantPermissionRequest,
-    current_user: dict = Depends(require_viewer)
+    current_user: dict = Depends(require_write_access)
 ):
     """Grant permissions to a user (requires share permission)."""
     try:
@@ -798,7 +798,7 @@ async def grant_permission(
 async def revoke_permission(
     dashboard_id: str,
     target_user_id: str,
-    current_user: dict = Depends(require_viewer)
+    current_user: dict = Depends(require_write_access)
 ):
     """Revoke permissions from a user (requires share permission)."""
     try:
@@ -832,7 +832,7 @@ class PublishDashboardRequest(BaseModel):
 async def publish_dashboard(
     dashboard_id: str,
     request: PublishDashboardRequest = PublishDashboardRequest(),
-    current_user: dict = Depends(require_editor)
+    current_user: dict = Depends(require_write_access)
 ):
     """
     Publish dashboard - creates version snapshot and changes status to published.
@@ -887,7 +887,7 @@ async def list_dashboard_versions(
 async def revert_dashboard_version(
     dashboard_id: str,
     version: int,
-    current_user: dict = Depends(require_editor)
+    current_user: dict = Depends(require_write_access)
 ):
     """
     Revert dashboard to a previous version.

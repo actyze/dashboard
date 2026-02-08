@@ -204,7 +204,7 @@ const DatabaseSchemaPanel = ({
                   <ChevronIcon isExpanded={expandedDatabases.has(database.name)} />
                   <DatabaseIcon />
                   <Text className="font-medium text-xs">{database.name}</Text>
-                  {database.connector_type && (
+                  {database.connector_type && database.connector_type !== 'unknown' && (
                     <ConnectorBadge connector_type={database.connector_type} size="sm" showIcon={false} />
                   )}
                   <Text className="text-xs text-gray-400 ml-auto">

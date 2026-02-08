@@ -1010,7 +1010,7 @@ function SchemaOptimise() {
       </div>
 
       {/* Database Cards */}
-      <div className="flex-1 px-6 pb-6">
+      <div className="flex-1 px-6 pt-4 pb-6">
         {isDatabasesLoading ? (
           <div className="flex items-center justify-center py-16">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#5d6ad3]"></div>

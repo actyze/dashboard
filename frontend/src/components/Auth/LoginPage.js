@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { isDemoSite } from '../../utils/siteDetection';
 
 // Color palette - single source of truth
 const colors = {
@@ -110,10 +111,14 @@ const LoginPage = () => {
 
   const labelClasses = `block text-xs font-medium mb-1.5 ${isDark ? 'text-gray-400' : 'text-gray-600'}`;
 
+  const isDemo = isDemoSite();
+
   return (
-    <div className={`min-h-screen flex ${isDark ? 'bg-[#101012]' : 'bg-slate-50'}`}>
+    <div className={`min-h-screen flex flex-col ${isDark ? 'bg-[#101012]' : 'bg-slate-50'}`}>
       <style>{animationStyles}</style>
 
+      {/* Main Content */}
+      <div className="flex-1 flex">
       {/* Left Panel - Animated Fluid Gradient */}
       <div
         className="hidden lg:flex lg:w-1/2 relative overflow-hidden"
@@ -166,6 +171,14 @@ const LoginPage = () => {
             }}
           />
           <div className="mt-8 h-px w-32" style={{ background: styles.decorativeLine }} />
+          
+          {/* Demo Environment Badge */}
+          {isDemo && (
+            <div className="mt-6 flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-white/90 text-sm font-medium">Demo Environment</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -181,6 +194,13 @@ const LoginPage = () => {
               alt="Actyze" 
               className="h-10 mx-auto"
             />
+            {/* Demo Badge for Mobile */}
+            {isDemo && (
+              <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#5d6ad3]/10 border border-[#5d6ad3]/20">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className={`text-xs font-medium ${isDark ? 'text-[#5d6ad3]' : 'text-[#5d6ad3]'}`}>Demo Environment</span>
+              </div>
+            )}
           </div>
 
           {/* Welcome text */}
@@ -248,6 +268,7 @@ const LoginPage = () => {
             </button>
           </form>
         </div>
+      </div>
       </div>
     </div>
   );

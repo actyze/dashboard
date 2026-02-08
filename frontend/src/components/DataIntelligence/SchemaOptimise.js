@@ -28,14 +28,20 @@ const ChevronDownIcon = () => (
   </svg>
 );
 
+const ChevronLeftIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+  </svg>
+);
+
 const EyeSlashIcon = () => (
   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0 1 12 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 0 1 1.563-3.029m5.858.908a3 3 0 1 1 4.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0 1 12 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 0 1-4.132 5.411m0 0L21 21" />
   </svg>
 );
 
-const DatabaseIcon = () => (
-  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+const DatabaseIcon = ({ className = "w-4 h-4" }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
   </svg>
 );
@@ -73,6 +79,18 @@ const DescriptionIcon = ({ className }) => (
 const HiddenIcon = ({ className }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0 1 12 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 0 1 1.563-3.029m5.858.908a3 3 0 1 1 4.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0 1 12 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 0 1 -4.132 5.411m0 0L21 21" />
+  </svg>
+);
+
+const PencilIcon = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+  </svg>
+);
+
+const SparklesIcon = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
   </svg>
 );
 
@@ -114,6 +132,9 @@ function SchemaOptimise() {
   
   // Check if user is admin
   const isAdmin = user?.roles?.includes('ADMIN') || false;
+  
+  // Selected database state (for drill-down view)
+  const [selectedDatabase, setSelectedDatabase] = useState(null);
   
   // Tree state
   const [expandedDatabases, setExpandedDatabases] = useState(new Set());
@@ -231,6 +252,23 @@ function SchemaOptimise() {
       return true;
     }
     return false;
+  };
+
+  // Handle selecting a database (for card view)
+  const handleSelectDatabase = async (db) => {
+    setSelectedDatabase(db);
+    // Pre-load schemas when selecting a database
+    if (!schemaCache[db.name]) {
+      try {
+        const response = await RestService.getDatabaseSchemas(db.name);
+        if (response && response.schemas) {
+          setSchemaCache(prev => ({ ...prev, [db.name]: response.schemas }));
+        }
+      } catch (error) {
+        console.error(`Failed to fetch schemas for ${db.name}:`, error);
+        showError(`Failed to load schemas for ${db.name}`);
+      }
+    }
   };
 
   // Tree expansion handlers
@@ -442,7 +480,7 @@ function SchemaOptimise() {
     return (
       <div key={table.name} className={`ml-0 ${isExcluded ? 'opacity-50' : ''}`}>
         <div 
-          className={`flex items-center gap-2 px-3 py-2 group ${
+          className={`flex items-center gap-2 px-3 py-2.5 group ${
             isDark ? 'hover:bg-[#1c1d1f]' : 'hover:bg-gray-50'
           }`}
         >
@@ -455,10 +493,7 @@ function SchemaOptimise() {
           <span className={`${isDark ? 'text-gray-400' : 'text-gray-600'} flex-shrink-0`}>
             <TableIcon />
           </span>
-          <span 
-            className={`flex-1 min-w-0 cursor-pointer ${isDark ? 'text-white' : 'text-gray-900'}`}
-            onClick={() => handleOpenEditPanel(dbName, schemaName, table.name, null)}
-          >
+          <span className={`flex-1 min-w-0 ${isDark ? 'text-white' : 'text-gray-900'}`}>
             {table.name}
             {table.column_count > 0 && (
               <span className={`ml-2 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
@@ -485,10 +520,13 @@ function SchemaOptimise() {
           />
           <button
             onClick={() => handleOpenEditPanel(dbName, schemaName, table.name, null)}
-            className={`opacity-0 group-hover:opacity-100 text-xs px-2 py-1 rounded whitespace-nowrap transition-opacity ${
-              isDark ? 'text-gray-400 hover:bg-[#2a2b2e]' : 'text-gray-600 hover:bg-gray-100'
+            className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md font-medium transition-all ${
+              isDark 
+                ? 'bg-[#2a2b2e] text-gray-300 hover:bg-[#3a3b3e] hover:text-white' 
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
             }`}
           >
+            <PencilIcon className="w-3 h-3" />
             Edit
           </button>
         </div>
@@ -519,7 +557,7 @@ function SchemaOptimise() {
     return (
       <div key={schema.name} className={`ml-0 ${isExcluded ? 'opacity-50' : ''}`}>
         <div 
-          className={`flex items-center gap-2 px-3 py-2 group ${
+          className={`flex items-center gap-2 px-3 py-2.5 group ${
             isDark ? 'hover:bg-[#1c1d1f]' : 'hover:bg-gray-50'
           }`}
         >
@@ -532,10 +570,7 @@ function SchemaOptimise() {
           <span className={`${isDark ? 'text-purple-400' : 'text-purple-600'} flex-shrink-0`}>
             <SchemaIcon />
           </span>
-          <span 
-            className={`flex-1 min-w-0 cursor-pointer ${isDark ? 'text-white' : 'text-gray-900'}`}
-            onClick={() => handleOpenEditPanel(dbName, schema.name, null, null)}
-          >
+          <span className={`flex-1 min-w-0 ${isDark ? 'text-white' : 'text-gray-900'}`}>
             {schema.name}
             {schema.table_count > 0 && (
               <span className={`ml-2 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
@@ -562,10 +597,13 @@ function SchemaOptimise() {
           />
           <button
             onClick={() => handleOpenEditPanel(dbName, schema.name, null, null)}
-            className={`opacity-0 group-hover:opacity-100 text-xs px-2 py-1 rounded whitespace-nowrap transition-opacity ${
-              isDark ? 'text-gray-400 hover:bg-[#2a2b2e]' : 'text-gray-600 hover:bg-gray-100'
+            className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md font-medium transition-all ${
+              isDark 
+                ? 'bg-[#2a2b2e] text-gray-300 hover:bg-[#3a3b3e] hover:text-white' 
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
             }`}
           >
+            <PencilIcon className="w-3 h-3" />
             Edit
           </button>
         </div>
@@ -579,46 +617,123 @@ function SchemaOptimise() {
     );
   };
 
-  const renderDatabase = (db) => {
-    const isExpanded = expandedDatabases.has(db.name);
-    const schemas = schemaCache[db.name];
-
+  // Render a database card
+  const renderDatabaseCard = (db) => {
     return (
-      <div key={db.name} className="ml-0">
-        <div 
-          className={`flex items-center gap-2 px-3 py-2 ${
-            isDark ? 'hover:bg-[#1c1d1f]' : 'hover:bg-gray-50'
-          }`}
-        >
-          <button
-            onClick={() => toggleDatabase(db.name)}
-            className={`${isDark ? 'text-gray-400' : 'text-gray-600'} flex-shrink-0`}
-          >
-            {isExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
-          </button>
-          <span className={`${isDark ? 'text-[#5d6ad3]' : 'text-[#5d6ad3]'} flex-shrink-0`}>
-            <DatabaseIcon />
-          </span>
-          <span 
-            className={`flex-1 font-medium min-w-0 ${isDark ? 'text-white' : 'text-gray-900'} flex items-center gap-2`}
-          >
-            <span>{db.name}</span>
-            {db.connector_type && db.connector_type !== 'unknown' && (
-              <ConnectorBadge connector_type={db.connector_type} size="sm" />
-            )}
-            {db.schema_count > 0 && (
-              <span className={`text-xs font-normal ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                {db.schema_count} schemas
-              </span>
-            )}
-          </span>
-        </div>
-
-        {isExpanded && schemas && (
-          <div className="ml-4">
-            {schemas.map(s => renderSchema(s, db.name))}
+      <div
+        key={db.name}
+        onClick={() => handleSelectDatabase(db)}
+        className={`group cursor-pointer rounded-xl border p-5 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg ${
+          isDark 
+            ? 'bg-[#17181a] border-[#2a2b2e] hover:border-[#5d6ad3]/50 hover:bg-[#1c1d1f]' 
+            : 'bg-white border-gray-200 hover:border-[#5d6ad3]/50 hover:shadow-[#5d6ad3]/10'
+        }`}
+      >
+        <div className="flex items-start justify-between mb-3">
+          <div className={`p-2.5 rounded-lg ${isDark ? 'bg-[#5d6ad3]/20' : 'bg-[#5d6ad3]/10'}`}>
+            <DatabaseIcon className={`w-5 h-5 text-[#5d6ad3]`} />
           </div>
-        )}
+          {db.connector_type && db.connector_type !== 'unknown' && (
+            <ConnectorBadge connector_type={db.connector_type} size="sm" />
+          )}
+        </div>
+        
+        <h3 className={`font-semibold text-base mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+          {db.name}
+        </h3>
+        
+        <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+          {db.schema_count || 0} {db.schema_count === 1 ? 'schema' : 'schemas'}
+        </p>
+        
+        <div className={`flex items-center gap-1 mt-3 text-xs font-medium ${isDark ? 'text-[#5d6ad3]' : 'text-[#5d6ad3]'}`}>
+          <span>Explore</span>
+          <ChevronRightIcon />
+        </div>
+      </div>
+    );
+  };
+
+  // Render the database detail view (schemas and tables)
+  const renderDatabaseDetail = () => {
+    const schemas = schemaCache[selectedDatabase.name];
+    const dbKey = buildKey(selectedDatabase.name, null, null, null);
+    const dbHasDescription = descriptions[dbKey];
+    const dbPreference = findPreference(selectedDatabase.name, null, null);
+    
+    return (
+      <div className="h-full flex flex-col">
+        {/* Back button and database header */}
+        <div className={`flex items-center justify-between px-6 py-4 border-b ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setSelectedDatabase(null)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                isDark 
+                  ? 'text-gray-400 hover:text-white hover:bg-[#2a2b2e]' 
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              }`}
+            >
+              <ChevronLeftIcon />
+              Back
+            </button>
+            
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${isDark ? 'bg-[#5d6ad3]/20' : 'bg-[#5d6ad3]/10'}`}>
+                <DatabaseIcon className={`w-5 h-5 text-[#5d6ad3]`} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className={`font-semibold text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    {selectedDatabase.name}
+                  </h2>
+                  {selectedDatabase.connector_type && selectedDatabase.connector_type !== 'unknown' && (
+                    <ConnectorBadge connector_type={selectedDatabase.connector_type} size="sm" />
+                  )}
+                  <StatusIndicators 
+                    hasBoost={!!dbPreference}
+                    hasDescription={!!dbHasDescription}
+                    boostWeight={dbPreference?.boost_weight}
+                    isDark={isDark}
+                  />
+                </div>
+                <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                  Click on any schema or table, then use the <strong>Edit</strong> button to add descriptions or boost priority
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Edit Database Button */}
+          <button
+            onClick={() => handleOpenEditPanel(selectedDatabase.name, null, null, null)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              isDark 
+                ? 'bg-[#2a2b2e] text-gray-300 hover:bg-[#3a3b3e] hover:text-white' 
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
+            }`}
+          >
+            <PencilIcon className="w-4 h-4" />
+            Edit Database
+          </button>
+        </div>
+        
+        {/* Schema tree */}
+        <div className="flex-1 overflow-auto px-6 py-4">
+          {!schemas ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#5d6ad3]"></div>
+            </div>
+          ) : schemas.length === 0 ? (
+            <div className={`text-center py-8 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+              No schemas found in this database
+            </div>
+          ) : (
+            <div className={`border rounded-lg ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
+              {schemas.map(s => renderSchema(s, selectedDatabase.name))}
+            </div>
+          )}
+        </div>
       </div>
     );
   };
@@ -640,251 +755,284 @@ function SchemaOptimise() {
     return parts.join(' › ');
   };
 
-  return (
-    <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className={`flex items-center justify-between px-6 py-4 border-b ${
-        isDark ? 'border-[#2a2b2e]' : 'border-gray-200'
-      }`}>
-        <div>
-          <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-            Click on any schema or table to add descriptions, boost priority, or hide from AI
-          </p>
-          <div className="flex items-center gap-4 mt-2">
-            <span className={`flex items-center gap-1.5 text-xs ${isDark ? 'text-gray-600' : 'text-gray-500'}`}>
-              <span className={`px-2 py-0.5 rounded ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
+  // Render the edit modal
+  const renderEditModal = () => (
+    <div 
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
+      onClick={(e) => e.target === e.currentTarget && setEditingNode(null)}
+    >
+      <div 
+        className={`w-full max-w-lg mx-4 rounded-xl shadow-2xl ${
+          isDark ? 'bg-[#17181a] border border-[#2a2b2e]' : 'bg-white border border-gray-200'
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Modal Header */}
+        <div className={`flex items-center justify-between px-5 py-4 border-b ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
+          <div>
+            <h3 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Optimise {getNodeTypeName()}
+            </h3>
+            <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+              {getNodePath()}
+            </p>
+          </div>
+          <button
+            onClick={() => setEditingNode(null)}
+            className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-[#2a2b2e] text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Modal Content */}
+        <div className="px-5 py-4 space-y-5">
+          {/* Description Section */}
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <label className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                Description
+              </label>
+              <span className={`text-xs px-2 py-0.5 rounded ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
                 Global
               </span>
-              = Applies to all users
-            </span>
-            <span className={`flex items-center gap-1.5 text-xs ${isDark ? 'text-gray-600' : 'text-gray-500'}`}>
-              <span className={`px-2 py-0.5 rounded ${isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'}`}>
-                User-level
-              </span>
-              = Only affects you
-            </span>
+            </div>
+            <textarea
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              placeholder="Add a description to help AI understand this data better..."
+              rows={3}
+              className={`w-full px-3 py-2 text-sm rounded-lg border transition-colors ${
+                isDark
+                  ? 'bg-[#0a0a0b] border-[#2a2b2e] text-white placeholder-gray-600 focus:border-[#5d6ad3]'
+                  : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-[#5d6ad3]'
+              } focus:outline-none focus:ring-1 focus:ring-[#5d6ad3]`}
+            />
+            <p className={`text-xs mt-1.5 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+              Descriptions help AI understand what this data represents and when to use it. <strong>Visible to all users.</strong>
+            </p>
+          </div>
+
+          {/* Boost Section - Only show for non-columns */}
+          {!editingNode.column && (
+            <div className={`p-4 rounded-lg ${isDark ? 'bg-[#0a0a0b] border border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200'}`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <BoostIcon className={`w-4 h-4 ${editBoostEnabled ? (isDark ? 'text-white' : 'text-gray-700') : isDark ? 'text-gray-600' : 'text-gray-400'}`} />
+                  <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Priority Boost
+                  </span>
+                  <span className={`text-xs px-2 py-0.5 rounded ${isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'}`}>
+                    User-level
+                  </span>
+                </div>
+                <button
+                  onClick={() => setEditBoostEnabled(!editBoostEnabled)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${
+                    editBoostEnabled 
+                      ? 'bg-[#5d6ad3]' 
+                      : isDark ? 'bg-[#3a3b3e]' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                      editBoostEnabled ? 'translate-x-5' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+              
+              <p className={`text-xs mb-3 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                When enabled, AI will <strong>prioritize this {getNodeTypeName().toLowerCase()}</strong> when generating SQL queries. 
+                Use this for frequently used or important data sources. <strong>Only affects your recommendations.</strong>
+              </p>
+
+              {editBoostEnabled && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                      Boost strength
+                    </span>
+                    <span className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      {editBoostWeight.toFixed(1)}x
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1.0"
+                    max="3.0"
+                    step="0.1"
+                    value={editBoostWeight}
+                    onChange={(e) => setEditBoostWeight(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-[#5d6ad3]"
+                  />
+                  <div className="flex justify-between text-xs mt-1">
+                    <span className={isDark ? 'text-gray-600' : 'text-gray-400'}>Low (1.0x)</span>
+                    <span className={isDark ? 'text-gray-600' : 'text-gray-400'}>High (3.0x)</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Hide/Show Section - Only show for non-columns and admins */}
+          {!editingNode.column && isAdmin && (
+            <div className={`p-4 rounded-lg border ${
+              editExcludeEnabled 
+                ? (isDark ? 'bg-red-900/10 border-red-900/30' : 'bg-red-50 border-red-200')
+                : (isDark ? 'bg-[#0a0a0b] border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200')
+            }`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <HiddenIcon className={`w-4 h-4 ${editExcludeEnabled ? 'text-red-500' : (isDark ? 'text-gray-400' : 'text-gray-600')}`} />
+                  <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Hide from AI
+                  </span>
+                  <span className={`text-xs px-2 py-0.5 rounded ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
+                    Global
+                  </span>
+                </div>
+                <button
+                  onClick={() => setEditExcludeEnabled(!editExcludeEnabled)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${
+                    editExcludeEnabled 
+                      ? 'bg-red-600' 
+                      : isDark ? 'bg-[#2a2b2e]' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
+                      editExcludeEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+              
+              <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                {editExcludeEnabled ? (
+                  <>
+                    This {getNodeTypeName().toLowerCase()} is <strong>hidden from all users</strong>. 
+                    It won't appear in AI recommendations or schema suggestions.
+                  </>
+                ) : (
+                  <>
+                    Hide this {getNodeTypeName().toLowerCase()} from AI recommendations <strong>for all users</strong>. 
+                    Useful for removing test data, deprecated tables, or sensitive information.
+                  </>
+                )}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Modal Footer */}
+        <div className={`flex items-center justify-end gap-3 px-5 py-4 border-t ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
+          <button
+            onClick={() => setEditingNode(null)}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              isDark ? 'text-gray-400 hover:bg-[#2a2b2e]' : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              saving 
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-[#5d6ad3] hover:bg-[#4f5bc4]'
+            } text-white`}
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // If a database is selected, show the detail view
+  if (selectedDatabase) {
+    return (
+      <div className="h-full flex flex-col">
+        {renderDatabaseDetail()}
+        
+        {/* Edit Panel Modal */}
+        {editingNode && renderEditModal()}
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full flex flex-col overflow-auto">
+      {/* Hero Banner */}
+      <div className={`mx-6 mt-6 rounded-xl p-6 ${
+        isDark 
+          ? 'bg-gradient-to-br from-[#5d6ad3]/20 via-[#17181a] to-[#17181a] border border-[#5d6ad3]/30' 
+          : 'bg-gradient-to-br from-[#5d6ad3]/10 via-white to-white border border-[#5d6ad3]/20'
+      }`}>
+        <div className="flex items-start gap-4">
+          <div className={`p-3 rounded-xl ${isDark ? 'bg-[#5d6ad3]/30' : 'bg-[#5d6ad3]/20'}`}>
+            <SparklesIcon className="w-6 h-6 text-[#5d6ad3]" />
+          </div>
+          <div className="flex-1">
+            <h2 className={`text-lg font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Optimise AI Recommendations
+            </h2>
+            <p className={`text-sm leading-relaxed mb-4 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              Help the AI understand your data better. Add descriptions to explain what your tables contain, 
+              boost priority on frequently-used data sources, or hide test tables from recommendations.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs ${
+                isDark ? 'bg-[#0a0a0b] border border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200'
+              }`}>
+                <DescriptionIcon className={`w-4 h-4 ${isDark ? 'text-blue-400' : 'text-blue-600'}`} />
+                <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>Add descriptions</span>
+              </div>
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs ${
+                isDark ? 'bg-[#0a0a0b] border border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200'
+              }`}>
+                <BoostIcon className={`w-4 h-4 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
+                <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>Boost priority</span>
+              </div>
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs ${
+                isDark ? 'bg-[#0a0a0b] border border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200'
+              }`}>
+                <HiddenIcon className={`w-4 h-4 ${isDark ? 'text-red-400' : 'text-red-600'}`} />
+                <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>Hide from AI</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Tree View */}
-      <div className="flex-1 overflow-auto px-6 py-4">
+      {/* Database Cards */}
+      <div className="flex-1 px-6 pb-6">
         {isDatabasesLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#5d6ad3]"></div>
+          <div className="flex items-center justify-center py-16">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#5d6ad3]"></div>
           </div>
         ) : databasesError ? (
-          <div className={`text-center py-8 ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+          <div className={`text-center py-16 ${isDark ? 'text-red-400' : 'text-red-600'}`}>
             Failed to load databases: {databasesError}
           </div>
         ) : !databasesData?.databases || databasesData.databases.length === 0 ? (
-          <div className={`text-center py-8 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-            No databases found
+          <div className={`text-center py-16 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+            <DatabaseIcon className={`w-12 h-12 mx-auto mb-3 ${isDark ? 'text-gray-600' : 'text-gray-300'}`} />
+            <p>No databases connected yet</p>
           </div>
         ) : (
-          <div className={`border rounded-lg ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
-            {databasesData.databases.map(db => renderDatabase(db))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {databasesData.databases.map(db => renderDatabaseCard(db))}
           </div>
         )}
       </div>
 
       {/* Edit Panel Modal */}
-      {editingNode && (
-        <div 
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
-          onClick={(e) => e.target === e.currentTarget && setEditingNode(null)}
-        >
-          <div 
-            className={`w-full max-w-lg mx-4 rounded-xl shadow-2xl ${
-              isDark ? 'bg-[#17181a] border border-[#2a2b2e]' : 'bg-white border border-gray-200'
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className={`flex items-center justify-between px-5 py-4 border-b ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
-              <div>
-                <h3 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                  Optimise {getNodeTypeName()}
-                </h3>
-                <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                  {getNodePath()}
-                </p>
-              </div>
-              <button
-                onClick={() => setEditingNode(null)}
-                className={`p-1.5 rounded-lg transition-colors ${isDark ? 'hover:bg-[#2a2b2e] text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="px-5 py-4 space-y-5">
-              {/* Description Section */}
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <label className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                    Description
-                  </label>
-                  <span className={`text-xs px-2 py-0.5 rounded ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
-                    Global
-                  </span>
-                </div>
-                <textarea
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
-                  placeholder="Add a description to help AI understand this data better..."
-                  rows={3}
-                  className={`w-full px-3 py-2 text-sm rounded-lg border transition-colors ${
-                    isDark
-                      ? 'bg-[#0a0a0b] border-[#2a2b2e] text-white placeholder-gray-600 focus:border-[#5d6ad3]'
-                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-[#5d6ad3]'
-                  } focus:outline-none focus:ring-1 focus:ring-[#5d6ad3]`}
-                />
-                <p className={`text-xs mt-1.5 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
-                  Descriptions help AI understand what this data represents and when to use it. <strong>Visible to all users.</strong>
-                </p>
-              </div>
-
-              {/* Boost Section - Only show for non-columns */}
-              {!editingNode.column && (
-                <div className={`p-4 rounded-lg ${isDark ? 'bg-[#0a0a0b] border border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200'}`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <BoostIcon className={`w-4 h-4 ${editBoostEnabled ? (isDark ? 'text-white' : 'text-gray-700') : isDark ? 'text-gray-600' : 'text-gray-400'}`} />
-                      <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Priority Boost
-                      </span>
-                      <span className={`text-xs px-2 py-0.5 rounded ${isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'}`}>
-                        User-level
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setEditBoostEnabled(!editBoostEnabled)}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${
-                        editBoostEnabled 
-                          ? 'bg-[#5d6ad3]' 
-                          : isDark ? 'bg-[#3a3b3e]' : 'bg-gray-300'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                          editBoostEnabled ? 'translate-x-5' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                  
-                  <p className={`text-xs mb-3 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                    When enabled, AI will <strong>prioritize this {getNodeTypeName().toLowerCase()}</strong> when generating SQL queries. 
-                    Use this for frequently used or important data sources. <strong>Only affects your recommendations.</strong>
-                  </p>
-
-                  {editBoostEnabled && (
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                          Boost strength
-                        </span>
-                        <span className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                          {editBoostWeight.toFixed(1)}x
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="1.0"
-                        max="3.0"
-                        step="0.1"
-                        value={editBoostWeight}
-                        onChange={(e) => setEditBoostWeight(parseFloat(e.target.value))}
-                        className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-[#5d6ad3]"
-                      />
-                      <div className="flex justify-between text-xs mt-1">
-                        <span className={isDark ? 'text-gray-600' : 'text-gray-400'}>Low (1.0x)</span>
-                        <span className={isDark ? 'text-gray-600' : 'text-gray-400'}>High (3.0x)</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Hide/Show Section - Only show for non-columns and admins */}
-              {!editingNode.column && isAdmin && (
-                <div className={`p-4 rounded-lg border ${
-                  editExcludeEnabled 
-                    ? (isDark ? 'bg-red-900/10 border-red-900/30' : 'bg-red-50 border-red-200')
-                    : (isDark ? 'bg-[#0a0a0b] border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200')
-                }`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <HiddenIcon className={`w-4 h-4 ${editExcludeEnabled ? 'text-red-500' : (isDark ? 'text-gray-400' : 'text-gray-600')}`} />
-                      <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Visibility
-                      </span>
-                      <span className={`text-xs px-2 py-0.5 rounded ${isDark ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-100 text-orange-700'}`}>
-                        Global
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setEditExcludeEnabled(!editExcludeEnabled)}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${
-                        editExcludeEnabled 
-                          ? 'bg-red-600' 
-                          : isDark ? 'bg-[#2a2b2e]' : 'bg-gray-300'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
-                          editExcludeEnabled ? 'translate-x-4' : 'translate-x-0.5'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                  
-                  <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                    {editExcludeEnabled ? (
-                      <>
-                        This {getNodeTypeName().toLowerCase()} will be <strong>hidden from all users</strong>. 
-                        It won't appear in AI recommendations or schema suggestions.
-                      </>
-                    ) : (
-                      <>
-                        Hide this {getNodeTypeName().toLowerCase()} from AI recommendations <strong>for all users</strong>. 
-                        Useful for removing test data, deprecated tables, or sensitive information.
-                      </>
-                    )}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className={`flex items-center justify-end gap-3 px-5 py-4 border-t ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
-              <button
-                onClick={() => setEditingNode(null)}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  isDark ? 'text-gray-400 hover:bg-[#2a2b2e]' : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  saving 
-                    ? 'bg-gray-400 cursor-not-allowed' 
-                    : 'bg-[#5d6ad3] hover:bg-[#4f5bc4]'
-                } text-white`}
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {editingNode && renderEditModal()}
     </div>
   );
 }

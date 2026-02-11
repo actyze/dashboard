@@ -79,18 +79,6 @@ const TableSchema = ({ tableName, tableDetails }) => {
     );
   };
 
-  const MoreIcon = () => (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
-    </svg>
-  );
-
-  const CopyIcon = () => (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-    </svg>
-  );
-
   // Loading state
   if (columns === null) {
     return (
@@ -134,14 +122,6 @@ const TableSchema = ({ tableName, tableDetails }) => {
           <Text color="secondary" className="text-xs">
             {columns.length} columns
           </Text>
-        </div>
-        <div className="flex items-center space-x-0.5">
-          <button className={`p-0.5 rounded transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}>
-            <CopyIcon />
-          </button>
-          <button className={`p-0.5 rounded transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}>
-            <MoreIcon />
-          </button>
         </div>
       </div>
 

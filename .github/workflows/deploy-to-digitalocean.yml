@@ -160,9 +160,12 @@ jobs:
                 mongodb.connection-url: "${{ secrets.MONGODB_CONNECTION_URL }}"
               snowflake:
                 connector.name: "snowflake"
-                connection-url: "${{ secrets.SNOWFLAKE_CONNECTION_URL }}"
-                connection-user: "${{ secrets.SNOWFLAKE_USERNAME }}"
-                connection-password: "${{ secrets.SNOWFLAKE_PASSWORD }}"
+                snowflake.account: "${{ secrets.SNOWFLAKE_ACCOUNT }}"
+                snowflake.user: "ACTYZE_TRINO_SVC"
+                snowflake.private-key: "${{ secrets.SNOWFLAKE_PRIVATE_KEY }}"
+                snowflake.warehouse: "SNOWFLAKE_LEARNING_WH"
+                snowflake.role: "SYSADMIN"
+                snowflake.database: "UNIVERSITY_ANALYTICS"
               supabase:
                 connector.name: "postgresql"
                 connection-url: "${{ secrets.SUPABASE_URL }}"

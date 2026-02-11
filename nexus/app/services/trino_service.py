@@ -228,14 +228,16 @@ class TrinoService:
                 self.logger.error("Error during SQL correction", error=str(e))
                 break
         
-        # Return final failure result
+        # Return final failure result with user-friendly message
+        last_error = error_history[-1] if error_history else "Unknown error"
         return {
             "success": False,
-            "error": f"Failed after {max_retries + 1} attempts",
+            "error": "Unable to execute the query after multiple attempts. Please review the generated SQL or try rephrasing your question.",
             "error_type": "MAX_RETRIES_EXCEEDED",
             "retry_attempts": max_retries,
             "error_history": error_history,
-            "final_sql": current_sql
+            "final_sql": current_sql,
+            "last_error": last_error
         }
     
     async def health_check(self) -> Dict[str, Any]:

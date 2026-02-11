@@ -313,7 +313,7 @@ const DatabaseSchemaPanel = ({
           </div>
 
           {/* Table Schema at Bottom - Fixed Height when visible */}
-          <div className={`${selectedTable ? 'flex-shrink-0' : 'hidden'} border-t border-gray-200/50 dark:border-gray-700/50 h-48 overflow-y-auto bg-[#0d0d0f]`}>
+          <div className={`${selectedTable ? 'flex-shrink-0' : 'hidden'} border-t border-gray-200/50 dark:border-gray-700/50 h-48 overflow-y-auto ${isDark ? 'bg-[#0d0d0f]' : 'bg-white'}`}>
             {selectedTable && selectedTableInfo && (
               <TableSchema 
                 tableName={selectedTable} 

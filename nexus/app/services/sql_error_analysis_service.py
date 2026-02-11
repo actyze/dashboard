@@ -63,6 +63,7 @@ class SqlErrorAnalysisService:
             "CONNECTION_ERROR": "Database connection issue. Please try again later.",
             "TYPE_ERROR": "Data type conversion error. Adjusting query format...",
             "TIMEOUT_ERROR": "Query took too long to execute. Try simplifying your request.",
+            "MAX_RETRIES_EXCEEDED": "Unable to execute the query after multiple attempts. Please review the generated SQL or try rephrasing your question.",
             "UNKNOWN_ERROR": "An unexpected error occurred. Please try rephrasing your request."
         }
         
@@ -76,66 +77,27 @@ class SqlErrorAnalysisService:
         error_type: str, 
         error_history: List[str]
     ) -> str:
-        """Build enhanced error correction prompt with Trino-specific guidance."""
+        """Build simple error correction prompt with raw error details."""
         
         prompt_parts = [
-            "TARGET DATABASE: Trino/Presto SQL Engine",
-            self._get_trino_rules(),
+            f"User Query: {original_query}",
             "",
-            "FIX SQL ERROR",
-            f"Original Request: {original_query}",
-            f"Failed SQL: {failed_sql}",
-            f"Error: {sql_error}",
+            f"Failed SQL Query:\n{failed_sql}",
+            "",
+            f"Database Error:\n{sql_error}",
             ""
         ]
         
-        # Add specific guidance based on error type
-        guidance = self._get_error_type_guidance(error_type, sql_error)
-        if guidance:
-            prompt_parts.append(guidance)
-            prompt_parts.append("")
-        
         # Add error history if available
         if error_history:
-            prompt_parts.append(f"Previous Errors: {'; '.join(error_history)}")
+            prompt_parts.append("Previous Attempt Errors:")
+            for i, error in enumerate(error_history, 1):
+                prompt_parts.append(f"{i}. {error}")
             prompt_parts.append("")
         
-        prompt_parts.append("Generate corrected SQL (no semicolons, proper Trino syntax):")
+        prompt_parts.append("Please generate corrected SQL based on the error above.")
         
         return "\n".join(prompt_parts)
-    
-    def _get_trino_rules(self) -> str:
-        """Get Trino-specific SQL rules."""
-        return (
-            "RULES: "
-            "- NO semicolons (;) - Trino JDBC rejects them"
-            "- Use catalog.schema.table format"
-            "- Trino/Presto syntax only"
-            "- Case-sensitive identifiers"
-            "- Use proper JOIN syntax"
-        )
-    
-    def _get_error_type_guidance(self, error_type: str, sql_error: str) -> str:
-        """Get specific guidance based on error type."""
-        
-        guidance_map = {
-            "SYNTAX_ERROR": "Check commas, parentheses, keywords. Ensure Trino/Presto compatibility.",
-            "SEMICOLON_ERROR": "Remove ALL semicolons (;). Example: 'SELECT * FROM table' not 'SELECT * FROM table;'",
-            "SCHEMA_ERROR": "Schema/table not found. Use provided schema recommendations, check catalog.schema.table format.",
-            "COLUMN_ERROR": "Column not found. Check schema recommendations, use exact column names (case-sensitive).",
-            "PERMISSION_ERROR": "Access denied. Use only accessible tables and columns.",
-            "CONNECTION_ERROR": "Connection issue. Simplify query, reduce complexity.",
-            "TYPE_ERROR": "Data type issue. Check column types and casting.",
-            "TIMEOUT_ERROR": "Query too complex. Add LIMIT clause, simplify JOINs."
-        }
-        
-        base_guidance = guidance_map.get(error_type, "Review error message, ensure Trino compatibility.")
-        
-        # Add specific semicolon guidance if detected
-        if "semicolon" in sql_error.lower() or ";" in sql_error:
-            base_guidance += " CRITICAL: Remove all semicolons from the query."
-        
-        return base_guidance
     
     def should_retry_error(self, error_type: str) -> bool:
         """Determine if an error type is worth retrying."""

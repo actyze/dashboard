@@ -518,18 +518,19 @@ class OrchestrationService:
                     "error_type": analyzed_error_type
                 }
             
-            # Build enhanced error correction prompt
-            enhanced_prompt = self.error_analysis_service.build_enhanced_error_prompt(
+            # Build simple error correction prompt
+            error_correction_prompt = self.error_analysis_service.build_enhanced_error_prompt(
                 original_query, failed_sql, sql_error, analyzed_error_type, error_history
             )
             
-            self.logger.debug("Using enhanced error correction", 
+            self.logger.info("Retrying with error correction", 
                             original_error_type=error_type, 
-                            analyzed_error_type=analyzed_error_type)
+                            analyzed_error_type=analyzed_error_type,
+                            retry_prompt=error_correction_prompt)
             
-            # Generate corrected SQL using enhanced prompt
+            # Generate corrected SQL using error correction prompt
             return await self.llm_service.generate_sql(
-                enhanced_prompt, conversation_history, schema_recommendations
+                error_correction_prompt, conversation_history, schema_recommendations
             )
         return correction_callback
     

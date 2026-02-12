@@ -111,7 +111,7 @@ jobs:
 
       - name: Create values-secrets.yaml from GitHub Secrets
         run: |
-          cat > /tmp/values-secrets.yaml <<EOF
+          cat > /tmp/values-secrets.yaml <<'EOF'
           secrets:
             create: true
             externalLLM:

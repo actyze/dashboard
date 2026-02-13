@@ -160,9 +160,13 @@ jobs:
                 mongodb.connection-url: "${{ secrets.MONGODB_CONNECTION_URL }}"
               snowflake:
                 connector.name: "snowflake"
-                connection-url: "${{ secrets.SNOWFLAKE_CONNECTION_URL }}"
+                connection-url: "jdbc:snowflake://CDUCMAC-VOC43074.snowflakecomputing.com"
                 connection-user: "${{ secrets.SNOWFLAKE_USERNAME }}"
                 connection-password: "${{ secrets.SNOWFLAKE_PASSWORD }}"
+                snowflake.account: "CDUCMAC-VOC43074"
+                snowflake.database: "UNIVERSITY_ANALYTICS"
+                snowflake.role: "SYSADMIN"
+                snowflake.warehouse: "SNOWFLAKE_LEARNING_WH"
               supabase:
                 connector.name: "postgresql"
                 connection-url: "${{ secrets.SUPABASE_URL }}"

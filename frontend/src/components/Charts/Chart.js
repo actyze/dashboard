@@ -815,9 +815,15 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
               'zoomIn2d', 
               'zoomOut2d', 
               'autoScale2d',
-              'resetScale2d',
-              'toImage'
+              'resetScale2d'
             ],
+            toImageButtonOptions: {
+              format: 'png',
+              filename: 'actyze_chart_' + new Date().toISOString().split('T')[0],
+              height: 800,
+              width: 1200,
+              scale: 2
+            },
             doubleClick: 'reset'
           }}
         />

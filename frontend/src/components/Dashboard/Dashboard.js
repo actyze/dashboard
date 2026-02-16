@@ -14,6 +14,8 @@ import { Chart } from '../Charts';
 import { RestService, QueryManagementService } from '../../services';
 import DashboardService from '../../services/DashboardService';
 import { transformQueryResults } from '../../utils/dataTransformers';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 // Grid configuration constants
 const GRID_COLS = 12;
@@ -637,6 +639,77 @@ const Dashboard = ({ isPublic = false }) => {
     );
   };
 
+  // Export dashboard as PNG
+  const handleExportPNG = async () => {
+    try {
+      const dashboardElement = gridContainerRef.current;
+      if (!dashboardElement) return;
+
+      // Hide action buttons and menus temporarily
+      const actionBars = dashboardElement.querySelectorAll('.react-grid-item .tile-actions');
+      actionBars.forEach(el => el.style.display = 'none');
+
+      const canvas = await html2canvas(dashboardElement, {
+        scale: 2,
+        backgroundColor: isDark ? '#101012' : '#ffffff',
+        logging: false,
+        useCORS: true
+      });
+
+      // Restore action buttons
+      actionBars.forEach(el => el.style.display = '');
+
+      canvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const filename = `${dashboard?.title || 'dashboard'}_${new Date().toISOString().split('T')[0]}.png`;
+        link.download = filename;
+        link.href = url;
+        link.click();
+        URL.revokeObjectURL(url);
+      });
+    } catch (error) {
+      console.error('Error exporting PNG:', error);
+      alert('Failed to export dashboard as PNG');
+    }
+  };
+
+  // Export dashboard as PDF
+  const handleExportPDF = async () => {
+    try {
+      const dashboardElement = gridContainerRef.current;
+      if (!dashboardElement) return;
+
+      // Hide action buttons and menus temporarily
+      const actionBars = dashboardElement.querySelectorAll('.react-grid-item .tile-actions');
+      actionBars.forEach(el => el.style.display = 'none');
+
+      const canvas = await html2canvas(dashboardElement, {
+        scale: 2,
+        backgroundColor: isDark ? '#101012' : '#ffffff',
+        logging: false,
+        useCORS: true
+      });
+
+      // Restore action buttons
+      actionBars.forEach(el => el.style.display = '');
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
+        unit: 'px',
+        format: [canvas.width, canvas.height]
+      });
+
+      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+      const filename = `${dashboard?.title || 'dashboard'}_${new Date().toISOString().split('T')[0]}.pdf`;
+      pdf.save(filename);
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      alert('Failed to export dashboard as PDF');
+    }
+  };
+
   // Loading state
   if (loadingDashboard) {
     return (
@@ -727,6 +800,26 @@ const Dashboard = ({ isPublic = false }) => {
                   {dashboard.is_anonymous_public ? 'public' : 'shared'}
                 </span>
               )}
+              
+              <button
+                onClick={handleExportPNG}
+                className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-200' : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'}`}
+                title="Export as PNG"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </button>
+
+              <button
+                onClick={handleExportPDF}
+                className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-200' : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'}`}
+                title="Export as PDF"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+              </button>
               
               <button
                 onClick={() => setShareModalOpen(true)}

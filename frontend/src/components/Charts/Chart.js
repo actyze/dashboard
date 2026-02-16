@@ -808,7 +808,16 @@ const Chart = ({ chartData, loading = false, error = null, onChartTypeChange = n
             responsive: true, 
             displayModeBar: showControls,
             displaylogo: false,
-            modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'],
+            modeBarButtonsToRemove: [
+              'pan2d', 
+              'lasso2d', 
+              'select2d', 
+              'zoomIn2d', 
+              'zoomOut2d', 
+              'autoScale2d',
+              'resetScale2d',
+              'toImage'
+            ],
             doubleClick: 'reset'
           }}
         />

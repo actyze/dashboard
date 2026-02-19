@@ -64,11 +64,20 @@ class TrinoService:
             
         except Exception as e:
             execution_time = (asyncio.get_event_loop().time() - start_time) * 1000
+            
+            # Extract clean error message from Trino exceptions
             error_msg = str(e)
+            if hasattr(e, 'message'):
+                # Trino exceptions have a clean message attribute
+                error_msg = str(e.message)
+            elif hasattr(e, 'args') and e.args:
+                # Fallback to first arg if available
+                error_msg = str(e.args[0])
             
             self.logger.error(
                 "Query execution failed",
                 error=error_msg,
+                error_type=type(e).__name__,
                 execution_time=execution_time
             )
             

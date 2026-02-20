@@ -62,6 +62,13 @@ class SchemaService:
         # In dev/local: Include TPC-H for testing
         # In production: Exclude TPC-H (it's just sample data)
         self.include_tpch = os.getenv("INCLUDE_TPCH", "false").lower() == "true"
+        
+        # Additional catalogs to exclude (comma-separated)
+        # Useful for external Trino with problematic catalogs
+        excluded_catalogs_env = os.getenv("EXCLUDED_CATALOGS", "")
+        self.extra_excluded_catalogs = [c.strip() for c in excluded_catalogs_env.split(",") if c.strip()]
+        if self.extra_excluded_catalogs:
+            logger.info(f"Additional excluded catalogs from EXCLUDED_CATALOGS: {self.extra_excluded_catalogs}")
 
         self.trino_service = TrinoSchemaService(
             host=self.trino_host, 
@@ -70,7 +77,8 @@ class SchemaService:
             password=self.trino_password,
             catalog=self.trino_catalog,
             ssl=self.trino_ssl,
-            include_tpch=self.include_tpch
+            include_tpch=self.include_tpch,
+            extra_excluded_catalogs=self.extra_excluded_catalogs
         )
         self.embedder = FAISSSchemaEmbedder()
         self.labeler = DomainLabeler()  # Initialize domain labeler

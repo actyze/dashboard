@@ -5,8 +5,8 @@ import asyncio
 import logging
 from typing import Dict, List, Any, Optional
 
-import trino.dbapi
-import trino.auth
+from trino.dbapi import connect
+from trino.auth import BasicAuthentication
 
 logger = logging.getLogger("trino-client")
 
@@ -58,10 +58,10 @@ class TrinoSchemaService:
             # Use basic auth if password is provided
             if self.password:
                 logger.info(f"Using basic authentication for user: {self.user}")
-                auth_obj = trino.auth.BasicAuthentication(self.user, self.password)
+                auth_obj = BasicAuthentication(self.user, self.password)
                 connect_params["auth"] = auth_obj
             
-            self.connection = trino.dbapi.connect(**connect_params)
+            self.connection = connect(**connect_params)
             logger.info(f"Connected to Trino at {self.host}:{self.port}")
         except Exception as e:
             logger.error(f"Trino connect failed: {e}")

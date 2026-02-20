@@ -5,7 +5,6 @@ import asyncio
 import logging
 from typing import Dict, List, Any, Optional
 
-import trino
 import trino.dbapi
 import trino.auth
 

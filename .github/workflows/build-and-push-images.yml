@@ -200,8 +200,8 @@ jobs:
           
           echo "=== Cleaning Docker completely ==="
           docker buildx prune -af --verbose || true
-          docker system prune -af --volumes --filter "until=24h"
-          sudo rm -rf /var/lib/docker/tmp/*
+          docker system prune -af --volumes
+          sudo rm -rf /var/lib/docker/tmp/* || true
           
           echo ""
           echo "=== Disk space AFTER cleanup ==="

@@ -15,7 +15,8 @@ class TrinoSchemaService:
     """Service for fetching schema metadata from Trino."""
     
     def __init__(self, host: str, port: int = 8080, user: str = "admin", password: str = "", 
-                 catalog: Optional[str] = None, ssl: bool = False, include_tpch: bool = False):
+                 catalog: Optional[str] = None, ssl: bool = False, include_tpch: bool = False,
+                 extra_excluded_catalogs: Optional[List[str]] = None):
         self.host = host
         self.port = port
         self.user = user
@@ -23,6 +24,7 @@ class TrinoSchemaService:
         self.catalog = catalog
         self.ssl = ssl
         self.include_tpch = include_tpch
+        self.extra_excluded_catalogs = extra_excluded_catalogs or []
         self.connection = None
 
     def connect(self):
@@ -77,6 +79,11 @@ class TrinoSchemaService:
         excluded_catalogs = ['system', 'jmx', 'memory', 'tpcds']
         if not self.include_tpch:
             excluded_catalogs.append('tpch')
+        
+        # Add any extra excluded catalogs from environment variable
+        if self.extra_excluded_catalogs:
+            excluded_catalogs.extend(self.extra_excluded_catalogs)
+            logger.info(f"Including extra excluded catalogs: {self.extra_excluded_catalogs}")
         
         # Build the NOT IN clause
         excluded_catalogs_str = ', '.join(f"'{cat}'" for cat in excluded_catalogs)

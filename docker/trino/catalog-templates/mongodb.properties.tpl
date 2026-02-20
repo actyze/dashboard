@@ -1,5 +1,5 @@
-# MongoDB Connector - Atlas Cloud
-# Configured for MongoDB Atlas connection
+# MongoDB Connector - NoSQL Database
+# Atlas cluster connection
 
 connector.name=mongodb
 mongodb.connection-url=${MONGODB_CONNECTION_URL}

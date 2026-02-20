@@ -1,5 +1,5 @@
 # Snowflake Connector - Cloud Data Warehouse
-# Configured for Snowflake connection
+# Configure Snowflake connection with warehouse, database, and role
 
 connector.name=snowflake
 connection-url=${SNOWFLAKE_CONNECTION_URL}

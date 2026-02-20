@@ -100,6 +100,7 @@ services:
       TRINO_HOST: ${TRINO_HOST:-trino}
       TRINO_PORT: ${TRINO_PORT:-8080}
       TRINO_USER: ${TRINO_USER:-admin}
+      TRINO_PASSWORD: ${TRINO_PASSWORD:-}
       TRINO_CATALOG: ${TRINO_CATALOG:-postgres}
       TRINO_SCHEMA: ${TRINO_SCHEMA:-public}
       TRINO_SSL: ${TRINO_SSL:-false}

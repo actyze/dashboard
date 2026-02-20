@@ -15,23 +15,22 @@ logger = logging.getLogger("trino-client")
 class TrinoSchemaService:
     """Service for fetching schema metadata from Trino."""
     
-    def __init__(self, host: str, port: int = 8080, user: str = "admin", catalog: Optional[str] = None, include_tpch: bool = False):
+    def __init__(self, host: str, port: int = 8080, user: str = "admin", password: str = "", 
+                 catalog: Optional[str] = None, ssl: bool = False, include_tpch: bool = False):
         self.host = host
         self.port = port
         self.user = user
+        self.password = password
         self.catalog = catalog
+        self.ssl = ssl
         self.include_tpch = include_tpch
         self.connection = None
 
     def connect(self):
         """Establish connection to Trino."""
         try:
-            # Check for basic auth credentials
-            auth_user = os.getenv("TRINO_AUTH_USER")
-            auth_password = os.getenv("TRINO_AUTH_PASSWORD")
-            
-            # Check SSL configuration
-            ssl_enabled = os.getenv("TRINO_SSL_ENABLED", "false").lower() == "true"
+            # SSL configuration
+            ssl_enabled = self.ssl
             ssl_verification = os.getenv("TRINO_SSL_VERIFICATION", "NONE").upper()
             
             # Auto-detect SSL for port 443
@@ -46,7 +45,8 @@ class TrinoSchemaService:
             connect_params = {
                 "host": self.host,
                 "port": self.port,
-                "catalog": self.catalog
+                "catalog": self.catalog,
+                "user": self.user
             }
             
             if ssl_enabled:
@@ -56,14 +56,11 @@ class TrinoSchemaService:
             else:
                 logger.info("Using HTTP (SSL disabled)")
             
-            # Use basic auth if credentials provided
-            if auth_user and auth_password:
-                logger.info(f"Using basic authentication for user: {auth_user}")
-                auth_obj = trino.auth.BasicAuthentication(auth_user, auth_password)
-                connect_params["user"] = auth_user
+            # Use basic auth if password is provided
+            if self.password:
+                logger.info(f"Using basic authentication for user: {self.user}")
+                auth_obj = trino.auth.BasicAuthentication(self.user, self.password)
                 connect_params["auth"] = auth_obj
-            else:
-                connect_params["user"] = self.user
             
             self.connection = trino.dbapi.connect(**connect_params)
             logger.info(f"Connected to Trino at {self.host}:{self.port}")

@@ -498,7 +498,7 @@ Generated SQL (Main Data):
         # Apply authentication based on configured type
         auth_type = settings.external_llm_auth_type.lower()
         if auth_type == "bearer":
-            # OpenAI, Perplexity, Groq, etc.
+            # OpenAI, Perplexity, Groq, etc. + Bedrock
             headers["Authorization"] = f"Bearer {settings.external_llm_api_key}"
         elif auth_type == "x-api-key":
             # Anthropic Claude
@@ -530,12 +530,41 @@ Generated SQL (Main Data):
                 }
             ]
         
-        payload = {
-            "model": settings.external_llm_model,
-            "messages": messages,
-            "max_tokens": settings.external_llm_max_tokens,
-            "temperature": settings.external_llm_temperature
-        }
+        # Format payload based on provider
+        provider = settings.external_llm_provider.lower()
+        
+        if provider == "bedrock":
+            # AWS Bedrock Converse API format
+            # Convert messages to Bedrock format with nested content
+            bedrock_messages = []
+            for msg in messages:
+                content = msg.get("content", "")
+                # Bedrock requires content as array of content blocks
+                if isinstance(content, str):
+                    bedrock_messages.append({
+                        "role": msg.get("role", "user"),
+                        "content": [{"text": content}]
+                    })
+                else:
+                    # Already in correct format
+                    bedrock_messages.append(msg)
+            
+            payload = {
+                "messages": bedrock_messages,
+                "inferenceConfig": {
+                    "maxTokens": settings.external_llm_max_tokens,
+                    "temperature": settings.external_llm_temperature
+                }
+            }
+            # Note: model is in the endpoint URL for Bedrock, not in the body
+        else:
+            # OpenAI-compatible format (default for most providers)
+            payload = {
+                "model": settings.external_llm_model,
+                "messages": messages,
+                "max_tokens": settings.external_llm_max_tokens,
+                "temperature": settings.external_llm_temperature
+            }
         
         # Use complete endpoint URL (includes provider-specific path)
         endpoint = settings.external_llm_base_url
@@ -566,9 +595,19 @@ Generated SQL (Main Data):
         
         # Handle different response formats based on provider
         content = None
+        provider = settings.external_llm_provider.lower()
+        
+        # AWS Bedrock Converse API format: {"output": {"message": {"content": [{"text": "..."}]}}, ...}
+        if provider == "bedrock" and "output" in result:
+            message = result.get("output", {}).get("message", {})
+            content_blocks = message.get("content", [])
+            for block in content_blocks:
+                if isinstance(block, dict) and "text" in block:
+                    content = block["text"]
+                    break
         
         # Anthropic Claude format: {"content": [{"type": "text", "text": "..."}], ...}
-        if "content" in result and isinstance(result["content"], list):
+        elif "content" in result and isinstance(result["content"], list):
             for item in result["content"]:
                 if isinstance(item, dict) and item.get("type") == "text":
                     content = item.get("text")

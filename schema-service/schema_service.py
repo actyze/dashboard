@@ -46,7 +46,9 @@ class SchemaService:
         self.trino_host = os.getenv("TRINO_HOST", "localhost")
         self.trino_port = int(os.getenv("TRINO_PORT", "8080"))
         self.trino_user = os.getenv("TRINO_USER", "admin")
+        self.trino_password = os.getenv("TRINO_PASSWORD", "")
         self.trino_catalog = os.getenv("TRINO_CATALOG")  # optional
+        self.trino_ssl = os.getenv("TRINO_SSL", "false").lower() == "true"
         self.refresh_hours = int(os.getenv("SCHEMA_REFRESH_HOURS", "3"))
         
         # PostgreSQL connection for intent examples (same as Nexus uses)
@@ -64,8 +66,10 @@ class SchemaService:
         self.trino_service = TrinoSchemaService(
             host=self.trino_host, 
             port=self.trino_port, 
-            user=self.trino_user, 
+            user=self.trino_user,
+            password=self.trino_password,
             catalog=self.trino_catalog,
+            ssl=self.trino_ssl,
             include_tpch=self.include_tpch
         )
         self.embedder = FAISSSchemaEmbedder()

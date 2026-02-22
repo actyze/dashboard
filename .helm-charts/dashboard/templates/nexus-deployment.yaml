@@ -83,15 +83,82 @@ spec:
               key: password
         {{- if .Values.modelStrategy.externalLLM.enabled }}
         # External LLM Configuration
+        # ============================================================================
+        # AI Provider Configuration (LiteLLM Integration)
+        # ============================================================================
         - name: EXTERNAL_LLM_ENABLED
           value: "{{ .Values.modelStrategy.externalLLM.enabled }}"
-        # Spring relaxed-binding for dashboard.external-llm.enabled
         - name: DASHBOARD_EXTERNAL_LLM_ENABLED
           value: "{{ .Values.modelStrategy.externalLLM.enabled }}"
-        - name: EXTERNAL_LLM_PROVIDER
-          value: {{ .Values.modelStrategy.externalLLM.provider }}
-        - name: DASHBOARD_EXTERNAL_LLM_PROVIDER
-          value: {{ .Values.modelStrategy.externalLLM.provider }}
+        
+        # LiteLLM Mode (auto, standard, openai-compatible)
+        - name: EXTERNAL_LLM_MODE
+          value: {{ .Values.modelStrategy.externalLLM.mode | default "auto" | quote }}
+        
+        # Model Configuration
+        - name: EXTERNAL_LLM_MODEL
+          value: {{ .Values.modelStrategy.externalLLM.model }}
+        - name: DASHBOARD_EXTERNAL_LLM_MODEL
+          value: {{ .Values.modelStrategy.externalLLM.model }}
+        
+        # Direct Connection: Provider-specific API keys (LiteLLM auto-detects)
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-external-llm
+              key: external-llm-api-key
+              optional: true
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-external-llm
+              key: openai-api-key
+              optional: true
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-external-llm
+              key: gemini-api-key
+              optional: true
+        - name: GROQ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-external-llm
+              key: groq-api-key
+              optional: true
+        - name: PERPLEXITY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-external-llm
+              key: perplexity-api-key
+              optional: true
+        # AWS Bedrock (requires AWS credentials)
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-external-llm
+              key: aws-access-key-id
+              optional: true
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-external-llm
+              key: aws-secret-access-key
+              optional: true
+        - name: AWS_REGION_NAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "dashboard.fullname" . }}-external-llm
+              key: aws-region-name
+              optional: true
+        
+        # Enterprise Gateway: Custom base URL and API key
+        {{- if .Values.modelStrategy.externalLLM.baseUrl }}
+        - name: EXTERNAL_LLM_BASE_URL
+          value: {{ .Values.modelStrategy.externalLLM.baseUrl }}
+        - name: DASHBOARD_EXTERNAL_LLM_BASE_URL
+          value: {{ .Values.modelStrategy.externalLLM.baseUrl }}
+        {{- end }}
         - name: EXTERNAL_LLM_API_KEY
           valueFrom:
             secretKeyRef:
@@ -104,14 +171,8 @@ spec:
               name: {{ include "dashboard.fullname" . }}-external-llm
               key: external-llm-api-key
               optional: true
-        - name: EXTERNAL_LLM_MODEL
-          value: {{ .Values.modelStrategy.externalLLM.model }}
-        - name: DASHBOARD_EXTERNAL_LLM_MODEL
-          value: {{ .Values.modelStrategy.externalLLM.model }}
-        - name: EXTERNAL_LLM_BASE_URL
-          value: {{ .Values.modelStrategy.externalLLM.baseUrl }}
-        - name: DASHBOARD_EXTERNAL_LLM_BASE_URL
-          value: {{ .Values.modelStrategy.externalLLM.baseUrl }}
+        
+        # Performance Settings
         - name: EXTERNAL_LLM_MAX_TOKENS
           value: "{{ .Values.modelStrategy.externalLLM.maxTokens }}"
         - name: EXTERNAL_LLM_TEMPERATURE
@@ -120,13 +181,20 @@ spec:
           value: "{{ .Values.modelStrategy.externalLLM.timeout }}"
         - name: EXTERNAL_LLM_FALLBACK_ENABLED
           value: "{{ .Values.modelStrategy.externalLLM.fallbackToLocal }}"
-        # Authentication configuration (flexible for any LLM provider)
+        
+        # Enterprise Gateway: Authentication
         - name: EXTERNAL_LLM_AUTH_TYPE
           value: {{ .Values.modelStrategy.externalLLM.authType | default "bearer" | quote }}
         {{- if .Values.modelStrategy.externalLLM.extraHeaders }}
         - name: EXTERNAL_LLM_EXTRA_HEADERS
           value: {{ .Values.modelStrategy.externalLLM.extraHeaders | quote }}
         {{- end }}
+        
+        # Legacy: Keep EXTERNAL_LLM_PROVIDER for backward compatibility
+        - name: EXTERNAL_LLM_PROVIDER
+          value: {{ .Values.modelStrategy.externalLLM.provider | default "anthropic" | quote }}
+        - name: DASHBOARD_EXTERNAL_LLM_PROVIDER
+          value: {{ .Values.modelStrategy.externalLLM.provider | default "anthropic" | quote }}
         {{- end }}
         # ML Service Configuration
         - name: ML_SERVICE_MODEL_TYPE

@@ -6,6 +6,14 @@ import structlog
 from typing import List, Dict, Any, Optional
 from app.config import settings
 
+# LiteLLM - unified interface for 100+ LLM providers
+try:
+    import litellm
+    LITELLM_AVAILABLE = True
+except ImportError:
+    LITELLM_AVAILABLE = False
+    litellm = None
+
 
 class LLMService:
     """Client for external LLM-based SQL generation."""
@@ -477,16 +485,194 @@ Generated SQL (Main Data):
         return "\n".join(prompt_parts)
     
     async def _call_external_llm(self, prompt: str = None, messages: List[Dict[str, str]] = None) -> Dict[str, Any]:
-        """Call external LLM API using OpenAI-compatible format (works with all providers)."""
+        """
+        Call external LLM API - intelligently routes based on configuration mode.
+        
+        Integration Modes:
+        - "auto" (default): Use LiteLLM if available, fallback to openai-compatible
+        - "standard": Force LiteLLM (100+ providers: OpenAI, Claude, Gemini, Bedrock, etc.)
+        - "openai-compatible": For enterprise gateways expecting OpenAI format
+        - "custom": Reserved for future custom template engine
+        
+        Config: settings.external_llm_mode or legacy settings.feature_use_litellm
+        """
         
         try:
-            return await self._call_openai_compatible_api(prompt, messages)
+            # Determine which mode to use
+            mode = settings.external_llm_mode.lower()
+            
+            if mode == "standard":
+                # Explicit: Force LiteLLM
+                if not LITELLM_AVAILABLE:
+                    raise ImportError(
+                        "LiteLLM not installed. Install with: pip install litellm\n"
+                        "Or set EXTERNAL_LLM_MODE=openai-compatible to use legacy mode"
+                    )
+                self.logger.info("Using LiteLLM (mode: standard)", model=settings.external_llm_model)
+                return await self._call_litellm_api(prompt, messages)
+            
+            elif mode == "openai-compatible":
+                # Explicit: Enterprise OpenAI-compatible gateway
+                self.logger.info(
+                    "Using OpenAI-compatible mode for enterprise gateway",
+                    endpoint=settings.external_llm_base_url
+                )
+                return await self._call_openai_compatible_api(prompt, messages)
+            
+            elif mode == "custom":
+                # Reserved for future custom template engine
+                self.logger.error("Custom mode not yet implemented")
+                return {
+                    "success": False,
+                    "error": "Custom mode not implemented. Use 'standard' or 'openai-compatible' mode.",
+                    "error_type": "CONFIGURATION_ERROR"
+                }
+            
+            else:  # mode == "auto" or any other value
+                # Auto mode: Try LiteLLM first, fallback to legacy
+                # Also respects legacy feature_use_litellm flag for backward compatibility
+                use_litellm = settings.feature_use_litellm and LITELLM_AVAILABLE
+                
+                if use_litellm:
+                    self.logger.info("Using LiteLLM (mode: auto)", model=settings.external_llm_model)
+                    return await self._call_litellm_api(prompt, messages)
+                else:
+                    if settings.feature_use_litellm and not LITELLM_AVAILABLE:
+                        self.logger.warning(
+                            "LiteLLM enabled but not installed. Falling back to OpenAI-compatible mode. "
+                            "Install with: pip install litellm"
+                        )
+                    self.logger.info("Using OpenAI-compatible mode (mode: auto)", endpoint=settings.external_llm_base_url)
+                    return await self._call_openai_compatible_api(prompt, messages)
+                    
         except Exception as e:
             self.logger.error("External LLM API call failed", error=str(e))
             return {
                 "success": False,
                 "error": f"API call failed: {str(e)}",
                 "error_type": "NETWORK_ERROR"
+            }
+    
+    async def _call_litellm_api(self, prompt: str = None, messages: List[Dict[str, str]] = None) -> Dict[str, Any]:
+        """
+        Call external LLM using LiteLLM unified interface.
+        
+        LiteLLM automatically handles:
+        - Request/response format conversion for 100+ providers
+        - Authentication (reads from standard env vars or uses api_key param)
+        - Error handling and retries
+        - Cost tracking
+        
+        Supported providers: OpenAI, Anthropic, Gemini, Bedrock, Perplexity, 
+                            Groq, Azure, Cohere, Mistral, and 100+ more
+        """
+        
+        # Construct messages if not provided
+        if not messages:
+            if not prompt:
+                raise ValueError("Either 'prompt' or 'messages' must be provided")
+            messages = [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        
+        # Prepare LiteLLM parameters
+        litellm_params = {
+            "model": settings.external_llm_model,
+            "messages": messages,
+            "max_tokens": settings.external_llm_max_tokens,
+            "temperature": settings.external_llm_temperature,
+        }
+        
+        # Add API key if provided (otherwise LiteLLM uses standard env vars)
+        if settings.external_llm_api_key:
+            litellm_params["api_key"] = settings.external_llm_api_key
+        
+        # Add custom base URL if provided
+        if settings.external_llm_base_url:
+            litellm_params["api_base"] = settings.external_llm_base_url
+        
+        # Add extra headers if provided
+        if settings.external_llm_extra_headers:
+            try:
+                extra_headers = json.loads(settings.external_llm_extra_headers)
+                litellm_params["extra_headers"] = extra_headers
+            except json.JSONDecodeError:
+                self.logger.warning(
+                    "Failed to parse external_llm_extra_headers, ignoring", 
+                    value=settings.external_llm_extra_headers
+                )
+        
+        self.logger.debug("=== LITELLM API CALL ===")
+        self.logger.debug(
+            "LiteLLM Configuration", 
+            model=settings.external_llm_model,
+            max_tokens=settings.external_llm_max_tokens,
+            temperature=settings.external_llm_temperature,
+            has_custom_base_url=bool(settings.external_llm_base_url)
+        )
+        
+        try:
+            # Call LiteLLM - automatically handles all providers
+            response = await litellm.acompletion(**litellm_params)
+            
+            self.logger.debug("=== LITELLM API RESPONSE ===")
+            self.logger.debug("Response Model", model=response.model)
+            
+            # Extract content from standard OpenAI-format response
+            # LiteLLM normalizes all provider responses to OpenAI format
+            content = response.choices[0].message.content
+            
+            if not content:
+                return {
+                    "success": False,
+                    "error": "No response content from LLM",
+                    "error_type": "API_ERROR"
+                }
+            
+            # Return with usage information (token tracking)
+            result = {
+                "success": True,
+                "content": content,
+                "model": response.model,
+            }
+            
+            # Add token usage if available
+            if hasattr(response, 'usage') and response.usage:
+                result["usage"] = {
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens
+                }
+                self.logger.debug(
+                    "Token Usage", 
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    total_tokens=response.usage.total_tokens
+                )
+            
+            return result
+            
+        except Exception as e:
+            # LiteLLM provides detailed error messages
+            error_msg = str(e)
+            self.logger.error("LiteLLM API call failed", error=error_msg, model=settings.external_llm_model)
+            
+            # Check for common error types
+            error_type = "API_ERROR"
+            if "authentication" in error_msg.lower() or "unauthorized" in error_msg.lower():
+                error_type = "AUTHENTICATION_ERROR"
+            elif "rate limit" in error_msg.lower():
+                error_type = "RATE_LIMIT_ERROR"
+            elif "timeout" in error_msg.lower():
+                error_type = "TIMEOUT_ERROR"
+            
+            return {
+                "success": False,
+                "error": f"LiteLLM API error: {error_msg}",
+                "error_type": error_type
             }
     
     async def _call_openai_compatible_api(self, prompt: str = None, messages: List[Dict[str, str]] = None) -> Dict[str, Any]:

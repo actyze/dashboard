@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     
     # External LLM Configuration (OpenAI, Perplexity, Anthropic, etc.)
     external_llm_enabled: bool = False
-    external_llm_provider: str = ""
+    external_llm_provider: str = ""  # Deprecated: use external_llm_mode instead
     external_llm_api_key: str = ""
     external_llm_model: str = ""
     external_llm_base_url: str = ""
@@ -84,12 +84,20 @@ class Settings(BaseSettings):
     external_llm_temperature: float = 0.1
     external_llm_timeout: int = 30
     
+    # LLM Integration Mode (New: Explicit configuration for enterprises)
+    # Options:
+    #   "auto" (default): Use LiteLLM if available, fallback to openai-compatible
+    #   "standard": Use LiteLLM (100+ providers: OpenAI, Claude, Gemini, Bedrock, etc.)
+    #   "openai-compatible": For enterprise gateways (expects OpenAI request/response format)
+    #   "custom": Reserved for future custom template engine
+    external_llm_mode: str = "auto"
+    
     # Authentication configuration (flexible for any provider)
     # Options: "bearer" (OpenAI/Perplexity), "x-api-key" (Anthropic), "api-key" (Azure)
     external_llm_auth_type: str = "bearer"
     
     # Optional: Additional headers as JSON string
-    # Example: '{"anthropic-version": "2023-06-01", "custom-header": "value"}'
+    # Example: '{"anthropic-version": "2023-06-01", "X-Enterprise-ID": "dept-123"}'
     external_llm_extra_headers: str = ""
     
     # =============================================================================
@@ -184,6 +192,7 @@ class Settings(BaseSettings):
     feature_query_caching: bool = True
     feature_schema_recommendations: bool = True
     feature_sql_correction: bool = True
+    feature_use_litellm: bool = True  # Use LiteLLM for multi-provider support (set to False to use legacy code)
     
     # =============================================================================
     # Backward Compatibility Properties

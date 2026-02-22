@@ -43,35 +43,37 @@ secrets:
     apiKey: ""  # ⚠️  LOADED from values-secrets.yaml or GitHub Actions workflow
 
 # ============================================================================
-# MODEL STRATEGY - External LLM Configuration
+# MODEL STRATEGY - AI Provider Configuration (LiteLLM Integration)
 # ============================================================================
 modelStrategy:
   externalLLM:
-    enabled: true              # Use external LLM (OpenAI, Perplexity, Claude, etc.)
-    provider: "anthropic"      # Options: openai, perplexity, anthropic, groq, together
+    enabled: true              # Use external AI provider
+    mode: "auto"               # Options: "auto", "standard", "openai-compatible"
+                               # - auto: LiteLLM auto-detects provider (recommended)
+                               # - standard: Use LiteLLM for 100+ providers
+                               # - openai-compatible: For enterprise gateways
     model: "claude-sonnet-4-20250514"
-    baseUrl: "https://api.anthropic.com/v1/messages"
-    # Examples for other providers:
-    # OpenAI: "https://api.openai.com/v1/chat/completions"
-    # Perplexity: "https://api.perplexity.ai/chat/completions"
-    # Groq: "https://api.groq.com/openai/v1/chat/completions"  
-    # Together: "https://api.together.xyz/v1/chat/completions"
-    # apiKey loaded from secret: dashboard-external-llm
-    maxTokens: 4096            # Match .env: EXTERNAL_LLM_MAX_TOKENS=4096
+    # Popular models:
+    # - Anthropic: "claude-sonnet-4-20250514", "claude-opus-4-20250514"
+    # - OpenAI: "gpt-4o", "gpt-4-turbo"
+    # - Google: "gemini/gemini-pro", "gemini/gemini-1.5-pro"
+    # - AWS: "bedrock/us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+    # - Groq: "groq/llama-3.3-70b-versatile"
+    # - Perplexity: "perplexity/sonar-reasoning-pro"
+    
+    # Direct Connection: Set apiKey in values-secrets.yaml
+    # LiteLLM auto-detects provider from model name prefix
+    
+    # Enterprise Gateway: Set these for custom internal gateways
+    baseUrl: ""                # Example: "https://llm-gateway.company.com/v1/chat/completions"
+    authType: "bearer"         # Options: "bearer", "x-api-key", "api-key"
+    extraHeaders: ''           # JSON string: '{"X-Department": "engineering"}'
+    
+    # Performance Settings
+    maxTokens: 4096
     temperature: 0.1
     timeout: 30
     fallbackToLocal: false
-    
-    # Authentication configuration (provider-specific)
-    # Options: "bearer" (OpenAI/Perplexity/Groq), "x-api-key" (Anthropic), "api-key" (Azure)
-    authType: "x-api-key"
-    
-    # Optional: Additional headers as JSON string (for version headers, custom options)
-    # Anthropic requires anthropic-version header
-    extraHeaders: '{"anthropic-version": "2023-06-01"}'
-    # Examples for other providers:
-    # OpenAI: ''  (no extra headers needed)
-    # Azure: '{"api-version": "2023-05-15"}'
 
 # Service Account
 serviceAccount:

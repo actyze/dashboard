@@ -115,7 +115,10 @@ jobs:
           secrets:
             create: true
             externalLLM:
+              # LiteLLM Integration - Auto-detects provider from model name
               apiKey: "${{ secrets.ANTHROPIC_API_KEY }}"
+              # For other providers, add their secrets to GitHub:
+              # OPENAI_API_KEY, GEMINI_API_KEY, GROQ_API_KEY, etc.
             trino:
               username: "admin"
               password: ""

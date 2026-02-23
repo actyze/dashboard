@@ -104,7 +104,9 @@ services:
       TRINO_CATALOG: ${TRINO_CATALOG:-postgres}
       TRINO_SCHEMA: ${TRINO_SCHEMA:-public}
       TRINO_SSL: ${TRINO_SSL:-false}
+      TRINO_SSL_VERIFY: ${TRINO_SSL_VERIFY:-true}
       EXCLUDED_CATALOGS: ${EXCLUDED_CATALOGS:-}
+      SCHEMA_REFRESH_HOURS: ${SCHEMA_REFRESH_HOURS:-3}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # Include TPC-H for local development (set to false for production)
       INCLUDE_TPCH: ${INCLUDE_TPCH:-true}
@@ -164,6 +166,12 @@ services:
       TRINO_USER: ${TRINO_USER:-admin}
       TRINO_PASSWORD: ${TRINO_PASSWORD:-}
       TRINO_SSL: ${TRINO_SSL:-false}
+      TRINO_SSL_VERIFY: ${TRINO_SSL_VERIFY:-true}
+      TRINO_MAX_ROWS: ${TRINO_MAX_ROWS:-1000}
+      TRINO_QUERY_TIMEOUT_SECONDS: ${TRINO_QUERY_TIMEOUT_SECONDS:-300}
+      # Query Processing Timeouts
+      DEFAULT_TIMEOUT_SECONDS: ${DEFAULT_TIMEOUT_SECONDS:-30}
+      EXTERNAL_LLM_TIMEOUT: ${EXTERNAL_LLM_TIMEOUT:-30}
       # Schema Service Configuration
       SCHEMA_SERVICE_URL: http://${SCHEMA_SERVICE_HOST:-schema-service}:${SCHEMA_SERVICE_PORT:-8000}
       SCHEMA_SERVICE_KEY: ${SCHEMA_SERVICE_KEY}

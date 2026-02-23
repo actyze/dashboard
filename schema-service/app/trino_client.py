@@ -32,15 +32,14 @@ class TrinoSchemaService:
         try:
             # SSL configuration
             ssl_enabled = self.ssl
-            ssl_verification = os.getenv("TRINO_SSL_VERIFICATION", "NONE").upper()
+            # Read TRINO_SSL_VERIFY (defaults to true for security)
+            ssl_verify_env = os.getenv("TRINO_SSL_VERIFY", "true").lower()
+            verify_ssl = ssl_verify_env in ("true", "1", "yes")
             
             # Auto-detect SSL for port 443
             if not ssl_enabled and self.port == 443:
                 ssl_enabled = True
                 logger.info("Port 443 detected, auto-enabling SSL")
-            
-            # Determine SSL verification setting
-            verify_ssl = ssl_verification != "NONE"
             
             # Build connection parameters
             connect_params = {

@@ -78,10 +78,10 @@ spec:
           value: "{{ .Values.schemaService.env.refreshHours }}"
         - name: INCLUDE_TPCH
           value: "{{ .Values.schemaService.env.includeTpch | default false }}"
-        - name: TRINO_SSL_ENABLED
+        - name: TRINO_SSL
           value: "{{ .Values.schemaService.env.trino.ssl | default false }}"
-        - name: TRINO_SSL_VERIFICATION
-          value: "{{ .Values.schemaService.env.trino.sslVerification | default "NONE" }}"
+        - name: TRINO_SSL_VERIFY
+          value: "{{ .Values.schemaService.env.trino.sslVerify | default "true" }}"
         - name: SERVICE_HOST
           value: "0.0.0.0"
         - name: SERVICE_PORT

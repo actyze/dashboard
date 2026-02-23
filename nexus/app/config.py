@@ -110,6 +110,7 @@ class Settings(BaseSettings):
     trino_catalog: str = "postgres"
     trino_schema: str = "public"
     trino_ssl: bool = False
+    trino_ssl_verify: bool = True  # Verify SSL certificates (set to False for self-signed)
     trino_max_rows: int = 1000
     trino_query_timeout_seconds: int = 300
     

@@ -52,7 +52,7 @@ class TrinoSchemaService:
             if ssl_enabled:
                 connect_params["http_scheme"] = "https"
                 connect_params["verify"] = verify_ssl
-                logger.info(f"Using HTTPS with SSL verification: {ssl_verification}")
+                logger.info(f"Using HTTPS with SSL verification: {verify_ssl}")
             else:
                 logger.info("Using HTTP (SSL disabled)")
             

@@ -120,6 +120,10 @@ class TrinoService:
             }
             if auth:
                 conn_args["auth"] = auth
+            
+            # Add SSL verification if using HTTPS
+            if settings.trino_ssl:
+                conn_args["verify"] = settings.trino_ssl_verify
                 
             conn = connect(**conn_args)
             cur = conn.cursor()

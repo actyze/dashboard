@@ -52,8 +52,10 @@ spec:
           value: "{{ .Values.nexus.env.trino.schema }}"
         - name: TRINO_SSL
           value: "{{ .Values.nexus.env.trino.ssl | default "false" }}"
+        - name: TRINO_SSL_VERIFY
+          value: "{{ .Values.nexus.env.trino.sslVerify | default "true" }}"
         - name: TRINO_URL
-          value: "jdbc:trino://{{ .Values.nexus.env.trino.host }}:{{ .Values.nexus.env.trino.port }}/{{ .Values.nexus.env.trino.catalog }}/{{ .Values.nexus.env.trino.schema }}{{ if .Values.nexus.env.trino.jdbcParams }}{{ .Values.nexus.env.trino.jdbcParams }}{{ else if .Values.nexus.env.trino.ssl | default false }}?SSL=true&SSLVerification={{ .Values.nexus.env.trino.sslVerification | default "NONE" }}{{ else }}?SSL=false{{ end }}"
+          value: "jdbc:trino://{{ .Values.nexus.env.trino.host }}:{{ .Values.nexus.env.trino.port }}/{{ .Values.nexus.env.trino.catalog }}/{{ .Values.nexus.env.trino.schema }}{{ if .Values.nexus.env.trino.jdbcParams }}{{ .Values.nexus.env.trino.jdbcParams }}{{ else if .Values.nexus.env.trino.ssl | default false }}?SSL=true{{ else }}?SSL=false{{ end }}"
         - name: TRINO_USER
           valueFrom:
             secretKeyRef:

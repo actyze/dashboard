@@ -10,6 +10,20 @@ httpx==0.25.2
 # LLM Abstraction (supports 100+ providers)
 litellm==1.52.0
 
+# LiteLLM Provider Dependencies
+# AWS Bedrock
+boto3==1.34.162
+botocore==1.34.162
+
+# Google Vertex AI / Gemini
+google-cloud-aiplatform==1.38.1
+
+# Azure OpenAI
+openai==1.54.0
+
+# Anthropic (may be included in litellm, but explicit for clarity)
+anthropic==0.39.0
+
 # Data Validation
 pydantic==2.5.0
 pydantic-settings==2.1.0

@@ -142,7 +142,7 @@ jobs:
                 catalog: "postgres"
                 schema: "public"
                 ssl: false
-                sslVerification: "NONE"
+                sslVerify: false  # Matches previous sslVerification: "NONE" behavior
               schemaServiceKey: "${{ secrets.SCHEMA_SERVICE_KEY }}"
 
           schemaService:
@@ -153,7 +153,7 @@ jobs:
                 catalog: "postgres"
                 schema: "public"
                 ssl: false
-                sslVerification: "NONE"
+                sslVerify: false  # Matches previous sslVerification: "NONE" behavior
               schemaServiceKey: "${{ secrets.SCHEMA_SERVICE_KEY }}"
 
           trino:

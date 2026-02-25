@@ -888,7 +888,7 @@ function SchemaOptimise() {
                 <div className="flex items-center gap-2">
                   <HiddenIcon className={`w-4 h-4 ${editExcludeEnabled ? 'text-red-500' : (isDark ? 'text-gray-400' : 'text-gray-600')}`} />
                   <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                    Hide from AI
+                    Hide for all users
                   </span>
                   <span className={`text-xs px-2 py-0.5 rounded ${isDark ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
                     Global
@@ -918,7 +918,7 @@ function SchemaOptimise() {
                   </>
                 ) : (
                   <>
-                    Hide this {getNodeTypeName().toLowerCase()} from AI recommendations <strong>for all users</strong>. 
+                    Hide this {getNodeTypeName().toLowerCase()} <strong>from all users</strong>. 
                     Useful for removing test data, deprecated tables, or sensitive information.
                   </>
                 )}
@@ -1002,7 +1002,7 @@ function SchemaOptimise() {
                 isDark ? 'bg-[#0a0a0b] border border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200'
               }`}>
                 <HiddenIcon className={`w-4 h-4 ${isDark ? 'text-red-400' : 'text-red-600'}`} />
-                <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>Hide from AI</span>
+                <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>Hide for all users</span>
               </div>
             </div>
           </div>

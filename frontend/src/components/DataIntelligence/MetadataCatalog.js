@@ -7,8 +7,10 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
+import { useAuth } from '../../contexts/AuthContext';
 import MetadataService from '../../services/MetadataService';
 import { RestService } from '../../services/RestService';
+import { ExclusionService } from '../../services';
 import { useGetDatabases } from '../../hooks/useRestAPI';
 import ConnectorBadge from '../Common/ConnectorBadge';
 
@@ -22,6 +24,12 @@ const ChevronRightIcon = () => (
 const ChevronDownIcon = () => (
   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+  </svg>
+);
+
+const EyeSlashIcon = () => (
+  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
   </svg>
 );
 
@@ -88,6 +96,10 @@ const InfoIcon = ({ description, isDark }) => {
 function MetadataCatalog() {
   const { isDark } = useTheme();
   const { showSuccess, showError } = useToast();
+  const { user } = useAuth();
+  
+  // Check if user is admin
+  const isAdmin = user?.roles?.includes('ADMIN') || false;
   
   // State - following DatabaseSchemaPanel pattern
   const [expandedDatabases, setExpandedDatabases] = useState(new Set());
@@ -97,6 +109,7 @@ function MetadataCatalog() {
   const [objectsCache, setObjectsCache] = useState({});
   const [tableDetailsCache, setTableDetailsCache] = useState({});
   const [descriptions, setDescriptions] = useState({});
+  const [exclusions, setExclusions] = useState([]);
   const [editingNode, setEditingNode] = useState(null);
   const [editDescription, setEditDescription] = useState('');
 
@@ -109,7 +122,11 @@ function MetadataCatalog() {
 
   useEffect(() => {
     loadDescriptions();
-  }, []);
+    // Only load exclusions for admins
+    if (isAdmin) {
+      loadExclusions();
+    }
+  }, [isAdmin]);
 
   const loadDescriptions = async () => {
     try {
@@ -131,6 +148,26 @@ function MetadataCatalog() {
     } catch (err) {
       console.error('Failed to load descriptions:', err);
     }
+  };
+
+  const loadExclusions = async () => {
+    try {
+      const response = await ExclusionService.getExclusions();
+      if (response && Array.isArray(response)) {
+        setExclusions(response);
+      }
+    } catch (err) {
+      console.error('Failed to load exclusions:', err);
+    }
+  };
+
+  const findExclusion = (catalog, schema, table) => {
+    return exclusions.find(excl => {
+      const catalogMatch = excl.catalog === catalog;
+      const schemaMatch = !excl.schema_name || excl.schema_name === schema;
+      const tableMatch = !excl.table_name || excl.table_name === table;
+      return catalogMatch && schemaMatch && tableMatch;
+    });
   };
 
   const buildDescriptionKey = (catalog, schema, table, column) => {
@@ -352,9 +389,16 @@ function MetadataCatalog() {
     const nodeKey = buildDescriptionKey(dbName, schemaName, table.name, null);
     const hasDescription = descriptions[nodeKey];
     const tableDetails = tableDetailsCache[tableKey];
+    // Use is_excluded flag directly from the table object (set by schema-service)
+    const isExcluded = !!table.is_excluded;
+
+    // For non-admin users, hide excluded tables entirely
+    if (isExcluded && !isAdmin) {
+      return null;
+    }
 
     return (
-      <div key={table.name} className="ml-0">
+      <div key={table.name} className={`ml-0 ${isExcluded ? 'opacity-50' : ''}`}>
         <div 
           className={`flex items-center gap-2 px-3 py-2 hover:bg-opacity-50 cursor-pointer group ${
             isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
@@ -377,6 +421,17 @@ function MetadataCatalog() {
               </span>
             )}
           </span>
+          {isExcluded && isAdmin && (
+            <span 
+              className={`flex items-center gap-1 px-1.5 py-0.5 text-xs rounded ${
+                isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700'
+              }`}
+              title="Hidden from regular users"
+            >
+              <EyeSlashIcon />
+              Hidden
+            </span>
+          )}
 
           <div className="flex items-center gap-1 flex-shrink-0">
             {hasDescription && (
@@ -410,9 +465,16 @@ function MetadataCatalog() {
     const nodeKey = buildDescriptionKey(dbName, schema.name, null, null);
     const hasDescription = descriptions[nodeKey];
     const objects = objectsCache[schemaKey];
+    // Use is_excluded flag directly from the schema object (set by schema-service)
+    const isExcluded = !!schema.is_excluded;
+
+    // For non-admin users, hide excluded schemas entirely
+    if (isExcluded && !isAdmin) {
+      return null;
+    }
 
     return (
-      <div key={schema.name} className="ml-0">
+      <div key={schema.name} className={`ml-0 ${isExcluded ? 'opacity-50' : ''}`}>
         <div 
           className={`flex items-center gap-2 px-3 py-2 hover:bg-opacity-50 cursor-pointer group ${
             isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
@@ -435,6 +497,17 @@ function MetadataCatalog() {
               </span>
             )}
           </span>
+          {isExcluded && isAdmin && (
+            <span 
+              className={`flex items-center gap-1 px-1.5 py-0.5 text-xs rounded ${
+                isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700'
+              }`}
+              title="Hidden from regular users"
+            >
+              <EyeSlashIcon />
+              Hidden
+            </span>
+          )}
 
           <div className="flex items-center gap-1 flex-shrink-0">
             {hasDescription && (

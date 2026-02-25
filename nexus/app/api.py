@@ -160,6 +160,57 @@ async def execute_sql(
                 detail=f"Access denied to the following tables: {', '.join(access_denied_tables)}. Please contact an administrator to grant you access."
         )
     
+    # Check if any table in the query is excluded (hidden from ALL users, including admins)
+    from app.services.exclusion_service import ExclusionService
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from app.database import get_db
+    
+    db: AsyncSession = None
+    try:
+        # Get database session
+        async for db_session in get_db():
+            db = db_session
+            break
+        
+        # Get all exclusions
+        exclusions = await ExclusionService.get_all_exclusions(db)
+        excluded_tables_in_query = []
+        
+        for table in tables:
+            table_catalog = table["catalog"]
+            table_schema = table["schema"]
+            table_name = table["table"]
+            
+            # Check if this table matches any exclusion rule
+            for exclusion in exclusions:
+                excl_catalog = exclusion.get("catalog")
+                excl_schema = exclusion.get("schema_name")
+                excl_table = exclusion.get("table_name")
+                
+                # Database-level exclusion
+                if excl_catalog == table_catalog and not excl_schema:
+                    excluded_tables_in_query.append(f"{table_catalog}.{table_schema}.{table_name}")
+                    break
+                
+                # Schema-level exclusion
+                if excl_catalog == table_catalog and excl_schema == table_schema and not excl_table:
+                    excluded_tables_in_query.append(f"{table_catalog}.{table_schema}.{table_name}")
+                    break
+                
+                # Table-level exclusion
+                if excl_catalog == table_catalog and excl_schema == table_schema and excl_table == table_name:
+                    excluded_tables_in_query.append(f"{table_catalog}.{table_schema}.{table_name}")
+                    break
+        
+        if excluded_tables_in_query:
+            raise HTTPException(
+                status_code=403,
+                detail=f"The following tables are hidden and cannot be queried: {', '.join(excluded_tables_in_query)}. Please contact an administrator if you need access."
+            )
+    finally:
+        if db:
+            await db.close()
+    
     # Track execution time and timestamps
     generated_at = datetime.utcnow()
     execution_start = asyncio.get_event_loop().time()
@@ -356,25 +407,79 @@ async def toggle_favorite(
 # Explorer Endpoints
 # =============================================================================
 
+def filter_excluded_items(data: Any, is_admin: bool) -> Any:
+    """
+    Filter out excluded items for non-admin users.
+    
+    Schema-service returns ALL items (including excluded) with 'is_excluded' flag.
+    This function filters based on user role:
+    - Admin: Returns all items (including excluded)
+    - Non-admin: Filters out items where is_excluded=True
+    
+    Args:
+        data: Response from schema-service (dict, list, or primitive)
+        is_admin: Whether current user is admin
+        
+    Returns:
+        Filtered data (admins see all, non-admins see only non-excluded)
+    """
+    if is_admin:
+        # Admins see everything
+        return data
+    
+    if isinstance(data, dict):
+        # If it's a single object with is_excluded flag
+        if data.get('is_excluded', False):
+            return None
+        # Recursively filter nested objects/lists
+        filtered = {}
+        for key, value in data.items():
+            if isinstance(value, (dict, list)):
+                filtered_value = filter_excluded_items(value, is_admin)
+                if filtered_value is not None:
+                    filtered[key] = filtered_value
+            else:
+                filtered[key] = value
+        return filtered
+    elif isinstance(data, list):
+        # Filter list items
+        filtered_list = []
+        for item in data:
+            filtered_item = filter_excluded_items(item, is_admin)
+            if filtered_item is not None:
+                filtered_list.append(filtered_item)
+        return filtered_list
+    else:
+        # Primitive value
+        return data
+
 @explorer_router.get("/databases")
 async def get_databases(current_user: dict = Depends(require_viewer)):
     """Get list of all databases."""
-    return await schema_service_client.get_databases()
+    result = await schema_service_client.get_databases()
+    is_admin = 'ADMIN' in current_user.get('roles', [])
+    return filter_excluded_items(result, is_admin)
 
 @explorer_router.get("/databases/{database}/schemas")
 async def get_database_schemas(database: str, current_user: dict = Depends(require_viewer)):
     """Get schemas for a database."""
-    return await schema_service_client.get_database_schemas(database)
+    result = await schema_service_client.get_database_schemas(database)
+    is_admin = 'ADMIN' in current_user.get('roles', [])
+    return filter_excluded_items(result, is_admin)
 
 @explorer_router.get("/databases/{database}/schemas/{schema}/objects")
 async def get_schema_objects(database: str, schema: str, current_user: dict = Depends(require_viewer)):
     """Get objects (tables/views) for a schema."""
-    return await schema_service_client.get_schema_objects(database, schema)
+    result = await schema_service_client.get_schema_objects(database, schema)
+    is_admin = 'ADMIN' in current_user.get('roles', [])
+    return filter_excluded_items(result, is_admin)
 
 @explorer_router.get("/databases/{database}/schemas/{schema}/tables/{table}")
 async def get_table_details(database: str, schema: str, table: str, current_user: dict = Depends(require_viewer)):
     """Get detailed information about a specific table."""
-    return await schema_service_client.get_table_details(database, schema, table)
+    result = await schema_service_client.get_table_details(database, schema, table)
+    is_admin = 'ADMIN' in current_user.get('roles', [])
+    return filter_excluded_items(result, is_admin)
 
 @explorer_router.get("/search")
 async def search_objects(
@@ -385,7 +490,9 @@ async def search_objects(
     current_user: dict = Depends(require_viewer)
 ):
     """Search for database objects."""
-    return await schema_service_client.search_database_objects(query, database, schema, object_type)
+    result = await schema_service_client.search_database_objects(query, database, schema, object_type)
+    is_admin = 'ADMIN' in current_user.get('roles', [])
+    return filter_excluded_items(result, is_admin)
 
 # =============================================================================
 # Dashboard Endpoints (with RBAC)

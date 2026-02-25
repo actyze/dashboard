@@ -216,7 +216,9 @@ const DatabaseSchemaPanel = ({
                 {expandedDatabases.has(database.name) && (
                   <div className="ml-4">
                     {schemaCache[database.name] ? (
-                      schemaCache[database.name].map((schema) => {
+                      schemaCache[database.name]
+                        .filter(schema => !schema.is_excluded) // Hide excluded schemas for ALL users in Queries
+                        .map((schema) => {
                         const schemaKey = `${database.name}.${schema.name}`;
                         return (
                           <div key={schema.name} className="mb-1">
@@ -238,12 +240,12 @@ const DatabaseSchemaPanel = ({
                                 {objectsCache[schemaKey] ? (
                                   <>
                                     {/* Tables Section */}
-                                    {objectsCache[schemaKey].tables && objectsCache[schemaKey].tables.length > 0 && (
+                                    {objectsCache[schemaKey].tables && objectsCache[schemaKey].tables.filter(t => !t.is_excluded).length > 0 && (
                                       <>
                                         <div className={`mb-1.5 px-1 py-0.5 rounded text-xs ${isDark ? 'bg-[#1c1d1f] text-gray-400' : 'bg-gray-100/40 text-gray-600'} font-medium uppercase tracking-wide`}>
                                           Tables
                                         </div>
-                                        {objectsCache[schemaKey].tables.map((table) => (
+                                        {objectsCache[schemaKey].tables.filter(table => !table.is_excluded).map((table) => (
                                           <button
                                             key={table.name}
                                             onClick={() => handleTableClick(database.name, schema.name, table.name)}
@@ -265,12 +267,12 @@ const DatabaseSchemaPanel = ({
                                     )}
                                     
                                     {/* Views Section */}
-                                    {objectsCache[schemaKey].views && objectsCache[schemaKey].views.length > 0 && (
+                                    {objectsCache[schemaKey].views && objectsCache[schemaKey].views.filter(v => !v.is_excluded).length > 0 && (
                                       <>
                                         <div className={`mb-1.5 mt-2 px-1 py-0.5 rounded text-xs ${isDark ? 'bg-[#1c1d1f] text-gray-400' : 'bg-gray-100/40 text-gray-600'} font-medium uppercase tracking-wide`}>
                                           Views
                                         </div>
-                                        {objectsCache[schemaKey].views.map((view) => (
+                                        {objectsCache[schemaKey].views.filter(view => !view.is_excluded).map((view) => (
                                           <button
                                             key={view.name}
                                             onClick={() => handleTableClick(database.name, schema.name, view.name)}

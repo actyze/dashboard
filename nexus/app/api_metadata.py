@@ -287,7 +287,12 @@ async def notify_schema_service_description_updated(
 ):
     """
     Notify schema service that a table's metadata description was updated.
-    This triggers an incremental update of the table's FAISS embedding.
+    This triggers an in-place update of the table's FAISS embedding.
+    
+    The schema service will:
+    1. Fetch updated descriptions from Nexus (this service)
+    2. Re-encode the table with new descriptions
+    3. Update the FAISS vector in-place (no delete/rebuild needed)
     """
     try:
         schema_service_url = os.getenv("SCHEMA_SERVICE_URL", "http://schema-service:8000")
@@ -297,18 +302,8 @@ async def notify_schema_service_description_updated(
         if service_key:
             headers["X-Service-Key"] = service_key
         
-        # First remove the old embedding
+        # Trigger in-place refresh for this specific table
         async with httpx.AsyncClient() as client:
-            await client.delete(
-                f"{schema_service_url}/table/{catalog}/{schema_name}/{table_name}",
-                headers=headers,
-                timeout=30.0
-            )
-        
-        # Then fetch fresh table metadata from Trino and add it back
-        # The schema service will re-fetch descriptions from Nexus
-        async with httpx.AsyncClient() as client:
-            # Trigger a refresh for this specific table
             response = await client.post(
                 f"{schema_service_url}/table/refresh",
                 json={

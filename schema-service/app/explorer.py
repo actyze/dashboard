@@ -60,6 +60,7 @@ def get_database_schemas_list(database: str, raw_schema_cache, last_updated):
                     "table_count": 0,
                     "total_columns": 0
                 }
+            # Count table regardless of exclusion (schemas are visible if they have ANY non-excluded tables)
             schemas[schema_name]["table_count"] += 1
             schemas[schema_name]["total_columns"] += schema_obj["column_count"]
     
@@ -90,7 +91,8 @@ def get_schema_objects_list(database: str, schema: str, raw_schema_cache, last_u
                 "type": schema_obj.get("type", "TABLE"),
                 "connector_type": connector_type,
                 "column_count": schema_obj["column_count"],
-                "full_name": schema_obj["full_name"]
+                "full_name": schema_obj["full_name"],
+                "is_excluded": schema_obj.get("is_excluded", False)  # Add exclusion flag for filtering
             })
     
     if not tables:
@@ -151,6 +153,7 @@ def get_table_detail(database: str, schema: str, table: str, raw_schema_cache, l
         "connector_type": table_info.get("connector_type", "unknown"),
         "columns": table_info["columns"],
         "column_count": table_info["column_count"],
+        "is_excluded": table_info.get("is_excluded", False),  # Add exclusion flag for filtering
         "metadata": {
             "last_updated": last_updated.isoformat() if last_updated else None
         }

@@ -731,6 +731,106 @@ async def batch_remove_tables(filter_info: Dict[str, Any], auth: dict = Depends(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/table/batch-remove-multi")
+async def batch_remove_tables_multi(items: List[Dict[str, Any]], auth: dict = Depends(verify_service_auth)):
+    """
+    Remove multiple tables from FAISS index for multiple filter patterns in ONE call.
+    
+    This is optimized for bulk exclusions:
+    - Accepts a list of filter patterns (catalog/schema/table combinations)
+    - Collects ALL matching tables across all patterns
+    - Rebuilds FAISS index only ONCE at the end
+    - 10-100x faster than N separate HTTP calls
+    
+    Request body: List of filter objects, each with:
+    - catalog: string (required)
+    - schema: string (optional - if null, matches all schemas in catalog)
+    - table: string (optional - if null, matches all tables in schema)
+    
+    Example:
+    [
+        {"catalog": "db1", "schema": "schema1", "table": "table1"},
+        {"catalog": "db1", "schema": "schema2", "table": null},
+        {"catalog": "db2", "schema": null, "table": null}
+    ]
+    
+    Security: Simple service key authentication (X-Service-Key header)
+    """
+    try:
+        if not items:
+            return {
+                "status": "success",
+                "message": "No items to remove",
+                "removed_count": 0,
+                "patterns_processed": 0
+            }
+        
+        # Collect all tables to remove across all patterns
+        all_tables_to_remove = set()
+        patterns_processed = 0
+        
+        for filter_info in items:
+            catalog = filter_info.get('catalog')
+            schema_name = filter_info.get('schema') or filter_info.get('schema_name')
+            table_name = filter_info.get('table') or filter_info.get('table_name')
+            
+            if not catalog:
+                logger.warning(f"Skipping item without catalog: {filter_info}")
+                continue
+            
+            # Build filter pattern
+            if table_name and schema_name:
+                pattern = f"{catalog}.{schema_name}.{table_name}"
+                level = "table"
+            elif schema_name:
+                pattern = f"{catalog}.{schema_name}."
+                level = "schema"
+            else:
+                pattern = f"{catalog}."
+                level = "database"
+            
+            # Find all matching tables for this pattern
+            for meta in schema_service.embedder.schema_metadata:
+                full_name = meta.get('full_name', '')
+                if level == "table":
+                    if full_name == pattern:
+                        all_tables_to_remove.add(full_name)
+                else:
+                    if full_name.startswith(pattern):
+                        all_tables_to_remove.add(full_name)
+            
+            patterns_processed += 1
+        
+        logger.info(f"Batch remove multi: {patterns_processed} patterns, {len(all_tables_to_remove)} total tables to remove")
+        
+        if not all_tables_to_remove:
+            return {
+                "status": "success",
+                "message": "No matching tables found",
+                "removed_count": 0,
+                "patterns_processed": patterns_processed
+            }
+        
+        # Remove all at once using batch method (rebuilds index only ONCE!)
+        result = await schema_service.embedder.batch_remove_tables(list(all_tables_to_remove))
+        
+        return {
+            "status": "success",
+            "message": f"Batch remove completed for {patterns_processed} patterns",
+            "patterns_processed": patterns_processed,
+            "removed_count": result['removed_count'],
+            "not_found": result.get('not_found', []),
+            "index_size": schema_service.embedder.index.ntotal if schema_service.embedder.index else 0,
+            "total_schemas": len(schema_service.embedder.schema_metadata)
+        }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to batch remove tables (multi)")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/table/batch-add")
 async def batch_add_tables(filter_info: Dict[str, Any], auth: dict = Depends(verify_service_auth)):
     """

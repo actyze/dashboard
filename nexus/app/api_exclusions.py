@@ -37,6 +37,20 @@ class ExclusionResponse(BaseModel):
     created_at: Optional[str]
 
 
+class BulkExclusionCreate(BaseModel):
+    """Request model for bulk creating exclusions."""
+    exclusions: List[ExclusionCreate] = Field(..., description="List of exclusions to create")
+
+
+class BulkExclusionResponse(BaseModel):
+    """Response model for bulk exclusion operation."""
+    success: bool
+    created_count: int
+    skipped_count: int
+    errors: List[str]
+    created_exclusions: List[ExclusionResponse]
+
+
 @router.get("", response_model=List[ExclusionResponse])
 async def get_exclusions(
     db: AsyncSession = Depends(get_db),
@@ -87,6 +101,41 @@ async def add_exclusion(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error("Failed to add exclusion", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/bulk", response_model=BulkExclusionResponse)
+async def bulk_add_exclusions(
+    request: BulkExclusionCreate,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+    current_user: dict = Depends(require_admin)
+):
+    """
+    Bulk add schema exclusions (admin only).
+    
+    This will hide multiple databases/schemas/tables from AI recommendations
+    for all users. Resources will be removed from the schema service FAISS index.
+    
+    Skips any exclusions that already exist without raising an error.
+    """
+    try:
+        result = await ExclusionService.bulk_add_exclusions(
+            db=db,
+            exclusions=[
+                {
+                    "catalog": exc.catalog,
+                    "schema_name": exc.schema_name,
+                    "table_name": exc.table_name,
+                    "reason": exc.reason
+                }
+                for exc in request.exclusions
+            ],
+            user_id=uuid.UUID(user_id)
+        )
+        return result
+    except Exception as e:
+        logger.error("Failed to bulk add exclusions", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 

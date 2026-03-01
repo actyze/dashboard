@@ -549,6 +549,9 @@ class FAISSSchemaEmbedder:
                 # Atomic swap
                 self.index = new_index
             
+            # Update last_updated for health endpoint
+            self.last_updated = datetime.now()
+            
             logger.info(f"Successfully removed {removed_count} tables. Index size: {self.index.ntotal}")
             return {
                 'removed_count': removed_count,

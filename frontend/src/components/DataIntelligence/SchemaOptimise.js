@@ -1,6 +1,6 @@
 /**
  * Schema Optimise Component
- * Combined functionality for boosting schemas AND adding descriptions
+ * Combined functionality for marking preferred schemas AND adding descriptions
  * Unified interface for optimizing AI recommendations
  */
 
@@ -64,7 +64,7 @@ const ColumnIcon = () => (
   </svg>
 );
 
-const BoostIcon = ({ className }) => (
+const PreferredIcon = ({ className }) => (
   <svg className={className} fill="currentColor" viewBox="0 0 20 20">
     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 0 0 .95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 0 0 -.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 0 0 -1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 0 0 -.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 0 0 .951-.69l1.07-3.292z" />
   </svg>
@@ -118,20 +118,20 @@ const SelectModeIcon = ({ className }) => (
 );
 
 // Status indicators component
-const StatusIndicators = ({ hasBoost, hasDescription, boostWeight, isDark }) => {
-  if (!hasBoost && !hasDescription) return null;
+const StatusIndicators = ({ isPreferred, hasDescription, isDark }) => {
+  if (!isPreferred && !hasDescription) return null;
   
   return (
     <div className="flex items-center gap-1.5 flex-shrink-0">
-      {hasBoost && (
+      {isPreferred && (
         <span 
           className={`flex items-center gap-1 px-1.5 py-0.5 text-xs rounded ${
             isDark ? 'bg-[#2a2b2e] text-gray-300' : 'bg-gray-200 text-gray-700'
           }`}
-          title={`Boosted ${boostWeight}x - AI will prioritize this in recommendations`}
+          title="Preferred - AI will prioritize this in recommendations"
         >
-          <BoostIcon className="w-3 h-3" />
-          {boostWeight?.toFixed(1)}x
+          <PreferredIcon className="w-3 h-3" />
+          Preferred
         </span>
       )}
       {hasDescription && (
@@ -175,8 +175,7 @@ function SchemaOptimise() {
   // Edit panel state
   const [editingNode, setEditingNode] = useState(null);
   const [editDescription, setEditDescription] = useState('');
-  const [editBoostEnabled, setEditBoostEnabled] = useState(false);
-  const [editBoostWeight, setEditBoostWeight] = useState(1.5);
+  const [editPreferred, setEditPreferred] = useState(false);
   const [editExcludeEnabled, setEditExcludeEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
   
@@ -371,7 +370,7 @@ function SchemaOptimise() {
   const handleOpenEditPanel = (catalog, schema, table, column) => {
     const key = buildKey(catalog, schema, table, column);
     const existingDesc = descriptions[key];
-    const existingPref = column ? null : findPreference(catalog, schema, table); // No boost for columns
+    const existingPref = column ? null : findPreference(catalog, schema, table); // No preference for columns
     const existingExcl = column ? null : findExclusion(catalog, schema, table); // No exclusion for columns
     
     setEditingNode({ 
@@ -383,12 +382,11 @@ function SchemaOptimise() {
       exclusion: existingExcl
     });
     setEditDescription(existingDesc?.description || '');
-    setEditBoostEnabled(!!existingPref);
-    setEditBoostWeight(existingPref?.boost_weight || 1.5);
+    setEditPreferred(!!existingPref);
     setEditExcludeEnabled(!!existingExcl);
   };
 
-  // Save description, boost preference, and exclusion state
+  // Save description, preferred setting, and exclusion state
   const handleSave = async () => {
     if (!editingNode) return;
     setSaving(true);
@@ -415,24 +413,22 @@ function SchemaOptimise() {
         await MetadataService.deleteDescription(existingDesc.id);
       }
 
-      // Handle boost preference (only for non-columns)
+      // Handle preferred setting (only for non-columns)
       if (!column) {
-        if (editBoostEnabled) {
-          if (existingPref) {
-            // Update existing preference boost weight
-            await PreferencesService.updatePreferenceBoost(existingPref.id, editBoostWeight);
-          } else {
-            // Create new preference
+        if (editPreferred) {
+          if (!existingPref) {
+            // Create new preference with default boost weight
             await PreferencesService.addUserPreference({
               catalog: null,
               database_name: catalog,
               schema_name: schema || null,
               table_name: table || null,
-              boost_weight: editBoostWeight
+              boost_weight: 2.0  // Default boost weight for preferred items
             });
           }
+          // If preference already exists, no update needed
         } else if (existingPref) {
-          // Remove boost
+          // Remove preference
           await PreferencesService.deleteUserPreference(existingPref.id);
         }
 
@@ -732,9 +728,8 @@ function SchemaOptimise() {
             </span>
           )}
           <StatusIndicators 
-            hasBoost={!!preference}
+            isPreferred={!!preference}
             hasDescription={!!hasDescription}
-            boostWeight={preference?.boost_weight}
             isDark={isDark}
           />
           {!bulkSelectMode && (
@@ -833,9 +828,8 @@ function SchemaOptimise() {
             </span>
           )}
           <StatusIndicators 
-            hasBoost={!!preference}
+            isPreferred={!!preference}
             hasDescription={!!hasDescription}
-            boostWeight={preference?.boost_weight}
             isDark={isDark}
           />
           {!bulkSelectMode && (
@@ -957,9 +951,8 @@ function SchemaOptimise() {
                     {selectedDatabase.name}
                   </h2>
                   <StatusIndicators 
-                    hasBoost={!!dbPreference}
+                    isPreferred={!!dbPreference}
                     hasDescription={!!dbHasDescription}
-                    boostWeight={dbPreference?.boost_weight}
                     isDark={isDark}
                   />
                 </div>
@@ -1008,7 +1001,7 @@ function SchemaOptimise() {
             {!bulkSelectMode && (
               <button
                 onClick={() => handleOpenEditPanel(selectedDatabase.name, null, null, null)}
-                title="Add description or boost priority for this database"
+                title="Configure database settings"
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
                   isDark 
                     ? 'bg-[#2a2b2e] text-gray-400 hover:bg-[#3a3b3e] hover:text-white' 
@@ -1242,65 +1235,39 @@ function SchemaOptimise() {
             </p>
           </div>
 
-          {/* Boost Section - Only show for non-columns */}
+          {/* Preferred Section - Only show for non-columns */}
           {!editingNode.column && (
             <div className={`p-4 rounded-lg ${isDark ? 'bg-[#0a0a0b] border border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200'}`}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <BoostIcon className={`w-4 h-4 ${editBoostEnabled ? (isDark ? 'text-white' : 'text-gray-700') : isDark ? 'text-gray-600' : 'text-gray-400'}`} />
+                  <PreferredIcon className={`w-4 h-4 ${editPreferred ? (isDark ? 'text-white' : 'text-gray-700') : (isDark ? 'text-gray-600' : 'text-gray-400')}`} />
                   <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                    Priority Boost
+                    Preferred
                   </span>
                   <span className={`text-xs px-2 py-0.5 rounded ${isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'}`}>
                     User-level
                   </span>
                 </div>
                 <button
-                  onClick={() => setEditBoostEnabled(!editBoostEnabled)}
+                  onClick={() => setEditPreferred(!editPreferred)}
                   className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${
-                    editBoostEnabled 
+                    editPreferred 
                       ? 'bg-[#5d6ad3]' 
                       : isDark ? 'bg-[#3a3b3e]' : 'bg-gray-300'
                   }`}
                 >
                   <span
                     className={`inline-block h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                      editBoostEnabled ? 'translate-x-5' : 'translate-x-1'
+                      editPreferred ? 'translate-x-5' : 'translate-x-1'
                     }`}
                   />
                 </button>
               </div>
               
-              <p className={`text-xs mb-3 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                When enabled, AI will <strong>prioritize this {getNodeTypeName().toLowerCase()}</strong> when generating SQL queries. 
+              <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                Mark this {getNodeTypeName().toLowerCase()} as preferred. AI will <strong>prioritize preferred items</strong> when generating SQL queries. 
                 Use this for frequently used or important data sources. <strong>Only affects your recommendations.</strong>
               </p>
-
-              {editBoostEnabled && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                      Boost strength
-                    </span>
-                    <span className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      {editBoostWeight.toFixed(1)}x
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="1.0"
-                    max="3.0"
-                    step="0.1"
-                    value={editBoostWeight}
-                    onChange={(e) => setEditBoostWeight(parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-[#5d6ad3]"
-                  />
-                  <div className="flex justify-between text-xs mt-1">
-                    <span className={isDark ? 'text-gray-600' : 'text-gray-400'}>Low (1.0x)</span>
-                    <span className={isDark ? 'text-gray-600' : 'text-gray-400'}>High (3.0x)</span>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -1413,7 +1380,7 @@ function SchemaOptimise() {
             </h2>
             <p className={`text-sm leading-relaxed mb-4 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
               Help the AI understand your data better. Add descriptions to explain what your tables contain, 
-              boost priority on frequently-used data sources, or hide test tables from recommendations.
+              mark preferred data sources for prioritization, or hide test tables from recommendations.
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs ${
@@ -1425,8 +1392,8 @@ function SchemaOptimise() {
               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs ${
                 isDark ? 'bg-[#0a0a0b] border border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200'
               }`}>
-                <BoostIcon className={`w-4 h-4 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
-                <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>Boost priority</span>
+                <PreferredIcon className={`w-4 h-4 ${isDark ? 'text-gray-400' : 'text-gray-600'}`} />
+                <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>Preferred</span>
               </div>
               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs ${
                 isDark ? 'bg-[#0a0a0b] border border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200'

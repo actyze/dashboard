@@ -94,6 +94,29 @@ const SparklesIcon = ({ className }) => (
   </svg>
 );
 
+const CheckboxIcon = ({ checked, indeterminate, isDark }) => (
+  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
+    checked || indeterminate
+      ? 'bg-[#5d6ad3] border-[#5d6ad3]'
+      : isDark ? 'border-gray-500 hover:border-gray-400' : 'border-gray-400 hover:border-gray-500'
+  }`}>
+    {checked && (
+      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+      </svg>
+    )}
+    {indeterminate && !checked && (
+      <div className="w-2 h-0.5 bg-white rounded" />
+    )}
+  </div>
+);
+
+const SelectModeIcon = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+  </svg>
+);
+
 // Status indicators component
 const StatusIndicators = ({ hasBoost, hasDescription, boostWeight, isDark }) => {
   if (!hasBoost && !hasDescription) return null;
@@ -156,6 +179,13 @@ function SchemaOptimise() {
   const [editBoostWeight, setEditBoostWeight] = useState(1.5);
   const [editExcludeEnabled, setEditExcludeEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
+  
+  // Bulk selection state
+  const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const [selectedSchemas, setSelectedSchemas] = useState(new Set()); // Set of "dbName.schemaName"
+  const [selectedTables, setSelectedTables] = useState(new Set()); // Set of "dbName.schemaName.tableName"
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [showHideConfirmDialog, setShowHideConfirmDialog] = useState(false);
   
   // Use the same hook as other components
   const { 
@@ -443,6 +473,178 @@ function SchemaOptimise() {
     }
   };
 
+  // Bulk selection handlers
+  const toggleBulkSelectMode = () => {
+    if (bulkSelectMode) {
+      // Exiting bulk mode - clear selections
+      setSelectedSchemas(new Set());
+      setSelectedTables(new Set());
+    }
+    setBulkSelectMode(!bulkSelectMode);
+  };
+
+  const toggleSchemaSelection = (dbName, schemaName) => {
+    const schemaKey = `${dbName}.${schemaName}`;
+    const newSelected = new Set(selectedSchemas);
+    
+    if (newSelected.has(schemaKey)) {
+      newSelected.delete(schemaKey);
+      // Also deselect all tables in this schema
+      const newSelectedTables = new Set(selectedTables);
+      for (const tableKey of selectedTables) {
+        if (tableKey.startsWith(`${schemaKey}.`)) {
+          newSelectedTables.delete(tableKey);
+        }
+      }
+      setSelectedTables(newSelectedTables);
+    } else {
+      newSelected.add(schemaKey);
+    }
+    setSelectedSchemas(newSelected);
+  };
+
+  const toggleTableSelection = (dbName, schemaName, tableName) => {
+    const tableKey = `${dbName}.${schemaName}.${tableName}`;
+    const newSelected = new Set(selectedTables);
+    
+    if (newSelected.has(tableKey)) {
+      newSelected.delete(tableKey);
+    } else {
+      newSelected.add(tableKey);
+    }
+    setSelectedTables(newSelected);
+  };
+
+  const selectAllInSchema = (dbName, schemaName, tables) => {
+    const schemaKey = `${dbName}.${schemaName}`;
+    const newSelectedTables = new Set(selectedTables);
+    
+    // Check if all tables are already selected
+    const allSelected = tables.every(t => 
+      selectedTables.has(`${schemaKey}.${t.name}`) || isExcluded(dbName, schemaName, t.name)
+    );
+    
+    if (allSelected) {
+      // Deselect all
+      for (const table of tables) {
+        newSelectedTables.delete(`${schemaKey}.${table.name}`);
+      }
+    } else {
+      // Select all (except already excluded)
+      for (const table of tables) {
+        if (!isExcluded(dbName, schemaName, table.name)) {
+          newSelectedTables.add(`${schemaKey}.${table.name}`);
+        }
+      }
+    }
+    setSelectedTables(newSelectedTables);
+  };
+
+  const getTotalSelectedCount = () => {
+    return selectedSchemas.size + selectedTables.size;
+  };
+
+  const clearSelection = () => {
+    setSelectedSchemas(new Set());
+    setSelectedTables(new Set());
+  };
+
+  // Show confirmation dialog before hiding
+  const handleBulkHideClick = () => {
+    if (!isAdmin) {
+      showError('Only admins can hide resources');
+      return;
+    }
+    
+    if (getTotalSelectedCount() === 0) {
+      showError('Please select items to hide');
+      return;
+    }
+    
+    setShowHideConfirmDialog(true);
+  };
+
+  // Bulk hide action (called after confirmation)
+  const confirmBulkHide = async () => {
+    setShowHideConfirmDialog(false);
+    
+    const exclusions = [];
+    
+    // Add selected schemas
+    for (const schemaKey of selectedSchemas) {
+      const [catalog, schemaName] = schemaKey.split('.');
+      // Check if not already excluded
+      if (!isExcluded(catalog, schemaName, null)) {
+        exclusions.push({
+          catalog,
+          schema_name: schemaName,
+          table_name: null,
+          reason: null
+        });
+      }
+    }
+    
+    // Add selected tables (only if their schema is not selected)
+    for (const tableKey of selectedTables) {
+      const parts = tableKey.split('.');
+      const catalog = parts[0];
+      const schemaName = parts[1];
+      const tableName = parts.slice(2).join('.'); // Handle table names with dots
+      
+      const schemaKey = `${catalog}.${schemaName}`;
+      // Skip if schema is already selected (it will hide all tables)
+      if (selectedSchemas.has(schemaKey)) continue;
+      
+      // Check if not already excluded
+      if (!isExcluded(catalog, schemaName, tableName)) {
+        exclusions.push({
+          catalog,
+          schema_name: schemaName,
+          table_name: tableName,
+          reason: null
+        });
+      }
+    }
+
+    if (exclusions.length === 0) {
+      showError('No items to hide (all selected items may already be hidden)');
+      return;
+    }
+
+    setBulkActionLoading(true);
+    try {
+      const result = await ExclusionService.bulkAddExclusions(exclusions);
+      
+      // Handle response - result might have different structures
+      const createdCount = result?.created_count ?? 0;
+      const skippedCount = result?.skipped_count ?? 0;
+      const errors = result?.errors ?? [];
+      
+      if (createdCount > 0) {
+        showSuccess(`Successfully hidden ${createdCount} item${createdCount > 1 ? 's' : ''}`);
+      } else if (skippedCount > 0 && createdCount === 0) {
+        showSuccess('Items were already hidden');
+      }
+      
+      if (errors.length > 0) {
+        showError(`Some items failed: ${errors[0]}`);
+      }
+      
+      // Refresh exclusions to update UI
+      await loadExclusions();
+      
+    } catch (err) {
+      console.error('Bulk hide failed:', err);
+      const errorMessage = err.response?.data?.detail || err.message || 'Failed to hide items';
+      showError(errorMessage);
+    } finally {
+      // Always clear selection and exit bulk mode
+      clearSelection();
+      setBulkSelectMode(false);
+      setBulkActionLoading(false);
+    }
+  };
+
   // Render functions
   const renderColumn = (column) => {
     return (
@@ -470,20 +672,37 @@ function SchemaOptimise() {
     const hasDescription = descriptions[nodeKey];
     const preference = findPreference(dbName, schemaName, table.name);
     const tableDetails = tableDetailsCache[tableKey];
-    const isExcluded = !!findExclusion(dbName, schemaName, table.name);
+    const tableIsExcluded = !!findExclusion(dbName, schemaName, table.name);
+    const isSelected = selectedTables.has(tableKey);
+    const schemaKey = `${dbName}.${schemaName}`;
+    const schemaIsSelected = selectedSchemas.has(schemaKey);
 
     // For non-admin users, hide excluded tables entirely
-    if (isExcluded && !isAdmin) {
+    if (tableIsExcluded && !isAdmin) {
       return null;
     }
 
     return (
-      <div key={table.name} className={`ml-0 ${isExcluded ? 'opacity-50' : ''}`}>
+      <div key={table.name} className={`ml-0 ${tableIsExcluded ? 'opacity-50' : ''}`}>
         <div 
           className={`flex items-center gap-2 px-3 py-2.5 group ${
-            isDark ? 'hover:bg-[#1c1d1f]' : 'hover:bg-gray-50'
-          }`}
+            isSelected ? (isDark ? 'bg-[#5d6ad3]/10' : 'bg-[#5d6ad3]/5') : ''
+          } ${isDark ? 'hover:bg-[#1c1d1f]' : 'hover:bg-gray-50'}`}
         >
+          {/* Checkbox in bulk select mode */}
+          {bulkSelectMode && isAdmin && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleTableSelection(dbName, schemaName, table.name);
+              }}
+              disabled={tableIsExcluded || schemaIsSelected}
+              className={`flex-shrink-0 ${tableIsExcluded || schemaIsSelected ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              title={tableIsExcluded ? 'Already hidden' : schemaIsSelected ? 'Schema is selected' : 'Select table'}
+            >
+              <CheckboxIcon checked={isSelected || schemaIsSelected} isDark={isDark} />
+            </button>
+          )}
           <button
             onClick={() => toggleTable(dbName, schemaName, table.name)}
             className={`${isDark ? 'text-gray-400' : 'text-gray-600'} flex-shrink-0`}
@@ -501,7 +720,7 @@ function SchemaOptimise() {
               </span>
             )}
           </span>
-          {isExcluded && isAdmin && (
+          {tableIsExcluded && isAdmin && (
             <span 
               className={`flex items-center gap-1 px-1.5 py-0.5 text-xs rounded ${
                 isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700'
@@ -518,17 +737,19 @@ function SchemaOptimise() {
             boostWeight={preference?.boost_weight}
             isDark={isDark}
           />
-          <button
-            onClick={() => handleOpenEditPanel(dbName, schemaName, table.name, null)}
-            className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md font-medium transition-all ${
-              isDark 
-                ? 'bg-[#2a2b2e] text-gray-300 hover:bg-[#3a3b3e] hover:text-white' 
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
-            }`}
-          >
-            <PencilIcon className="w-3 h-3" />
-            Edit
-          </button>
+          {!bulkSelectMode && (
+            <button
+              onClick={() => handleOpenEditPanel(dbName, schemaName, table.name, null)}
+              title="Edit table settings"
+              className={`p-1.5 rounded-md transition-all ${
+                isDark 
+                  ? 'text-gray-300 hover:bg-[#2a2b2e] hover:text-white' 
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              <PencilIcon className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         {isExpanded && tableDetails && tableDetails.columns && (
@@ -547,20 +768,42 @@ function SchemaOptimise() {
     const hasDescription = descriptions[nodeKey];
     const preference = findPreference(dbName, schema.name, null);
     const objects = objectsCache[schemaKey];
-    const isExcluded = !!findExclusion(dbName, schema.name, null);
+    const schemaIsExcluded = !!findExclusion(dbName, schema.name, null);
+    const isSelected = selectedSchemas.has(schemaKey);
 
     // For non-admin users, hide excluded schemas entirely
-    if (isExcluded && !isAdmin) {
+    if (schemaIsExcluded && !isAdmin) {
       return null;
     }
 
+    // Calculate how many tables are selected in this schema
+    const tablesInSchema = objects || [];
+    const selectedTablesInSchema = tablesInSchema.filter(t => 
+      selectedTables.has(`${schemaKey}.${t.name}`)
+    ).length;
+    const hasPartialSelection = selectedTablesInSchema > 0 && selectedTablesInSchema < tablesInSchema.length;
+
     return (
-      <div key={schema.name} className={`ml-0 ${isExcluded ? 'opacity-50' : ''}`}>
+      <div key={schema.name} className={`ml-0 ${schemaIsExcluded ? 'opacity-50' : ''}`}>
         <div 
           className={`flex items-center gap-2 px-3 py-2.5 group ${
-            isDark ? 'hover:bg-[#1c1d1f]' : 'hover:bg-gray-50'
-          }`}
+            isSelected ? (isDark ? 'bg-[#5d6ad3]/10' : 'bg-[#5d6ad3]/5') : ''
+          } ${isDark ? 'hover:bg-[#1c1d1f]' : 'hover:bg-gray-50'}`}
         >
+          {/* Checkbox in bulk select mode */}
+          {bulkSelectMode && isAdmin && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleSchemaSelection(dbName, schema.name);
+              }}
+              disabled={schemaIsExcluded}
+              className={`flex-shrink-0 ${schemaIsExcluded ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              title={schemaIsExcluded ? 'Already hidden' : 'Select schema (includes all tables)'}
+            >
+              <CheckboxIcon checked={isSelected} indeterminate={hasPartialSelection} isDark={isDark} />
+            </button>
+          )}
           <button
             onClick={() => toggleSchema(dbName, schema.name)}
             className={`${isDark ? 'text-gray-400' : 'text-gray-600'} flex-shrink-0`}
@@ -578,7 +821,7 @@ function SchemaOptimise() {
               </span>
             )}
           </span>
-          {isExcluded && isAdmin && (
+          {schemaIsExcluded && isAdmin && (
             <span 
               className={`flex items-center gap-1 px-1.5 py-0.5 text-xs rounded ${
                 isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700'
@@ -595,17 +838,35 @@ function SchemaOptimise() {
             boostWeight={preference?.boost_weight}
             isDark={isDark}
           />
-          <button
-            onClick={() => handleOpenEditPanel(dbName, schema.name, null, null)}
-            className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md font-medium transition-all ${
-              isDark 
-                ? 'bg-[#2a2b2e] text-gray-300 hover:bg-[#3a3b3e] hover:text-white' 
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
-            }`}
-          >
-            <PencilIcon className="w-3 h-3" />
-            Edit
-          </button>
+          {!bulkSelectMode && (
+            <button
+              onClick={() => handleOpenEditPanel(dbName, schema.name, null, null)}
+              title="Edit schema settings"
+              className={`p-1.5 rounded-md transition-all ${
+                isDark 
+                  ? 'text-gray-300 hover:bg-[#2a2b2e] hover:text-white' 
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              <PencilIcon className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {/* Select all tables button in bulk mode */}
+          {bulkSelectMode && isAdmin && isExpanded && objects && objects.length > 0 && !isSelected && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                selectAllInSchema(dbName, schema.name, objects);
+              }}
+              className={`text-xs px-2 py-1 rounded transition-colors ${
+                isDark 
+                  ? 'text-gray-400 hover:text-white hover:bg-[#2a2b2e]' 
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {tablesInSchema.every(t => selectedTables.has(`${schemaKey}.${t.name}`)) ? 'Deselect all' : 'Select all tables'}
+            </button>
+          )}
         </div>
 
         {isExpanded && objects && (
@@ -660,6 +921,7 @@ function SchemaOptimise() {
     const dbKey = buildKey(selectedDatabase.name, null, null, null);
     const dbHasDescription = descriptions[dbKey];
     const dbPreference = findPreference(selectedDatabase.name, null, null);
+    const totalSelected = getTotalSelectedCount();
     
     return (
       <div className="h-full flex flex-col">
@@ -667,7 +929,14 @@ function SchemaOptimise() {
         <div className={`flex items-center justify-between px-6 py-4 border-b ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
           <div className="flex items-center gap-4">
             <button
-              onClick={() => setSelectedDatabase(null)}
+              onClick={() => {
+                setSelectedDatabase(null);
+                // Clear selections when going back
+                if (bulkSelectMode) {
+                  setBulkSelectMode(false);
+                  clearSelection();
+                }
+              }}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 isDark 
                   ? 'text-gray-400 hover:text-white hover:bg-[#2a2b2e]' 
@@ -687,9 +956,6 @@ function SchemaOptimise() {
                   <h2 className={`font-semibold text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>
                     {selectedDatabase.name}
                   </h2>
-                  {selectedDatabase.connector_type && selectedDatabase.connector_type !== 'unknown' && (
-                    <ConnectorBadge connector_type={selectedDatabase.connector_type} size="sm" />
-                  )}
                   <StatusIndicators 
                     hasBoost={!!dbPreference}
                     hasDescription={!!dbHasDescription}
@@ -698,25 +964,108 @@ function SchemaOptimise() {
                   />
                 </div>
                 <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                  Click on any schema or table, then use the <strong>Edit</strong> button to add descriptions or boost priority
+                  {bulkSelectMode 
+                    ? <>Select schemas or tables, then click <strong className="text-red-400">Hide Selected</strong> below</>
+                    : <>Use <strong>Configure</strong> to edit database settings, or click the pencil icon on any item</>
+                  }
                 </p>
               </div>
             </div>
           </div>
           
-          {/* Edit Database Button */}
-          <button
-            onClick={() => handleOpenEditPanel(selectedDatabase.name, null, null, null)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              isDark 
-                ? 'bg-[#2a2b2e] text-gray-300 hover:bg-[#3a3b3e] hover:text-white' 
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
-            }`}
-          >
-            <PencilIcon className="w-4 h-4" />
-            Edit Database
-          </button>
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2">
+            {/* Bulk Select Toggle - Only for admins */}
+            {isAdmin && (
+              <button
+                onClick={toggleBulkSelectMode}
+                title={bulkSelectMode ? "Exit selection mode" : "Select schemas or tables to hide"}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
+                  bulkSelectMode
+                    ? 'bg-[#5d6ad3] text-white'
+                    : isDark 
+                      ? 'border border-[#3a3b3e] bg-transparent text-gray-400 hover:border-[#5d6ad3] hover:text-[#5d6ad3]' 
+                      : 'border border-gray-300 bg-transparent text-gray-500 hover:border-[#5d6ad3] hover:text-[#5d6ad3]'
+                }`}
+              >
+                {bulkSelectMode ? (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <span>Done</span>
+                  </>
+                ) : (
+                  <>
+                    <EyeSlashIcon />
+                    <span>Hide</span>
+                  </>
+                )}
+              </button>
+            )}
+            
+            {/* Edit Database Button - Hide in bulk mode */}
+            {!bulkSelectMode && (
+              <button
+                onClick={() => handleOpenEditPanel(selectedDatabase.name, null, null, null)}
+                title="Add description or boost priority for this database"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
+                  isDark 
+                    ? 'bg-[#2a2b2e] text-gray-400 hover:bg-[#3a3b3e] hover:text-white' 
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-900'
+                }`}
+              >
+                <PencilIcon className="w-3.5 h-3.5" />
+                <span>Configure</span>
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Bulk Action Bar - Shows when items are selected */}
+        {bulkSelectMode && totalSelected > 0 && (
+          <div className={`flex items-center justify-between px-6 py-3 border-b ${
+            isDark ? 'bg-[#5d6ad3]/10 border-[#5d6ad3]/30' : 'bg-[#5d6ad3]/5 border-[#5d6ad3]/20'
+          }`}>
+            <div className="flex items-center gap-3">
+              <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                {totalSelected} item{totalSelected !== 1 ? 's' : ''} selected
+              </span>
+              <button
+                onClick={clearSelection}
+                className={`text-xs px-2 py-1 rounded transition-colors ${
+                  isDark 
+                    ? 'text-gray-400 hover:text-white hover:bg-[#2a2b2e]' 
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Clear selection
+              </button>
+            </div>
+            
+            <button
+              onClick={handleBulkHideClick}
+              disabled={bulkActionLoading}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                bulkActionLoading
+                  ? 'bg-gray-400 cursor-not-allowed text-white'
+                  : 'bg-red-600 hover:bg-red-700 text-white'
+              }`}
+            >
+              {bulkActionLoading ? (
+                <>
+                  <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Hiding...
+                </>
+              ) : (
+                <>
+                  <HiddenIcon className="w-3 h-3" />
+                  Hide Selected
+                </>
+              )}
+            </button>
+          </div>
+        )}
         
         {/* Schema tree */}
         <div className="flex-1 overflow-auto px-6 py-4">
@@ -754,6 +1103,84 @@ function SchemaOptimise() {
     if (editingNode.column) parts.push(editingNode.column);
     return parts.join(' › ');
   };
+
+  // Render the hide confirmation dialog
+  const renderHideConfirmDialog = () => (
+    <div 
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
+      onClick={(e) => e.target === e.currentTarget && setShowHideConfirmDialog(false)}
+    >
+      <div 
+        className={`w-full max-w-md mx-4 rounded-xl shadow-2xl ${
+          isDark ? 'bg-[#17181a] border border-[#2a2b2e]' : 'bg-white border border-gray-200'
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Dialog Header */}
+        <div className={`flex items-center gap-3 px-5 py-4 border-b ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
+          <div className={`p-2 rounded-lg ${isDark ? 'bg-amber-500/20' : 'bg-amber-100'}`}>
+            <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className={`text-base font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              Hide from Actyze AI?
+            </h3>
+          </div>
+        </div>
+
+        {/* Dialog Content */}
+        <div className="px-5 py-4">
+          <p className={`text-sm leading-relaxed ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+            You are about to hide <strong className={isDark ? 'text-white' : 'text-gray-900'}>{getTotalSelectedCount()} item{getTotalSelectedCount() !== 1 ? 's' : ''}</strong> from Actyze AI.
+          </p>
+          <div className={`mt-4 p-3 rounded-lg ${isDark ? 'bg-[#0a0a0b] border border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200'}`}>
+            <div className="flex items-start gap-2.5">
+              <svg className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                <p className="font-medium mb-2">What this means:</p>
+                <ul className="space-y-1.5 ml-0.5">
+                  <li className="flex items-start gap-2">
+                    <span className="mt-1.5 w-1 h-1 rounded-full bg-current flex-shrink-0" />
+                    <span>Hidden schemas and tables will <strong>not</strong> be used for AI query recommendations</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-1.5 w-1 h-1 rounded-full bg-current flex-shrink-0" />
+                    <span>They won't appear in search results for regular users</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-1.5 w-1 h-1 rounded-full bg-current flex-shrink-0" />
+                    <span>You can unhide them later from the Edit panel</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Dialog Footer */}
+        <div className={`flex items-center justify-end gap-3 px-5 py-4 border-t ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
+          <button
+            onClick={() => setShowHideConfirmDialog(false)}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+              isDark ? 'text-gray-400 hover:bg-[#2a2b2e]' : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={confirmBulkHide}
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
+          >
+            Yes, Hide Items
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   // Render the edit modal
   const renderEditModal = () => (
@@ -961,6 +1388,9 @@ function SchemaOptimise() {
         
         {/* Edit Panel Modal */}
         {editingNode && renderEditModal()}
+        
+        {/* Hide Confirmation Dialog */}
+        {showHideConfirmDialog && renderHideConfirmDialog()}
       </div>
     );
   }

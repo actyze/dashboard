@@ -1,6 +1,7 @@
 """Service for managing schema exclusions (global org-level hiding of databases/schemas/tables)."""
 
 import uuid
+import asyncio
 from typing import Dict, List, Any, Optional
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -192,6 +193,121 @@ class ExclusionService:
             await db.rollback()
             logger.error("Failed to remove exclusion", error=str(e), exclusion_id=exclusion_id)
             raise
+    
+    @staticmethod
+    async def bulk_add_exclusions(
+        db: AsyncSession,
+        exclusions: List[Dict[str, Any]],
+        user_id: uuid.UUID
+    ) -> Dict[str, Any]:
+        """
+        Bulk add exclusions efficiently.
+        
+        Args:
+            db: Database session
+            exclusions: List of exclusion dicts with catalog, schema_name, table_name, reason
+            user_id: User who is adding the exclusions
+            
+        Returns:
+            Summary with created_count, skipped_count, errors, and created_exclusions
+        """
+        created_exclusions = []
+        skipped_count = 0
+        errors = []
+        
+        # Collect all items to notify schema service at once
+        items_to_remove = []
+        
+        for exc_data in exclusions:
+            catalog = exc_data.get("catalog")
+            schema_name = exc_data.get("schema_name")
+            table_name = exc_data.get("table_name")
+            reason = exc_data.get("reason")
+            
+            try:
+                # Validate hierarchy
+                if table_name and not schema_name:
+                    errors.append(f"Cannot exclude table {table_name} without specifying schema")
+                    continue
+                
+                # Check if already excluded
+                existing = await db.execute(
+                    select(SchemaExclusion).where(
+                        SchemaExclusion.catalog == catalog,
+                        SchemaExclusion.schema_name == schema_name if schema_name else SchemaExclusion.schema_name.is_(None),
+                        SchemaExclusion.table_name == table_name if table_name else SchemaExclusion.table_name.is_(None)
+                    )
+                )
+                if existing.scalar_one_or_none():
+                    skipped_count += 1
+                    continue
+                
+                # Create exclusion
+                exclusion = SchemaExclusion(
+                    catalog=catalog,
+                    schema_name=schema_name,
+                    table_name=table_name,
+                    reason=reason,
+                    excluded_by=user_id
+                )
+                
+                db.add(exclusion)
+                await db.flush()  # Get the ID without committing
+                
+                created_exclusions.append({
+                    "id": exclusion.id,
+                    "catalog": exclusion.catalog,
+                    "schema_name": exclusion.schema_name,
+                    "table_name": exclusion.table_name,
+                    "full_path": ExclusionService._build_full_path(catalog, schema_name, table_name),
+                    "level": ExclusionService._get_level(schema_name, table_name),
+                    "reason": exclusion.reason,
+                    "excluded_by": str(exclusion.excluded_by),
+                    "created_at": exclusion.created_at.isoformat() if exclusion.created_at else None
+                })
+                
+                items_to_remove.append({
+                    "catalog": catalog,
+                    "schema_name": schema_name,
+                    "table_name": table_name
+                })
+                
+            except Exception as e:
+                path = ExclusionService._build_full_path(catalog, schema_name, table_name)
+                errors.append(f"Failed to exclude {path}: {str(e)}")
+        
+        # Commit all successful exclusions
+        if created_exclusions:
+            await db.commit()
+            
+            # Notify schema service for all items concurrently (much faster)
+            if items_to_remove:
+                notification_tasks = [
+                    ExclusionService._notify_schema_service_remove(
+                        item["catalog"], 
+                        item["schema_name"], 
+                        item["table_name"]
+                    )
+                    for item in items_to_remove
+                ]
+                # Run all notifications concurrently, don't fail if some fail
+                await asyncio.gather(*notification_tasks, return_exceptions=True)
+        
+        logger.info(
+            "Bulk exclusions completed",
+            created_count=len(created_exclusions),
+            skipped_count=skipped_count,
+            error_count=len(errors),
+            user_id=str(user_id)
+        )
+        
+        return {
+            "success": True,
+            "created_count": len(created_exclusions),
+            "skipped_count": skipped_count,
+            "errors": errors,
+            "created_exclusions": created_exclusions
+        }
     
     @staticmethod
     async def is_excluded(

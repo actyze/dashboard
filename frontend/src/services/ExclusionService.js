@@ -74,6 +74,27 @@ const ExclusionService = {
       console.error('Failed to check exclusion:', error);
       throw error;
     }
+  },
+
+  /**
+   * Bulk add exclusions (hide multiple resources at once)
+   * @param {Array<Object>} exclusions - Array of exclusion objects
+   * @param {string} exclusions[].catalog - Catalog/database name
+   * @param {string|null} exclusions[].schema_name - Schema name
+   * @param {string|null} exclusions[].table_name - Table name
+   * @param {string|null} exclusions[].reason - Optional reason
+   * @returns {Promise<Object>} Result with created_count, skipped_count, errors
+   */
+  async bulkAddExclusions(exclusions) {
+    try {
+      const response = await apiInstance.post('/v1/exclusions/bulk', { exclusions });
+      // Handle both cases: response is data directly OR response.data contains data
+      const data = response?.data !== undefined ? response.data : response;
+      return data;
+    } catch (error) {
+      console.error('Failed to bulk add exclusions:', error);
+      throw error;
+    }
   }
 };
 

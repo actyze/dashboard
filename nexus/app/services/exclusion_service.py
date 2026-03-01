@@ -280,18 +280,9 @@ class ExclusionService:
         if created_exclusions:
             await db.commit()
             
-            # Notify schema service for all items concurrently (much faster)
+            # Notify schema service in a SINGLE HTTP call (much faster than N calls)
             if items_to_remove:
-                notification_tasks = [
-                    ExclusionService._notify_schema_service_remove(
-                        item["catalog"], 
-                        item["schema_name"], 
-                        item["table_name"]
-                    )
-                    for item in items_to_remove
-                ]
-                # Run all notifications concurrently, don't fail if some fail
-                await asyncio.gather(*notification_tasks, return_exceptions=True)
+                await ExclusionService._notify_schema_service_batch_remove_items(items_to_remove)
         
         logger.info(
             "Bulk exclusions completed",
@@ -417,6 +408,58 @@ class ExclusionService:
         except Exception as e:
             logger.error("Failed to notify schema service", error=str(e))
             # Don't raise - exclusion is still saved in DB
+    
+    @staticmethod
+    async def _notify_schema_service_batch_remove_items(
+        items: List[Dict[str, Any]]
+    ):
+        """
+        Notify schema service to remove MULTIPLE resources in a SINGLE HTTP call.
+        
+        This is 10-100x faster than making N separate HTTP calls:
+        - Single network round-trip instead of N
+        - Schema service collects all matching tables
+        - FAISS index is rebuilt only ONCE at the end
+        
+        Args:
+            items: List of dicts with catalog, schema_name, table_name keys
+        """
+        if not items:
+            return
+            
+        try:
+            schema_service_url = os.getenv("SCHEMA_SERVICE_URL", "http://schema-service:8000")
+            service_key = os.getenv("SCHEMA_SERVICE_KEY", "")
+            
+            headers = {}
+            if service_key:
+                headers["X-Service-Key"] = service_key
+            
+            async with httpx.AsyncClient() as client:
+                # Use batch-remove-multi endpoint for all items at once
+                response = await client.post(
+                    f"{schema_service_url}/table/batch-remove-multi",
+                    json=items,
+                    headers=headers,
+                    timeout=120.0  # Longer timeout for bulk operations
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    removed_count = result.get('removed_count', 0)
+                    patterns_processed = result.get('patterns_processed', len(items))
+                    logger.info(
+                        "Schema service: batch remove multi completed", 
+                        patterns_processed=patterns_processed,
+                        removed_count=removed_count
+                    )
+                else:
+                    logger.warning("Schema service: batch remove multi failed", 
+                                 status=response.status_code)
+                        
+        except Exception as e:
+            logger.error("Failed to notify schema service (batch remove multi)", error=str(e))
+            # Don't raise - exclusions are still saved in DB
     
     @staticmethod
     async def _notify_schema_service_refresh(

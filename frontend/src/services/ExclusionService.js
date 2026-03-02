@@ -22,35 +22,20 @@ const ExclusionService = {
   },
 
   /**
-   * Add a new exclusion
-   * @param {Object} exclusion - Exclusion data
-   * @param {string} exclusion.catalog - Catalog/database name
-   * @param {string|null} exclusion.schema_name - Schema name (null for database-level)
-   * @param {string|null} exclusion.table_name - Table name (null for schema-level)
-   * @param {string|null} exclusion.reason - Reason for exclusion
-   * @returns {Promise<Object>} Created exclusion
+   * Bulk remove exclusions (unhide multiple resources at once)
+   * @param {Array<number>} exclusionIds - Array of exclusion IDs to remove
+   * @returns {Promise<Object>} Result with removed_count, errors, removed_exclusions
    */
-  async addExclusion(exclusion) {
+  async bulkRemoveExclusions(exclusionIds) {
     try {
-      const response = await apiInstance.post('/v1/exclusions', exclusion);
-      return response.data;
+      // Use query params (not body) — DELETE with body is stripped by nginx proxy
+      const params = new URLSearchParams();
+      exclusionIds.forEach(id => params.append('ids', id));
+      const response = await apiInstance.delete(`/v1/exclusions/bulk?${params.toString()}`);
+      const data = response?.data !== undefined ? response.data : response;
+      return data;
     } catch (error) {
-      console.error('Failed to add exclusion:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Remove an exclusion (re-enable the resource)
-   * @param {number} exclusionId - ID of exclusion to remove
-   * @returns {Promise<Object>} Success message
-   */
-  async removeExclusion(exclusionId) {
-    try {
-      const response = await apiInstance.delete(`/v1/exclusions/${exclusionId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Failed to remove exclusion:', error);
+      console.error('Failed to bulk remove exclusions:', error);
       throw error;
     }
   },

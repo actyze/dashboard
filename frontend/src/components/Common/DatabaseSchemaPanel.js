@@ -258,9 +258,6 @@ const DatabaseSchemaPanel = ({
                                           >
                                             <TableIcon />
                                             <Text className="text-xs">{table.name}</Text>
-                                            <Text className="text-xs text-gray-400 ml-auto">
-                                              {table.column_count} cols
-                                            </Text>
                                           </button>
                                         ))}
                                       </>
@@ -285,9 +282,6 @@ const DatabaseSchemaPanel = ({
                                           >
                                             <TableIcon />
                                             <Text className="text-xs">{view.name}</Text>
-                                            <Text className="text-xs text-gray-400 ml-auto">
-                                              {view.column_count} cols
-                                            </Text>
                                           </button>
                                         ))}
                                       </>

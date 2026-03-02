@@ -167,13 +167,12 @@ const ConnectorBadge = ({ connector_type, size = 'sm', showIcon = true }) => {
   return (
     <span
       className={`
-        inline-flex items-center gap-1 rounded-full font-medium
+        inline-flex items-center rounded-full font-medium
         ${sizeConfig.badge}
-        ${isDark ? `${config.bgDark} ${config.textDark}` : `${config.bgLight} ${config.textLight}`}
+        ${isDark ? 'bg-[#2a2b2e] text-gray-400' : 'bg-gray-100 text-gray-600'}
       `}
       title={`Trino Connector: ${config.label}`}
     >
-      {showIcon && <span className={sizeConfig.icon}>{config.icon}</span>}
       <span>{config.label}</span>
     </span>
   );

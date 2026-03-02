@@ -444,9 +444,17 @@ Generated SQL (Main Data):
             prompt_parts.append("Provide reasoning + suggestions for rephrasing or alternative queries.")
             prompt_parts.append("="*40 + "\n")
         
+        # Conditional table usage rules based on intent
+        if intent in ["REFINE_RESULT", "REJECT_RESULT", "EXPLAIN_RESULT"]:
+            # For corrections/refinements: allow using tables from previous SQL
+            table_usage_rule = "1. You can use tables from the PREVIOUS SQL above OR from AVAILABLE TABLES list"
+        else:
+            # For new queries: strict constraint
+            table_usage_rule = "1. ONLY use tables from AVAILABLE TABLES list above"
+        
         prompt_parts.extend([
             "SQL RULES:",
-            "1. ONLY use tables from AVAILABLE TABLES list above",
+            table_usage_rule,
             "2. No tables = no SQL (provide guidance instead)",
             "3. Use exact qualified names (catalog.schema.table)",
             "4. Trino SQL syntax (default), adapt for connector-specific features when needed",

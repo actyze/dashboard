@@ -435,25 +435,20 @@ function SchemaOptimise() {
         // Handle exclusion (visibility) - only for non-columns
         if (editExcludeEnabled && !exclusion) {
           // User wants to hide, and it's not already hidden
-          try {
-            await ExclusionService.addExclusion({
-              catalog,
-              schema_name: schema || null,
-              table_name: table || null,
-              reason: null
-            });
-          } catch (addErr) {
-            // If already excluded, reload exclusions and show info message
-            if (addErr.response?.data?.detail?.includes('already excluded')) {
-              await loadExclusions();
-              showError('This resource is already hidden. The exclusion list has been refreshed.');
-              return;
-            }
-            throw addErr; // Re-throw other errors
+          const addResult = await ExclusionService.bulkAddExclusions([{
+            catalog,
+            schema_name: schema || null,
+            table_name: table || null,
+            reason: null
+          }]);
+          if (addResult.skipped_count > 0 && addResult.created_count === 0) {
+            await loadExclusions();
+            showError('This resource is already hidden. The exclusion list has been refreshed.');
+            return;
           }
         } else if (!editExcludeEnabled && exclusion) {
           // User wants to show, and it's currently hidden
-          await ExclusionService.removeExclusion(exclusion.id);
+          await ExclusionService.bulkRemoveExclusions([exclusion.id]);
         }
       }
 

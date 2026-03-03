@@ -197,7 +197,17 @@ class OrchestrationService:
                 cached_sql_result["intent_confidence"] = intent_confidence
                 return cached_sql_result
             
-            cache_key = f"{nl_query}_{len(conversation_history)}_{len(recommendations)}"
+            # NEW: Fetch preferred tables for this user
+            preferred_tables = []
+            if user_id:
+                try:
+                    preferred_tables = await self.preference_service.get_user_preferred_tables_with_metadata(user_id)
+                    self.logger.info(f"Fetched {len(preferred_tables)} preferred tables for user", user_id=user_id)
+                except Exception as e:
+                    self.logger.warning("Failed to fetch preferred tables", error=str(e), user_id=user_id)
+                    preferred_tables = []
+            
+            cache_key = f"{nl_query}_{len(conversation_history)}_{len(recommendations)}_{len(preferred_tables)}"
             cached_response = await self.cache_service.get_llm_response(
                 cache_key, {"type": "sql_generation"}
             )
@@ -219,11 +229,12 @@ class OrchestrationService:
                     )
                     sql_generation = cached_response
             else:
-                # Pass intent and last_sql for context-aware prompting
+                # Pass intent, last_sql, and preferred_tables for context-aware prompting
                 sql_generation = await self.llm_service.generate_sql(
                     nl_query, 
                     conversation_history, 
                     schema_recommendations,
+                    preferred_tables=preferred_tables,  # NEW: Pass preferred tables
                     last_sql=last_sql,
                     intent=intent
                 )
@@ -249,6 +260,7 @@ class OrchestrationService:
                         "nl_query": nl_query,
                         "generated_sql": None,
                         "schema_recommendations": recommendations,
+                        "preferred_tables": [p.get("full_name") for p in preferred_tables],
                         "model_reasoning": reasoning,
                         "suggestions": suggestions,
                         "processing_time": processing_time,
@@ -279,6 +291,7 @@ class OrchestrationService:
                     "nl_query": nl_query,
                     "generated_sql": None,
                     "schema_recommendations": recommendations,
+                    "preferred_tables": [p.get("full_name") for p in preferred_tables],
                     "model_reasoning": reasoning,
                     "suggestions": suggestions,
                     "processing_time": processing_time,
@@ -295,6 +308,7 @@ class OrchestrationService:
                 "nl_query": nl_query,
                 "generated_sql": generated_sql,
                 "schema_recommendations": recommendations,
+                "preferred_tables": [p.get("full_name") for p in preferred_tables],
                 "model_confidence": sql_generation.get("confidence"),
                 "model_reasoning": sql_generation.get("reasoning"),
                 "processing_time": processing_time

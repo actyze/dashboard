@@ -11,117 +11,167 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/api/preferences", tags=["User Preferences"])
 
 
-class PreferenceInput(BaseModel):
-    """Input for adding a new preference."""
-    catalog: Optional[str] = Field(default=None, description="Database catalog")
-    database_name: Optional[str] = Field(default=None, description="Database name")
-    schema_name: Optional[str] = Field(default=None, description="Schema name")
-    table_name: Optional[str] = Field(default=None, description="Table name (NULL = entire schema)")
-    preferred_columns: Optional[List[str]] = Field(default=None, description="Specific columns (NULL = all)")
-    boost_weight: float = Field(default=1.5, ge=1.0, le=3.0, description="Boost multiplier (1.0-3.0)")
+# ============================================================================
+# Preferred Tables API
+# ============================================================================
+
+class PreferredTableInput(BaseModel):
+    """Input for adding a table to preferred list."""
+    catalog: str = Field(..., description="Database catalog")
+    schema_name: str = Field(..., description="Schema name", alias="schema")
+    table_name: str = Field(..., description="Table name", alias="table")
+    
+    class Config:
+        populate_by_name = True
 
 
-class PreferenceResponse(BaseModel):
-    """Response for preference."""
+class BulkPreferredTableItem(BaseModel):
+    """Single item in a bulk preferred tables request."""
+    catalog: str
+    database_name: str
+    schema_name: str
+    table_name: str
+
+
+class BulkAddPreferredTablesInput(BaseModel):
+    """Input for bulk adding preferred tables."""
+    tables: List[BulkPreferredTableItem]
+
+
+class BulkRemovePreferredTablesInput(BaseModel):
+    """Input for bulk removing preferred tables."""
+    preference_ids: List[str]
+
+
+class PreferredTableResponse(BaseModel):
+    """Response for preferred table (slim - no columns, frontend only needs identifiers)."""
     id: str
-    catalog: Optional[str]
-    database_name: Optional[str]
-    schema_name: Optional[str]
-    table_name: Optional[str]
-    preferred_columns: List[str]
-    boost_weight: float
+    catalog: str
+    database_name: str
+    schema_name: str
+    table_name: str
+    full_name: str
     created_at: Optional[str]
     updated_at: Optional[str]
 
 
-class BoostWeightUpdate(BaseModel):
-    """Input for updating boost weight."""
-    boost_weight: float = Field(..., ge=1.0, le=3.0, description="Boost multiplier (1.0-3.0)")
-
-
-@router.get("", response_model=List[PreferenceResponse])
-async def get_user_preferences(current_user: dict = Depends(get_current_user)):
-    """Get all schema/table preferences for the current user."""
+@router.get("/preferred-tables", response_model=List[PreferredTableResponse])
+async def get_preferred_tables(current_user: dict = Depends(get_current_user)):
+    """
+    Get all preferred tables for the current user (slim response - identifiers only).
+    
+    Columns and metadata are stored in DB and used directly by the AI orchestration
+    service when generating SQL. The frontend only needs table identifiers.
+    """
     try:
-        preferences = await preference_service.get_user_preferences(str(current_user["id"]))
-        return preferences
+        preferred_tables = await preference_service.get_user_preferred_tables(str(current_user["id"]))
+        return preferred_tables
     except Exception as e:
-        logger.error("Failed to get user preferences", error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to retrieve preferences")
+        logger.error("Failed to get preferred tables", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to retrieve preferred tables")
 
 
-@router.post("")
-async def add_user_preference(
-    preference: PreferenceInput,
+
+@router.post("/preferred-tables")
+async def add_preferred_table(
+    table: PreferredTableInput,
     current_user: dict = Depends(require_write_access)
 ):
-    """Add a new schema/table preference for the current user."""
+    """
+    Add a table to user's preferred list.
+    
+    The system will automatically fetch full metadata (columns, types, descriptions)
+    from the schema service and store it for AI query generation.
+    
+    Maximum preferred tables: Configured via MAX_PREFERRED_TABLES (default: 50)
+    """
     try:
-        result = await preference_service.add_user_preference(
+        # Extract database name from catalog (for now, use catalog as database)
+        # This assumes catalog = database name (standard for most connectors)
+        result = await preference_service.add_preferred_table(
             user_id=str(current_user["id"]),
-            catalog=preference.catalog,
-            database_name=preference.database_name,
-            schema_name=preference.schema_name,
-            table_name=preference.table_name,
-            preferred_columns=preference.preferred_columns,
-            boost_weight=preference.boost_weight
+            catalog=table.catalog,
+            database_name=table.catalog,  # Use catalog as database name
+            schema_name=table.schema_name,
+            table_name=table.table_name
         )
         
         if not result.get("success"):
-            raise HTTPException(status_code=400, detail=result.get("error", "Failed to add preference"))
+            raise HTTPException(status_code=400, detail=result.get("error", "Failed to add preferred table"))
         
         return result
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to add user preference", error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to add preference")
+        logger.error("Failed to add preferred table", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to add preferred table")
 
 
-@router.delete("/{preference_id}")
-async def delete_user_preference(
+@router.post("/preferred-tables/bulk")
+async def bulk_add_preferred_tables(
+    payload: BulkAddPreferredTablesInput,
+    current_user: dict = Depends(require_write_access)
+):
+    """
+    Add multiple tables to user's preferred list in one request.
+    Respects MAX_PREFERRED_TABLES limit - extras are skipped with reason.
+    MUST be defined before /preferred-tables/{preference_id} to avoid route shadowing.
+    """
+    try:
+        tables = [t.model_dump() for t in payload.tables]
+        result = await preference_service.bulk_add_preferred_tables(
+            user_id=str(current_user["id"]),
+            tables=tables
+        )
+        return result
+    except Exception as e:
+        logger.error("Failed to bulk add preferred tables", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to bulk add preferred tables")
+
+
+@router.delete("/preferred-tables/bulk")
+async def bulk_remove_preferred_tables(
+    payload: BulkRemovePreferredTablesInput,
+    current_user: dict = Depends(require_write_access)
+):
+    """
+    Remove multiple tables from user's preferred list in one request.
+    MUST be defined before /preferred-tables/{preference_id} to avoid route shadowing.
+    """
+    try:
+        result = await preference_service.bulk_remove_preferred_tables(
+            user_id=str(current_user["id"]),
+            preference_ids=payload.preference_ids
+        )
+        return result
+    except Exception as e:
+        logger.error("Failed to bulk remove preferred tables", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to bulk remove preferred tables")
+
+
+@router.delete("/preferred-tables/{preference_id}")
+async def remove_preferred_table(
     preference_id: str,
     current_user: dict = Depends(require_write_access)
 ):
-    """Delete a schema/table preference."""
+    """
+    Remove a table from user's preferred list.
+    
+    The table will no longer be prioritized by AI for query generation.
+    """
     try:
-        result = await preference_service.delete_user_preference(
+        result = await preference_service.remove_preferred_table(
             user_id=str(current_user["id"]),
             preference_id=preference_id
         )
         
         if not result.get("success"):
-            raise HTTPException(status_code=404, detail=result.get("error", "Preference not found"))
+            raise HTTPException(status_code=404, detail=result.get("error", "Preferred table not found"))
         
         return result
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to delete user preference", error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to delete preference")
-
-
-@router.patch("/{preference_id}/boost")
-async def update_preference_boost(
-    preference_id: str,
-    update: BoostWeightUpdate,
-    current_user: dict = Depends(require_write_access)
-):
-    """Update the boost weight for a preference."""
-    try:
-        result = await preference_service.update_preference_boost(
-            user_id=str(current_user["id"]),
-            preference_id=preference_id,
-            boost_weight=update.boost_weight
-        )
-        
-        if not result.get("success"):
-            raise HTTPException(status_code=404, detail=result.get("error", "Preference not found"))
-        
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Failed to update preference boost", error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to update boost weight")
+        logger.error("Failed to remove preferred table", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to remove preferred table")
 

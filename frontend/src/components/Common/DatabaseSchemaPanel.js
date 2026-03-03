@@ -10,8 +10,13 @@ const DatabaseSchemaPanel = ({
   isCollapsed, 
   onToggle,
   onTableSelect,
-  selectedTable 
+  selectedTable,
+  preferredTables = [] // Array of {database_name, schema_name, table_name}
 }) => {
+  // Build a Set of "db.schema.table" keys for O(1) lookup
+  const preferredSet = new Set(
+    preferredTables.map(p => `${p.database_name}.${p.schema_name}.${p.table_name}`)
+  );
   const { isDark } = useTheme();
   const [expandedDatabases, setExpandedDatabases] = useState(new Set());
   const [expandedSchemas, setExpandedSchemas] = useState(new Set());
@@ -245,7 +250,9 @@ const DatabaseSchemaPanel = ({
                                         <div className={`mb-1.5 px-1 py-0.5 rounded text-xs ${isDark ? 'bg-[#1c1d1f] text-gray-400' : 'bg-gray-100/40 text-gray-600'} font-medium uppercase tracking-wide`}>
                                           Tables
                                         </div>
-                                        {objectsCache[schemaKey].tables.filter(table => !table.is_excluded).map((table) => (
+                                        {objectsCache[schemaKey].tables.filter(table => !table.is_excluded).map((table) => {
+                                          const isPreferred = preferredSet.has(`${database.name}.${schema.name}.${table.name}`);
+                                          return (
                                           <button
                                             key={table.name}
                                             onClick={() => handleTableClick(database.name, schema.name, table.name)}
@@ -255,11 +262,16 @@ const DatabaseSchemaPanel = ({
                                                 : (isDark ? 'hover:bg-[#1c1d1f] text-gray-300' : 'hover:bg-gray-100/60 text-gray-700')
                                               }
                                             `}
+                                            title={isPreferred ? 'Preferred table - AI will prioritize this' : table.name}
                                           >
                                             <TableIcon />
-                                            <Text className="text-xs">{table.name}</Text>
+                                            <Text className="text-xs flex-1">{table.name}</Text>
+                                            {isPreferred && (
+                                              <span className="text-yellow-400 text-xs ml-1 flex-shrink-0" title="Preferred table">★</span>
+                                            )}
                                           </button>
-                                        ))}
+                                          );
+                                        })}
                                       </>
                                     )}
                                     

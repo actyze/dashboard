@@ -1,59 +1,89 @@
 /**
  * User Preferences Service
- * Manages user-specific schema/table preferences for recommendation boosting
+ * Manages user-specific preferred tables for AI query prioritization
  */
 
 import { apiInstance } from './network';
 
 const PreferencesService = {
+  // ============================================================================
+  // Preferred Tables API
+  // ============================================================================
+
   /**
-   * Get all preferences for the current user
+   * Get all preferred tables for the current user
+   * Returns list of tables with full metadata (columns, descriptions)
    */
-  async getUserPreferences() {
+  async getPreferredTables() {
     try {
-      const response = await apiInstance.get(`/preferences`);
+      const response = await apiInstance.get(`/preferences/preferred-tables`);
       return response.data;
     } catch (error) {
-      console.error('Failed to get user preferences:', error);
+      console.error('Failed to get preferred tables:', error);
       throw error;
     }
   },
 
   /**
-   * Add a new preference
+   * Add a table to user's preferred list
+   * @param {string} catalog - Database catalog
+   * @param {string} schema - Schema name
+   * @param {string} table - Table name
    */
-  async addUserPreference(preferenceData) {
+  async addPreferredTable(catalog, schema, table) {
     try {
-      const response = await apiInstance.post(`/preferences`, preferenceData);
+      const response = await apiInstance.post(`/preferences/preferred-tables`, {
+        catalog,
+        schema,
+        table
+      });
       return response.data;
     } catch (error) {
-      console.error('Failed to add user preference:', error);
+      console.error('Failed to add preferred table:', error);
       throw error;
     }
   },
 
   /**
-   * Delete a preference
+   * Remove a table from user's preferred list
+   * @param {string} preferenceId - Preference ID
    */
-  async deleteUserPreference(preferenceId) {
+  async removePreferredTable(preferenceId) {
     try {
-      const response = await apiInstance.delete(`/preferences/${preferenceId}`);
+      const response = await apiInstance.delete(`/preferences/preferred-tables/${preferenceId}`);
       return response.data;
     } catch (error) {
-      console.error('Failed to delete user preference:', error);
+      console.error('Failed to remove preferred table:', error);
       throw error;
     }
   },
 
   /**
-   * Update boost weight for a preference
+   * Bulk add multiple tables to preferred list (single API call)
+   * @param {Array} tables - Array of {catalog, database_name, schema_name, table_name}
    */
-  async updatePreferenceBoost(preferenceId, boostWeight) {
+  async bulkAddPreferredTables(tables) {
     try {
-      const response = await apiInstance.patch(`/preferences/${preferenceId}/boost`, { boost_weight: boostWeight });
+      const response = await apiInstance.post(`/preferences/preferred-tables/bulk`, { tables });
       return response.data;
     } catch (error) {
-      console.error('Failed to update preference boost:', error);
+      console.error('Failed to bulk add preferred tables:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Bulk remove multiple tables from preferred list (single API call)
+   * @param {Array} preferenceIds - Array of preference ID strings
+   */
+  async bulkRemovePreferredTables(preferenceIds) {
+    try {
+      const response = await apiInstance.delete(`/preferences/preferred-tables/bulk`, {
+        data: { preference_ids: preferenceIds }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to bulk remove preferred tables:', error);
       throw error;
     }
   }

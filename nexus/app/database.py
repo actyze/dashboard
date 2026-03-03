@@ -175,22 +175,23 @@ class UserDataAccess(Base):
 
 
 class UserSchemaPreference(Base):
-    """User-specific schema/table/column preferences for boosting recommendations."""
+    """User-specific preferred tables for AI query prioritization (table-level only)."""
     __tablename__ = "user_schema_preferences"
     __table_args__ = {'schema': 'nexus'}
     
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), nullable=False, index=True)
     
-    # Resource hierarchy (matching user_data_access structure)
+    # Resource hierarchy (table-level required)
     catalog: Mapped[Optional[str]] = mapped_column(String(255), index=True)
     database_name: Mapped[Optional[str]] = mapped_column(String(255), index=True)
     schema_name: Mapped[Optional[str]] = mapped_column(String(255), index=True)
-    table_name: Mapped[Optional[str]] = mapped_column(String(255))
-    preferred_columns: Mapped[Optional[list]] = mapped_column(ARRAY(String), nullable=True)
+    table_name: Mapped[str] = mapped_column(String(255), nullable=False)  # Required - table-level only
     
-    # Preference-specific field
-    boost_weight: Mapped[float] = mapped_column(Numeric(3, 2), default=1.5)
+    # Preferred tables feature
+    is_preferred: Mapped[bool] = mapped_column(Boolean, default=True)
+    columns_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, default={})
+    table_metadata: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Audit fields
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

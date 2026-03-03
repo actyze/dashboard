@@ -19,7 +19,10 @@ from app.models import (
     SchemaRecommendationRequest, 
     SchemaRecommendationResponse,
     IntentDetectionRequest,
-    IntentDetectionResponse
+    IntentDetectionResponse,
+    TableMetadataRequest,
+    TableMetadataResponse,
+    ColumnMetadata
 )
 from app.trino_client import TrinoSchemaService
 from app.embedder import FAISSSchemaEmbedder
@@ -956,6 +959,124 @@ async def reload_intent_examples(auth: dict = Depends(verify_service_auth)):
     except Exception as e:
         logger.exception("Intent examples reload failed")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Table Metadata API (for Preferred Tables Feature)
+# ============================================================================
+
+@app.post("/table/metadata", response_model=TableMetadataResponse)
+async def get_table_metadata(req: TableMetadataRequest, auth: dict = Depends(verify_service_auth)):
+    """
+    Get complete table metadata including all columns, types, and descriptions.
+    
+    Used by Nexus preferred tables feature to fetch full table information
+    when user marks a table as preferred.
+    
+    Security: Simple service key authentication (X-Service-Key header)
+    
+    Returns:
+        - All columns with names, types, and descriptions (from metadata_descriptions)
+        - Table-level description (from metadata_descriptions)
+        - Connector type (postgresql, mysql, mongodb, etc.)
+        - Full qualified name (catalog.schema.table)
+    """
+    try:
+        full_name = f"{req.catalog}.{req.schema}.{req.table}"
+        logger.info(f"Fetching metadata for preferred table: {full_name}")
+        
+        # Find table in raw schema cache (includes ALL tables, even excluded)
+        # NOTE: raw_schema_cache stores the catalog under the key "database" (not "catalog")
+        table_schema = None
+        for schema in schema_service.embedder.raw_schema_cache:
+            if (schema.get('database') == req.catalog and 
+                schema.get('schema') == req.schema and 
+                schema.get('table') == req.table):
+                table_schema = schema
+                break
+        
+        if not table_schema:
+            # Table not found in cache - might be newly created or cache needs refresh
+            logger.warning(f"Table {full_name} not found in cache, fetching from Trino...")
+            
+            # Fetch from Trino directly
+            all_schemas = await schema_service.trino_service.get_all_schemas()
+            for schema in all_schemas:
+                if (schema.get('catalog') == req.catalog and 
+                    schema.get('schema') == req.schema and 
+                    schema.get('table') == req.table):
+                    table_schema = schema
+                    break
+            
+            if not table_schema:
+                return TableMetadataResponse(
+                    success=False,
+                    catalog=req.catalog,
+                    schema=req.schema,
+                    table=req.table,
+                    full_name=full_name,
+                    error=f"Table {full_name} not found in Trino"
+                )
+        
+        # Enrich with descriptions from Nexus
+        enriched = await schema_service.enrich_with_descriptions([table_schema])
+        if enriched:
+            table_schema = enriched[0]
+        
+        # Build column metadata list
+        columns_metadata = []
+        columns = table_schema.get('columns', [])
+        column_descriptions = table_schema.get('column_descriptions', {})
+        
+        for col in columns:
+            # Handle both string format "name|type" and dict format
+            if isinstance(col, str) and '|' in col:
+                col_name, col_type = col.split('|', 1)
+            elif isinstance(col, dict):
+                col_name = col.get('name', '')
+                col_type = col.get('type', 'unknown')
+            else:
+                continue
+            
+            col_description = column_descriptions.get(col_name)
+            
+            columns_metadata.append(ColumnMetadata(
+                name=col_name,
+                type=col_type,
+                description=col_description
+            ))
+        
+        # Get table-level description
+        table_description = table_schema.get('description')
+        
+        # Get connector type
+        connector_type = table_schema.get('connector_type', 'unknown')
+        
+        logger.info(f"Successfully fetched metadata for {full_name}: {len(columns_metadata)} columns")
+        
+        return TableMetadataResponse(
+            success=True,
+            catalog=req.catalog,
+            schema=req.schema,
+            table=req.table,
+            full_name=full_name,
+            connector_type=connector_type,
+            columns=columns_metadata,
+            table_description=table_description
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Failed to fetch table metadata for {req.catalog}.{req.schema}.{req.table}")
+        return TableMetadataResponse(
+            success=False,
+            catalog=req.catalog,
+            schema=req.schema,
+            table=req.table,
+            full_name=f"{req.catalog}.{req.schema}.{req.table}",
+            error=str(e)
+        )
 
 
 # ============================================================================

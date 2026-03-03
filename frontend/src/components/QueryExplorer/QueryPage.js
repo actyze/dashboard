@@ -10,6 +10,7 @@ import { Chart } from '../Charts';
 import { Text } from '../ui';
 import { useProcessNaturalLanguage, useExecuteSql, useConversationHistory } from '../../hooks';
 import { QueryManagementService } from '../../services';
+import PreferencesService from '../../services/PreferencesService';
 import SaveQueryDialog from './SaveQueryDialog';
 import UnsavedChangesDialog from './UnsavedChangesDialog';
 
@@ -62,6 +63,9 @@ const QueryPage = () => {
   // Prevent duplicate AI query calls (React StrictMode protection)
   const aiQueryInProgressRef = useRef(false);
   
+  // Preferred tables for star indicators in the sidebar
+  const [preferredTables, setPreferredTables] = useState([]);
+  
   // Track unsaved changes (conversation or SQL changes)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const originalSqlRef = useRef(queryFromState?.generated_sql || "");
@@ -82,6 +86,13 @@ const QueryPage = () => {
     const hasSqlChanges = sqlQuery !== originalSqlRef.current;
     setHasUnsavedChanges(hasConversation || hasSqlChanges);
   }, [conversationHistory, sqlQuery]);
+
+  // Load preferred tables once on mount for star indicators in the sidebar
+  useEffect(() => {
+    PreferencesService.getPreferredTables()
+      .then(tables => setPreferredTables(tables || []))
+      .catch(() => setPreferredTables([])); // Silently fail - stars are non-critical
+  }, []);
 
   // Warn before browser close if unsaved changes
   useEffect(() => {
@@ -670,6 +681,7 @@ const QueryPage = () => {
           onToggle={() => setDatabasePanelCollapsed(!databasePanelCollapsed)}
           onTableSelect={setSelectedTable}
           selectedTable={selectedTable}
+          preferredTables={preferredTables}
         />
         
         {/* Main Dashboard */}

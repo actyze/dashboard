@@ -171,6 +171,7 @@ function SchemaOptimise() {
   const [descriptions, setDescriptions] = useState({});
   const [preferences, setPreferences] = useState([]);
   const [exclusions, setExclusions] = useState([]);
+  const MAX_PREFERRED_TABLES = 25;
   
   // Edit panel state
   const [editingNode, setEditingNode] = useState(null);
@@ -181,6 +182,7 @@ function SchemaOptimise() {
   
   // Bulk selection state
   const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const [bulkPreferredMode, setBulkPreferredMode] = useState(false); // Table-only, all users
   const [selectedSchemas, setSelectedSchemas] = useState(new Set()); // Set of "dbName.schemaName"
   const [selectedTables, setSelectedTables] = useState(new Set()); // Set of "dbName.schemaName.tableName"
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
@@ -220,7 +222,7 @@ function SchemaOptimise() {
 
   const loadPreferences = async () => {
     try {
-      const prefs = await PreferencesService.getUserPreferences();
+      const prefs = await PreferencesService.getPreferredTables();
       setPreferences(prefs || []);
     } catch (err) {
       console.error('Failed to load preferences:', err);
@@ -413,23 +415,27 @@ function SchemaOptimise() {
         await MetadataService.deleteDescription(existingDesc.id);
       }
 
-      // Handle preferred setting (only for non-columns)
-      if (!column) {
-        if (editPreferred) {
+      // Handle preferred setting (only for non-columns and table-level only)
+      if (!column && table) {
+        // Safety net: a hidden table cannot be preferred — force-remove if hiding
+        const effectivePreferred = editPreferred && !editExcludeEnabled;
+
+        if (effectivePreferred) {
           if (!existingPref) {
-            // Create new preference with default boost weight
-            await PreferencesService.addUserPreference({
-              catalog: null,
-              database_name: catalog,
-              schema_name: schema || null,
-              table_name: table || null,
-              boost_weight: 2.0  // Default boost weight for preferred items
-            });
+            // Check if user has reached the limit (derived from list length)
+            if (preferences.length >= MAX_PREFERRED_TABLES) {
+              showError(`You can only mark up to ${MAX_PREFERRED_TABLES} tables as preferred. Please remove some preferred tables first.`);
+              setSaving(false);
+              return;
+            }
+            
+            // Add to preferred tables (new API)
+            await PreferencesService.addPreferredTable(catalog, schema, table);
           }
-          // If preference already exists, no update needed
+          // If preference already exists, it's already preferred (do nothing)
         } else if (existingPref) {
-          // Remove preference
-          await PreferencesService.deleteUserPreference(existingPref.id);
+          // Remove from preferred tables (either user untoggled, or table is being hidden)
+          await PreferencesService.removePreferredTable(existingPref.id);
         }
 
         // Handle exclusion (visibility) - only for non-columns
@@ -467,11 +473,21 @@ function SchemaOptimise() {
   // Bulk selection handlers
   const toggleBulkSelectMode = () => {
     if (bulkSelectMode) {
-      // Exiting bulk mode - clear selections
       setSelectedSchemas(new Set());
       setSelectedTables(new Set());
     }
+    // Ensure only one bulk mode is active at a time
+    if (!bulkSelectMode) setBulkPreferredMode(false);
     setBulkSelectMode(!bulkSelectMode);
+  };
+
+  const toggleBulkPreferredMode = () => {
+    if (bulkPreferredMode) {
+      setSelectedTables(new Set());
+    }
+    // Ensure only one bulk mode is active at a time
+    if (!bulkPreferredMode) setBulkSelectMode(false);
+    setBulkPreferredMode(!bulkPreferredMode);
   };
 
   const toggleSchemaSelection = (dbName, schemaName) => {
@@ -636,6 +652,90 @@ function SchemaOptimise() {
     }
   };
 
+  // Bulk preferred: mark selected tables as preferred (single API call)
+  const confirmBulkMarkPreferred = async () => {
+    if (selectedTables.size === 0) return;
+
+    const tablesToAdd = [];
+    for (const tableKey of selectedTables) {
+      const parts = tableKey.split('.');
+      const catalog = parts[0];
+      const schemaName = parts[1];
+      const tableName = parts.slice(2).join('.');
+      const fullName = `${catalog}.${schemaName}.${tableName}`;
+      const alreadyPreferred = preferences.some(p => p.full_name === fullName);
+      if (!alreadyPreferred) {
+        tablesToAdd.push({
+          catalog,
+          database_name: catalog,  // catalog == database_name convention
+          schema_name: schemaName,
+          table_name: tableName
+        });
+      }
+    }
+
+    if (tablesToAdd.length === 0) {
+      showError('All selected tables are already marked as preferred');
+      return;
+    }
+
+    setBulkActionLoading(true);
+    try {
+      const result = await PreferencesService.bulkAddPreferredTables(tablesToAdd);
+      const added = result?.added_count ?? tablesToAdd.length;
+      const skipped = result?.skipped_count ?? 0;
+      if (added > 0) {
+        showSuccess(`Marked ${added} table${added > 1 ? 's' : ''} as preferred${skipped > 0 ? ` (${skipped} skipped — limit reached)` : ''}`);
+      } else {
+        showError(skipped > 0 ? `Limit of ${MAX_PREFERRED_TABLES} tables reached` : 'No tables were added');
+      }
+      await loadPreferences();
+    } catch (err) {
+      console.error('Bulk mark preferred failed:', err);
+      showError(err.response?.data?.detail || err.message || 'Failed to mark tables as preferred');
+    } finally {
+      setSelectedTables(new Set());
+      setBulkPreferredMode(false);
+      setBulkActionLoading(false);
+    }
+  };
+
+  // Bulk preferred: remove selected tables from preferred (single API call)
+  const confirmBulkRemovePreferred = async () => {
+    if (selectedTables.size === 0) return;
+
+    const idsToRemove = [];
+    for (const tableKey of selectedTables) {
+      const parts = tableKey.split('.');
+      const catalog = parts[0];
+      const schemaName = parts[1];
+      const tableName = parts.slice(2).join('.');
+      const fullName = `${catalog}.${schemaName}.${tableName}`;
+      const pref = preferences.find(p => p.full_name === fullName);
+      if (pref) idsToRemove.push(pref.id);
+    }
+
+    if (idsToRemove.length === 0) {
+      showError('None of the selected tables are currently preferred');
+      return;
+    }
+
+    setBulkActionLoading(true);
+    try {
+      const result = await PreferencesService.bulkRemovePreferredTables(idsToRemove);
+      const removed = result?.removed_count ?? idsToRemove.length;
+      showSuccess(`Removed ${removed} table${removed > 1 ? 's' : ''} from preferred`);
+      await loadPreferences();
+    } catch (err) {
+      console.error('Bulk remove preferred failed:', err);
+      showError(err.response?.data?.detail || err.message || 'Failed to remove preferred tables');
+    } finally {
+      setSelectedTables(new Set());
+      setBulkPreferredMode(false);
+      setBulkActionLoading(false);
+    }
+  };
+
   // Render functions
   const renderColumn = (column) => {
     return (
@@ -680,7 +780,7 @@ function SchemaOptimise() {
             isSelected ? (isDark ? 'bg-[#5d6ad3]/10' : 'bg-[#5d6ad3]/5') : ''
           } ${isDark ? 'hover:bg-[#1c1d1f]' : 'hover:bg-gray-50'}`}
         >
-          {/* Checkbox in bulk select mode */}
+          {/* Checkbox in bulk hide mode (admin only) */}
           {bulkSelectMode && isAdmin && (
             <button
               onClick={(e) => {
@@ -692,6 +792,20 @@ function SchemaOptimise() {
               title={tableIsExcluded ? 'Already hidden' : schemaIsSelected ? 'Schema is selected' : 'Select table'}
             >
               <CheckboxIcon checked={isSelected || schemaIsSelected} isDark={isDark} />
+            </button>
+          )}
+          {/* Checkbox in bulk preferred mode (all users, tables only) */}
+          {bulkPreferredMode && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleTableSelection(dbName, schemaName, table.name);
+              }}
+              disabled={tableIsExcluded}
+              className={`flex-shrink-0 ${tableIsExcluded ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              title={tableIsExcluded ? 'Hidden tables cannot be preferred' : (preference ? 'Currently preferred — click to deselect' : 'Select table')}
+            >
+              <CheckboxIcon checked={isSelected} isDark={isDark} />
             </button>
           )}
           <button
@@ -727,7 +841,7 @@ function SchemaOptimise() {
             hasDescription={!!hasDescription}
             isDark={isDark}
           />
-          {!bulkSelectMode && (
+          {!bulkSelectMode && !bulkPreferredMode && (
             <button
               onClick={() => handleOpenEditPanel(dbName, schemaName, table.name, null)}
               title="Edit table settings"
@@ -827,7 +941,7 @@ function SchemaOptimise() {
             hasDescription={!!hasDescription}
             isDark={isDark}
           />
-          {!bulkSelectMode && (
+          {!bulkSelectMode && !bulkPreferredMode && (
             <button
               onClick={() => handleOpenEditPanel(dbName, schema.name, null, null)}
               title="Edit schema settings"
@@ -840,7 +954,7 @@ function SchemaOptimise() {
               <PencilIcon className="w-3.5 h-3.5" />
             </button>
           )}
-          {/* Select all tables button in bulk mode */}
+          {/* Select all tables button in bulk hide mode */}
           {bulkSelectMode && isAdmin && isExpanded && objects && objects.length > 0 && !isSelected && (
             <button
               onClick={(e) => {
@@ -854,6 +968,26 @@ function SchemaOptimise() {
               }`}
             >
               {tablesInSchema.every(t => selectedTables.has(`${schemaKey}.${t.name}`)) ? 'Deselect all' : 'Select all tables'}
+            </button>
+          )}
+          {/* Select all tables button in bulk preferred mode */}
+          {bulkPreferredMode && isExpanded && objects && objects.length > 0 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                // Select only non-excluded tables
+                const eligibleTables = objects.filter(t => !findExclusion(dbName, schema.name, t.name));
+                selectAllInSchema(dbName, schema.name, eligibleTables);
+              }}
+              className={`text-xs px-2 py-1 rounded transition-colors ${
+                isDark
+                  ? 'text-gray-400 hover:text-white hover:bg-[#2a2b2e]'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {objects.filter(t => !findExclusion(dbName, schema.name, t.name))
+                       .every(t => selectedTables.has(`${schemaKey}.${t.name}`))
+                ? 'Deselect all' : 'Select all tables'}
             </button>
           )}
         </div>
@@ -920,10 +1054,14 @@ function SchemaOptimise() {
             <button
               onClick={() => {
                 setSelectedDatabase(null);
-                // Clear selections when going back
+                // Clear bulk modes when going back
                 if (bulkSelectMode) {
                   setBulkSelectMode(false);
                   clearSelection();
+                }
+                if (bulkPreferredMode) {
+                  setBulkPreferredMode(false);
+                  setSelectedTables(new Set());
                 }
               }}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -952,9 +1090,11 @@ function SchemaOptimise() {
                   />
                 </div>
                 <p className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                  {bulkSelectMode 
-                    ? <>Select schemas or tables, then click <strong className="text-red-400">Hide Selected</strong> below</>
-                    : <>Use <strong>Configure</strong> to edit database settings, or click the pencil icon on any item</>
+                  {bulkPreferredMode
+                    ? <>Select tables, then click <strong className="text-[#5d6ad3]">Mark Preferred</strong> or <strong className="text-gray-400">Remove Preferred</strong> below</>
+                    : bulkSelectMode 
+                      ? <>Select schemas or tables, then click <strong className="text-red-400">Hide Selected</strong> below</>
+                      : <>Use <strong>Configure</strong> to edit database settings, or click the pencil icon on any item</>
                   }
                 </p>
               </div>
@@ -963,6 +1103,33 @@ function SchemaOptimise() {
           
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
+            {/* Bulk Preferred Toggle - All users */}
+            <button
+              onClick={toggleBulkPreferredMode}
+              title={bulkPreferredMode ? "Exit preferred selection mode" : "Select tables to mark/unmark as preferred"}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
+                bulkPreferredMode
+                  ? 'bg-[#5d6ad3] text-white'
+                  : isDark
+                    ? 'border border-[#3a3b3e] bg-transparent text-gray-400 hover:border-[#5d6ad3] hover:text-[#5d6ad3]'
+                    : 'border border-gray-300 bg-transparent text-gray-500 hover:border-[#5d6ad3] hover:text-[#5d6ad3]'
+              }`}
+            >
+              {bulkPreferredMode ? (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <span>Done</span>
+                </>
+              ) : (
+                <>
+                  <PreferredIcon className="w-3.5 h-3.5" />
+                  <span>Preferred</span>
+                </>
+              )}
+            </button>
+
             {/* Bulk Select Toggle - Only for admins */}
             {isAdmin && (
               <button
@@ -992,8 +1159,8 @@ function SchemaOptimise() {
               </button>
             )}
             
-            {/* Edit Database Button - Hide in bulk mode */}
-            {!bulkSelectMode && (
+            {/* Edit Database Button - Hide in bulk modes */}
+            {!bulkSelectMode && !bulkPreferredMode && (
               <button
                 onClick={() => handleOpenEditPanel(selectedDatabase.name, null, null, null)}
                 title="Configure database settings"
@@ -1010,7 +1177,7 @@ function SchemaOptimise() {
           </div>
         </div>
 
-        {/* Bulk Action Bar - Shows when items are selected */}
+        {/* Bulk Action Bar - Hide mode */}
         {bulkSelectMode && totalSelected > 0 && (
           <div className={`flex items-center justify-between px-6 py-3 border-b ${
             isDark ? 'bg-[#5d6ad3]/10 border-[#5d6ad3]/30' : 'bg-[#5d6ad3]/5 border-[#5d6ad3]/20'
@@ -1052,6 +1219,81 @@ function SchemaOptimise() {
                 </>
               )}
             </button>
+          </div>
+        )}
+
+        {/* Bulk Action Bar - Preferred mode */}
+        {bulkPreferredMode && selectedTables.size > 0 && (
+          <div className={`flex items-center justify-between px-6 py-3 border-b ${
+            isDark ? 'bg-[#5d6ad3]/10 border-[#5d6ad3]/30' : 'bg-[#5d6ad3]/5 border-[#5d6ad3]/20'
+          }`}>
+            <div className="flex items-center gap-3">
+              <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                {selectedTables.size} table{selectedTables.size !== 1 ? 's' : ''} selected
+              </span>
+              <span className={`text-xs ${
+                preferences.length >= MAX_PREFERRED_TABLES
+                  ? (isDark ? 'text-red-400' : 'text-red-600')
+                  : (isDark ? 'text-gray-500' : 'text-gray-400')
+              }`}>
+                ({preferences.length}/{MAX_PREFERRED_TABLES} preferred)
+              </span>
+              <button
+                onClick={() => setSelectedTables(new Set())}
+                className={`text-xs px-2 py-1 rounded transition-colors ${
+                  isDark
+                    ? 'text-gray-400 hover:text-white hover:bg-[#2a2b2e]'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Clear
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={confirmBulkRemovePreferred}
+                disabled={bulkActionLoading}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  bulkActionLoading
+                    ? 'bg-gray-400 cursor-not-allowed text-white'
+                    : isDark
+                      ? 'border border-[#3a3b3e] text-gray-400 hover:border-red-500 hover:text-red-400'
+                      : 'border border-gray-300 text-gray-500 hover:border-red-400 hover:text-red-500'
+                }`}
+              >
+                {bulkActionLoading ? (
+                  <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <span>✕</span>
+                    Remove Preferred
+                  </>
+                )}
+              </button>
+              <button
+                onClick={confirmBulkMarkPreferred}
+                disabled={bulkActionLoading || preferences.length >= MAX_PREFERRED_TABLES}
+                title={preferences.length >= MAX_PREFERRED_TABLES ? `Limit of ${MAX_PREFERRED_TABLES} reached` : undefined}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  bulkActionLoading || preferences.length >= MAX_PREFERRED_TABLES
+                    ? 'bg-gray-400 cursor-not-allowed text-white'
+                    : 'bg-[#5d6ad3] hover:bg-[#4c5bc4] text-white'
+                }`}
+              >
+                {bulkActionLoading ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <PreferredIcon className="w-3 h-3" />
+                    Mark Preferred
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         )}
         
@@ -1230,40 +1472,83 @@ function SchemaOptimise() {
             </p>
           </div>
 
-          {/* Preferred Section - Only show for non-columns */}
+          {/* Preferred Section - Tables only */}
           {!editingNode.column && (
-            <div className={`p-4 rounded-lg ${isDark ? 'bg-[#0a0a0b] border border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200'}`}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <PreferredIcon className={`w-4 h-4 ${editPreferred ? (isDark ? 'text-white' : 'text-gray-700') : (isDark ? 'text-gray-600' : 'text-gray-400')}`} />
-                  <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+            editingNode.table ? (
+              /* TABLE node: full interactive preferred toggle */
+              <div className={`p-4 rounded-lg ${
+                editExcludeEnabled
+                  ? (isDark ? 'bg-[#0a0a0b] border border-[#2a2b2e] opacity-50' : 'bg-gray-50 border border-gray-200 opacity-50')
+                  : (isDark ? 'bg-[#0a0a0b] border border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200')
+              }`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <PreferredIcon className={`w-4 h-4 ${editPreferred && !editExcludeEnabled ? (isDark ? 'text-white' : 'text-gray-700') : (isDark ? 'text-gray-600' : 'text-gray-400')}`} />
+                    <span className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Preferred
+                    </span>
+                    <span className={`text-xs px-2 py-0.5 rounded ${isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'}`}>
+                      User-level
+                    </span>
+                  </div>
+                  <button
+                    disabled={editExcludeEnabled}
+                    onClick={() => !editExcludeEnabled && setEditPreferred(!editPreferred)}
+                    title={editExcludeEnabled ? 'Cannot mark a hidden table as preferred' : undefined}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${
+                      editExcludeEnabled
+                        ? 'cursor-not-allowed opacity-40 ' + (isDark ? 'bg-[#3a3b3e]' : 'bg-gray-300')
+                        : editPreferred
+                          ? 'bg-[#5d6ad3]'
+                          : isDark ? 'bg-[#3a3b3e]' : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                        editPreferred && !editExcludeEnabled ? 'translate-x-5' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                  {editExcludeEnabled ? (
+                    <span className={isDark ? 'text-red-400' : 'text-red-600'}>
+                      Hidden tables cannot be marked as preferred. Unhide this table first.
+                    </span>
+                  ) : (
+                    <>
+                      Mark this table as preferred. AI will <strong>prioritize it</strong> when generating SQL queries. 
+                      Only affects your recommendations.
+                      <span className={`ml-2 text-xs font-medium ${
+                        preferences.length >= MAX_PREFERRED_TABLES ? (isDark ? 'text-red-400' : 'text-red-600') :
+                        preferences.length > MAX_PREFERRED_TABLES * 0.8 ? (isDark ? 'text-yellow-400' : 'text-yellow-600') :
+                        (isDark ? 'text-purple-400' : 'text-purple-600')
+                      }`}>
+                        ({preferences.length}/{MAX_PREFERRED_TABLES} tables marked)
+                      </span>
+                    </>
+                  )}
+                </p>
+              </div>
+            ) : (
+              /* SCHEMA or DATABASE node: explain preferred is table-level only */
+              <div className={`p-4 rounded-lg ${isDark ? 'bg-[#0a0a0b] border border-[#2a2b2e]' : 'bg-gray-50 border border-gray-200'}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <PreferredIcon className={`w-4 h-4 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} />
+                  <span className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                     Preferred
                   </span>
-                  <span className={`text-xs px-2 py-0.5 rounded ${isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'}`}>
-                    User-level
+                  <span className={`text-xs px-2 py-0.5 rounded ${isDark ? 'bg-gray-800 text-gray-500' : 'bg-gray-200 text-gray-500'}`}>
+                    Table-level only
                   </span>
                 </div>
-                <button
-                  onClick={() => setEditPreferred(!editPreferred)}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${
-                    editPreferred 
-                      ? 'bg-[#5d6ad3]' 
-                      : isDark ? 'bg-[#3a3b3e]' : 'bg-gray-300'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                      editPreferred ? 'translate-x-5' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
+                <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                  Preferred is set per individual table, not at {getNodeTypeName().toLowerCase()} level.
+                  Expand this {getNodeTypeName().toLowerCase()} and mark specific tables as preferred.
+                  Each table counts toward your {MAX_PREFERRED_TABLES}-table limit.
+                </p>
               </div>
-              
-              <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                Mark this {getNodeTypeName().toLowerCase()} as preferred. AI will <strong>prioritize preferred items</strong> when generating SQL queries. 
-                Use this for frequently used or important data sources. <strong>Only affects your recommendations.</strong>
-              </p>
-            </div>
+            )
           )}
 
           {/* Hide/Show Section - Only show for non-columns and admins */}
@@ -1284,7 +1569,12 @@ function SchemaOptimise() {
                   </span>
                 </div>
                 <button
-                  onClick={() => setEditExcludeEnabled(!editExcludeEnabled)}
+                  onClick={() => {
+                    const newHideState = !editExcludeEnabled;
+                    setEditExcludeEnabled(newHideState);
+                    // Hiding a table makes it incompatible with preferred — auto-clear it
+                    if (newHideState) setEditPreferred(false);
+                  }}
                   className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${
                     editExcludeEnabled 
                       ? 'bg-red-600' 

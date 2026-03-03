@@ -105,3 +105,31 @@ class IntentDetectionResponse(BaseModel):
     confidence: float
     all_scores: Optional[Dict[str, float]] = None
 
+
+class TableMetadataRequest(BaseModel):
+    """Request for fetching complete table metadata."""
+    catalog: str
+    schema: str
+    table: str
+
+
+class ColumnMetadata(BaseModel):
+    """Column metadata with type and description."""
+    name: str
+    type: str
+    description: Optional[str] = None
+
+
+class TableMetadataResponse(BaseModel):
+    """Response with complete table metadata including columns and descriptions."""
+    success: bool
+    catalog: str
+    schema: str
+    table: str
+    full_name: str
+    connector_type: Optional[str] = None
+    columns: List[ColumnMetadata] = []
+    table_description: Optional[str] = None
+    row_count: Optional[int] = None
+    error: Optional[str] = None
+

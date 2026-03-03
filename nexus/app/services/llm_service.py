@@ -27,6 +27,7 @@ class LLMService:
         natural_language_query: str,
         conversation_history: Optional[List[str]] = None,
         schema_recommendations: Optional[Dict[str, Any]] = None,
+        preferred_tables: Optional[List[Dict[str, Any]]] = None,
         last_sql: Optional[str] = None,
         intent: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -58,11 +59,12 @@ class LLMService:
         )
         
         try:
-            # Build the prompt with schema context and previous SQL (for refinement intents)
+            # Build the prompt with schema context, preferred tables, and previous SQL (for refinement intents)
             prompt = self._build_sql_prompt(
                 natural_language_query, 
                 schema_recommendations, 
                 conversation_history,
+                preferred_tables,
                 last_sql,
                 intent
             )
@@ -384,10 +386,11 @@ Generated SQL (Main Data):
         query: str, 
         schema_recommendations: Optional[Dict[str, Any]] = None,
         conversation_history: Optional[List[str]] = None,
+        preferred_tables: Optional[List[Dict[str, Any]]] = None,
         last_sql: Optional[str] = None,
         intent: Optional[str] = None
     ) -> str:
-        """Build SQL generation prompt with schema context, previous SQL, and chart recommendations."""
+        """Build SQL generation prompt with preferred tables, schema context, previous SQL, and chart recommendations."""
         
         # Build strict prompt that enforces using ONLY provided tables
         prompt_parts = [
@@ -413,7 +416,47 @@ Generated SQL (Main Data):
             
             prompt_parts.append("="*40 + "\n")
         
-        # Add schema context FIRST (before rules) to make it prominent
+        # NEW: Add preferred tables section (HIGHEST PRIORITY)
+        if preferred_tables and len(preferred_tables) > 0:
+            prompt_parts.append("\n=== USER'S PREFERRED TABLES (★ PRIORITIZE THESE ★) ===")
+            
+            for pref in preferred_tables[:20]:  # Limit to 20 preferred tables to avoid token limits
+                full_name = pref.get('full_name', '')
+                database = pref.get('database_name', '')
+                schema = pref.get('schema_name', '')
+                table = pref.get('table_name', '')
+                
+                # Reconstruct full_name if not present
+                if not full_name:
+                    full_name = f"{database}.{schema}.{table}"
+                
+                table_info = f"★ {full_name} (PREFERRED)"
+                
+                # Add table description if available
+                table_desc = pref.get('table_metadata')
+                if table_desc:
+                    table_info += f"\n  Description: {table_desc}"
+                
+                # Add columns with types and descriptions
+                columns_meta = pref.get('columns_metadata', [])
+                if columns_meta:
+                    table_info += "\n  Columns:"
+                    for col in columns_meta[:30]:  # Limit to 30 columns per table
+                        if isinstance(col, dict):
+                            col_name = col.get('name', '')
+                            col_type = col.get('type', 'unknown')
+                            col_desc = col.get('description')
+                            
+                            col_line = f"    - {col_name} ({col_type})"
+                            if col_desc:
+                                col_line += f" — {col_desc}"
+                            table_info += "\n" + col_line
+                
+                prompt_parts.append(table_info)
+            
+            prompt_parts.append("="*40 + "\n")
+        
+        # Add schema context (FAISS recommendations - lower priority than preferred)
         recommendations = schema_recommendations.get("recommendations", []) if schema_recommendations else []
         
         if recommendations:
@@ -445,13 +488,15 @@ Generated SQL (Main Data):
             prompt_parts.append("="*40 + "\n")
         
         # Conditional table usage rules based on intent
+        has_preferred = preferred_tables and len(preferred_tables) > 0
+        
         if intent in ["REFINE_RESULT", "REJECT_RESULT", "EXPLAIN_RESULT"]:
             # For corrections/refinements: allow using tables from previous SQL
-            table_usage_rule = "1. You can use tables from the PREVIOUS SQL above OR from AVAILABLE TABLES list"
+            table_usage_rule = "1. You can use tables from the PREVIOUS SQL above OR from PREFERRED TABLES (★) OR from AVAILABLE TABLES list"
         else:
-            # For new queries: strict constraint
-            table_usage_rule = "1. ONLY use tables from AVAILABLE TABLES list above"
-        
+            # For new queries: strict constraint with preferred priority
+            table_usage_rule = "1. PRIORITIZE PREFERRED TABLES (★) when they match query intent. Use AVAILABLE TABLES if preferred don't fit"
+
         prompt_parts.extend([
             "SQL RULES:",
             table_usage_rule,

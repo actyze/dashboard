@@ -9,6 +9,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { usePaywall } from '../../contexts/PaywallContext';
 import SqlTileModal from './SqlTileModal';
 import ShareModal from './ShareModal';
+import VoiceTileCreator from './VoiceTileCreator';
 import { QueryResults } from '../QueryExplorer';
 import { Chart } from '../Charts';
 import { RestService, QueryManagementService } from '../../services';
@@ -911,6 +912,44 @@ const Dashboard = ({ isPublic = false }) => {
         {/* Action Bar */}
         {!isPublic && (
           <div className="flex items-center justify-end gap-2 mb-4">
+            {/* Voice Tile Creator */}
+            <VoiceTileCreator 
+              dashboardId={id}
+              existingTilesCount={tiles.length}
+              onTileCreated={async (tileData) => {
+                // Create tile via API
+                const response = await DashboardService.createTile(id, {
+                  title: tileData.title,
+                  description: tileData.description || null,
+                  sql_query: tileData.sqlQuery,
+                  nl_query: tileData.nlQuery || null,
+                  chart_type: tileData.chartType,
+                  chart_config: tileData.chartConfig || {},
+                  position: tileData.position || {
+                    x: (tiles.length % 2) * 6,
+                    y: Math.floor(tiles.length / 2) * 2,
+                    width: 6,
+                    height: 2,
+                  },
+                  refresh_interval_seconds: null
+                });
+
+                if (response.success) {
+                  const newTile = {
+                    ...response.tile,
+                    sql_query: tileData.sqlQuery,
+                    chart_type: tileData.chartType,
+                    chart_config: tileData.chartConfig || {},
+                    position: response.tile.position || tileData.position,
+                  };
+                  setTiles(prev => [...prev, newTile]);
+                  executeTileQuery(newTile);
+                } else {
+                  throw new Error(response.error || 'Failed to create tile');
+                }
+              }}
+            />
+            
             <button 
               onClick={handleCreateTile}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-[#5d6ad3] text-white hover:bg-[#4f5bc4] transition-colors"

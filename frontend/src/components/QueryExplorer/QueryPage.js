@@ -28,7 +28,9 @@ const QueryPage = () => {
   const [activeView, setActiveView] = useState('results');
   const [sqlQuery, setSqlQuery] = useState(queryFromState?.generated_sql || "");
   const [queryError, setQueryError] = useState(null);
-  const [queryResults, setQueryResults] = useState(null);
+  // Initialize with results from navigation state if passed from AI assistant
+  const resultsFromState = location.state?.queryResults;
+  const [queryResults, setQueryResults] = useState(resultsFromState || null);
   const [chartData, setChartData] = useState(null);
   
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -68,7 +70,7 @@ const QueryPage = () => {
   
   const sessionIdRef = useRef(`session-${id || 'new'}-${Date.now()}`);
 
-  // Reset context and clear unsaved flag when query ID changes
+  // Reset context and clear unsaved flag when query ID or state changes
   useEffect(() => {
     setQueryContext({});
     setHasUnsavedChanges(false);
@@ -442,6 +444,26 @@ const QueryPage = () => {
       setQueryError(error.message || 'Failed to execute SQL query');
     }
   });
+
+  // Handle results and chartData passed from Actyze AI assistant
+  // Results are already in the correct format: { data, columns, rowCount }
+  // ChartData is already in the correct format: { chart, data, cached }
+  useEffect(() => {
+    if (location.state?.fromAssistant) {
+      const passedResults = location.state?.queryResults;
+      const passedChartData = location.state?.chartData;
+      
+      if (passedResults) {
+        console.log('Loaded results from Actyze AI assistant:', passedResults);
+        setQueryResults(passedResults);
+      }
+      
+      if (passedChartData) {
+        console.log('Loaded chartData from Actyze AI assistant:', passedChartData);
+        setChartData(passedChartData);
+      }
+    }
+  }, [location.state]);
 
   const handleAIQuery = (naturalLanguageQuery) => {
     // Prevent duplicate calls (React StrictMode protection)

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAIAgent, AGENT_STATES } from '../../contexts/AIAgentContext';
 import VoiceWaveform from './VoiceWaveform';
+import DashboardService from '../../services/DashboardService';
 
 /**
  * AssistantPanel - Chat interface for the AI assistant
@@ -80,6 +81,60 @@ const AssistantPanel = ({ onClose }) => {
       }
     });
     onClose();
+  };
+
+  // Handle adding query result to a new dashboard
+  const handleAddToDashboard = async (msg) => {
+    try {
+      // Generate title from the natural language query
+      const dashboardTitle = msg.nlQuery 
+        ? `AI: ${msg.nlQuery.substring(0, 50)}${msg.nlQuery.length > 50 ? '...' : ''}`
+        : 'AI Dashboard';
+      
+      const tileTitle = msg.nlQuery
+        ? msg.nlQuery.split(' ').slice(0, 6).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+        : 'AI Query';
+
+      // Step 1: Create a new dashboard
+      const dashboardResponse = await DashboardService.createDashboard({
+        title: dashboardTitle,
+        description: msg.nlQuery || 'Dashboard created from Actyze AI',
+      });
+
+      if (!dashboardResponse.success) {
+        console.error('Failed to create dashboard:', dashboardResponse.error);
+        return;
+      }
+
+      const dashboardId = dashboardResponse.dashboard?.id;
+      if (!dashboardId) {
+        console.error('No dashboard ID returned');
+        return;
+      }
+
+      // Step 2: Create a tile in the new dashboard
+      const tileData = {
+        title: tileTitle,
+        description: msg.nlQuery || null,
+        sql_query: msg.sql,
+        nl_query: msg.nlQuery || null,
+        chart_type: msg.chartData?.chart?.type || 'bar',
+        chart_config: msg.chartRecommendation || msg.chartData?.chart?.config || {},
+        position: { x: 0, y: 0, width: 6, height: 2 },
+      };
+
+      const tileResponse = await DashboardService.createTile(dashboardId, tileData);
+
+      if (!tileResponse.success) {
+        console.error('Failed to create tile:', tileResponse.error);
+      }
+
+      // Step 3: Navigate to the new dashboard
+      navigate(`/dashboard/${dashboardId}`);
+      onClose();
+    } catch (error) {
+      console.error('Error adding to dashboard:', error);
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -244,24 +299,45 @@ const AssistantPanel = ({ onClose }) => {
                   </div>
                 )}
                 
-                {/* Open in Query Page Button */}
+                {/* Action Buttons */}
                 {msg.sql && msg.canOpenInQueryPage && (
-                  <button
-                    onClick={() => handleOpenInQueryPage(msg)}
-                    className={`
-                      mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                      transition-colors
-                      ${isDark 
-                        ? 'bg-violet-500/20 text-violet-300 hover:bg-violet-500/30 border border-violet-500/30' 
-                        : 'bg-violet-100 text-violet-700 hover:bg-violet-200 border border-violet-200'
-                      }
-                    `}
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                    Open in Query Page
-                  </button>
+                  <div className="flex gap-1.5 mt-2">
+                    {/* Open in Query Page Button */}
+                    <button
+                      onClick={() => handleOpenInQueryPage(msg)}
+                      className={`
+                        flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-[11px] font-medium
+                        transition-colors
+                        ${isDark 
+                          ? 'bg-black/30 text-gray-300 hover:bg-black/50 border border-gray-600' 
+                          : 'bg-white/50 text-gray-700 hover:bg-white/70 border border-gray-300'
+                        }
+                      `}
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      Query
+                    </button>
+                    
+                    {/* Add to Dashboard Button */}
+                    <button
+                      onClick={() => handleAddToDashboard(msg)}
+                      className={`
+                        flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-[11px] font-medium
+                        transition-colors
+                        ${isDark 
+                          ? 'bg-black/30 text-gray-300 hover:bg-black/50 border border-gray-600' 
+                          : 'bg-white/50 text-gray-700 hover:bg-white/70 border border-gray-300'
+                        }
+                      `}
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                      </svg>
+                      Dashboard
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

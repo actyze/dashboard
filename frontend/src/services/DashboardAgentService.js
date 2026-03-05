@@ -181,13 +181,16 @@ class DashboardAgentServiceClass {
         // For queries, generate SQL, execute it, and show results with option to open in Query page
         try {
           // Step 1: Generate SQL
+          console.log('DashboardAgentService: Generating SQL for:', message);
           const sqlResponse = await RestService.generateSql(message, this.conversationHistory);
+          console.log('DashboardAgentService: SQL response:', sqlResponse);
           
-          if (!sqlResponse.success || !sqlResponse.generated_sql) {
+          if (!sqlResponse || !sqlResponse.success || !sqlResponse.generated_sql) {
+            console.log('DashboardAgentService: SQL generation failed:', sqlResponse);
             return {
               success: false,
-              error: sqlResponse.error || sqlResponse.model_reasoning || 'Could not understand the request',
-              response: sqlResponse.model_reasoning || "I couldn't generate a query for that. Could you try rephrasing?",
+              error: sqlResponse?.error || sqlResponse?.model_reasoning || 'Could not understand the request',
+              response: sqlResponse?.model_reasoning || "I couldn't generate a query for that. Could you try rephrasing?",
             };
           }
 
@@ -201,12 +204,20 @@ class DashboardAgentServiceClass {
           let executionError = null;
           
           try {
+            console.log('DashboardAgentService: Executing SQL:', sql);
             const executeResponse = await RestService.executeSql(sql, 50, 30, message, this.conversationHistory);
+            console.log('DashboardAgentService: Execute response:', executeResponse);
             
-            if (executeResponse.success && executeResponse.query_results) {
+            if (executeResponse && executeResponse.success && executeResponse.query_results) {
               // Transform results to match QueryResults component format
               // { data: [...], columns: [...], rowCount: number }
-              queryResults = transformQueryResults(executeResponse.query_results);
+              try {
+                queryResults = transformQueryResults(executeResponse.query_results);
+                console.log('DashboardAgentService: Transformed results:', queryResults);
+              } catch (transformError) {
+                console.error('DashboardAgentService: Transform error:', transformError);
+                executionError = 'Failed to process query results';
+              }
               
               // Build chartData in the same format as useExecuteSql/useProcessNaturalLanguage
               if (queryResults) {
@@ -278,10 +289,12 @@ class DashboardAgentServiceClass {
             canOpenInQueryPage: true,
           };
         } catch (error) {
+          console.error('DashboardAgentService: Error in processMessage:', error);
+          console.error('DashboardAgentService: Error stack:', error.stack);
           return {
             success: false,
             error: error.message,
-            response: 'Sorry, I encountered an error processing your request.',
+            response: `Sorry, I encountered an error: ${error.message || 'Unknown error'}. Please try again.`,
           };
         }
     }

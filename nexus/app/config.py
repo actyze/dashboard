@@ -83,7 +83,7 @@ class Settings(BaseSettings):
     external_llm_base_url: str = ""
     external_llm_max_tokens: int = 4096
     external_llm_temperature: float = 0.1
-    external_llm_timeout: int = 30
+    external_llm_timeout: int = 120  # LLM API call timeout (enterprise models can be slow)
     
     # LLM Integration Mode (New: Explicit configuration for enterprises)
     # Options:
@@ -119,7 +119,8 @@ class Settings(BaseSettings):
     # Query Processing Configuration
     # =============================================================================
     default_max_results: int = 500
-    default_timeout_seconds: int = 30
+    default_timeout_seconds: int = 120       # Overall NL→SQL pipeline timeout
+    trino_execute_timeout_seconds: int = 120  # Trino SQL execution timeout (configurable via TRINO_EXECUTE_TIMEOUT_SECONDS)
     max_query_length: int = 10000
     max_result_rows: int = 1000
     conversation_history_size: int = 5

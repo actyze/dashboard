@@ -7,6 +7,7 @@ import 'react-resizable/css/styles.css';
 import { Button } from '../ui';
 import { useTheme } from '../../contexts/ThemeContext';
 import { usePaywall } from '../../contexts/PaywallContext';
+import { useDashboardExport } from '../../hooks';
 import SqlTileModal from './SqlTileModal';
 import ShareModal from './ShareModal';
 import { QueryResults } from '../QueryExplorer';
@@ -14,8 +15,6 @@ import { Chart } from '../Charts';
 import { RestService, QueryManagementService } from '../../services';
 import DashboardService from '../../services/DashboardService';
 import { transformQueryResults } from '../../utils/dataTransformers';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 
 // Grid configuration constants
 const GRID_COLS = 12;
@@ -58,7 +57,9 @@ const Dashboard = ({ isPublic = false }) => {
   
   // Download dropdown state
   const [downloadMenuAnchor, setDownloadMenuAnchor] = useState(null);
-  const [isExporting, setIsExporting] = useState(false);
+  
+  // Export hook
+  const { isExportingDashboard, exportingTileId, exportTileAsPNG, exportDashboardAsPDF } = useDashboardExport(isDark);
   
   // Grid container width - simple ref-based measurement
   const gridContainerRef = useRef(null);
@@ -653,137 +654,15 @@ const Dashboard = ({ isPublic = false }) => {
     setDownloadMenuAnchor(null);
   };
 
-  // Export dashboard as PNG
-  const handleExportPNG = async () => {
+  // Export handlers using the hook
+  const handleExportPDF = () => {
     handleDownloadMenuClose();
-    setIsExporting(true);
-    
-    try {
-      const dashboardElement = gridContentRef.current;
-      if (!dashboardElement) {
-        setIsExporting(false);
-        return;
-      }
-
-      // Store original styles to restore later
-      const originalOverflow = dashboardElement.style.overflow;
-      const originalHeight = dashboardElement.style.height;
-      const originalMaxHeight = dashboardElement.style.maxHeight;
-      
-      // Temporarily remove scroll constraints to capture full content
-      dashboardElement.style.overflow = 'visible';
-      dashboardElement.style.height = 'auto';
-      dashboardElement.style.maxHeight = 'none';
-
-      // Hide action buttons and menus temporarily
-      const actionBars = dashboardElement.querySelectorAll('.tile-actions, .MuiIconButton-root');
-      actionBars.forEach(el => el.style.visibility = 'hidden');
-
-      // Wait for styles to apply
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      const canvas = await html2canvas(dashboardElement, {
-        scale: 2,
-        backgroundColor: isDark ? '#101012' : '#ffffff',
-        logging: false,
-        useCORS: true,
-        allowTaint: true,
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: dashboardElement.scrollWidth,
-        windowHeight: dashboardElement.scrollHeight,
-        width: dashboardElement.scrollWidth,
-        height: dashboardElement.scrollHeight
-      });
-
-      // Restore original styles
-      dashboardElement.style.overflow = originalOverflow;
-      dashboardElement.style.height = originalHeight;
-      dashboardElement.style.maxHeight = originalMaxHeight;
-      actionBars.forEach(el => el.style.visibility = '');
-
-      canvas.toBlob((blob) => {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        const filename = `${dashboard?.title || 'dashboard'}_${new Date().toISOString().split('T')[0]}.png`;
-        link.download = filename;
-        link.href = url;
-        link.click();
-        URL.revokeObjectURL(url);
-        setIsExporting(false);
-      });
-    } catch (error) {
-      console.error('Error exporting PNG:', error);
-      alert('Failed to export dashboard as PNG');
-      setIsExporting(false);
-    }
+    exportDashboardAsPDF(dashboard?.title, gridContentRef);
   };
 
-  // Export dashboard as PDF
-  const handleExportPDF = async () => {
-    handleDownloadMenuClose();
-    setIsExporting(true);
-    
-    try {
-      const dashboardElement = gridContentRef.current;
-      if (!dashboardElement) {
-        setIsExporting(false);
-        return;
-      }
-
-      // Store original styles to restore later
-      const originalOverflow = dashboardElement.style.overflow;
-      const originalHeight = dashboardElement.style.height;
-      const originalMaxHeight = dashboardElement.style.maxHeight;
-      
-      // Temporarily remove scroll constraints to capture full content
-      dashboardElement.style.overflow = 'visible';
-      dashboardElement.style.height = 'auto';
-      dashboardElement.style.maxHeight = 'none';
-
-      // Hide action buttons and menus temporarily
-      const actionBars = dashboardElement.querySelectorAll('.tile-actions, .MuiIconButton-root');
-      actionBars.forEach(el => el.style.visibility = 'hidden');
-
-      // Wait for styles to apply
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      const canvas = await html2canvas(dashboardElement, {
-        scale: 2,
-        backgroundColor: isDark ? '#101012' : '#ffffff',
-        logging: false,
-        useCORS: true,
-        allowTaint: true,
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: dashboardElement.scrollWidth,
-        windowHeight: dashboardElement.scrollHeight,
-        width: dashboardElement.scrollWidth,
-        height: dashboardElement.scrollHeight
-      });
-
-      // Restore original styles
-      dashboardElement.style.overflow = originalOverflow;
-      dashboardElement.style.height = originalHeight;
-      dashboardElement.style.maxHeight = originalMaxHeight;
-      actionBars.forEach(el => el.style.visibility = '');
-
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
-        unit: 'px',
-        format: [canvas.width, canvas.height]
-      });
-
-      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-      const filename = `${dashboard?.title || 'dashboard'}_${new Date().toISOString().split('T')[0]}.pdf`;
-      pdf.save(filename);
-      setIsExporting(false);
-    } catch (error) {
-      console.error('Error exporting PDF:', error);
-      alert('Failed to export dashboard as PDF');
-      setIsExporting(false);
-    }
+  const handleExportTilePNG = (tile) => {
+    handleMenuClose();
+    exportTileAsPNG(tile.id, tile.title, gridContentRef);
   };
 
   // Loading state
@@ -879,11 +758,11 @@ const Dashboard = ({ isPublic = false }) => {
               
               <button
                 onClick={handleDownloadMenuOpen}
-                disabled={isExporting}
-                className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-200' : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'} ${isExporting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={isExportingDashboard}
+                className={`p-2 rounded-lg transition-colors ${isDark ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-200' : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'} ${isExportingDashboard ? 'opacity-50 cursor-not-allowed' : ''}`}
                 title="Download Dashboard"
               >
-                {isExporting ? (
+                {isExportingDashboard ? (
                   <CircularProgress size={20} sx={{ color: isDark ? '#9ca3af' : '#6b7280' }} />
                 ) : (
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -991,7 +870,10 @@ const Dashboard = ({ isPublic = false }) => {
                   Don't use h-full on this div - let grid control sizing.
                   Inner content uses 100% to fill the grid-controlled container.
                 */}
-                <div className={`w-full h-full flex flex-col overflow-hidden rounded-lg border ${isDark ? 'bg-[#1c1d1f] border-gray-700' : 'bg-white border-gray-200'}`}>
+                <div 
+                  data-tile-id={tile.id}
+                  className={`w-full h-full flex flex-col overflow-hidden rounded-lg border ${isDark ? 'bg-[#1c1d1f] border-gray-700' : 'bg-white border-gray-200'}`}
+                >
                   {/* Tile Header - Drag Handle */}
                   <div className={`tile-drag-handle flex items-center justify-between px-3 py-2 border-b cursor-move flex-shrink-0 ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
                     <span className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
@@ -1022,7 +904,7 @@ const Dashboard = ({ isPublic = false }) => {
         )}
       </div>
 
-      {/* Download Menu */}
+      {/* Download Menu - PDF only */}
       <Menu
         anchorEl={downloadMenuAnchor}
         open={Boolean(downloadMenuAnchor)}
@@ -1056,19 +938,6 @@ const Dashboard = ({ isPublic = false }) => {
         transformOrigin={{ horizontal: 'right', vertical: 'top' }}
         anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
       >
-        <MenuItem onClick={handleExportPNG}>
-          <div className="flex items-center gap-3">
-            <div className={`p-1.5 rounded-lg ${isDark ? 'bg-emerald-500/20' : 'bg-emerald-100'}`}>
-              <svg className={`w-4 h-4 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <div className="flex flex-col">
-              <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>PNG Image</span>
-              <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>High quality image</span>
-            </div>
-          </div>
-        </MenuItem>
         <MenuItem onClick={handleExportPDF}>
           <div className="flex items-center gap-3">
             <div className={`p-1.5 rounded-lg ${isDark ? 'bg-red-500/20' : 'bg-red-100'}`}>
@@ -1078,7 +947,7 @@ const Dashboard = ({ isPublic = false }) => {
             </div>
             <div className="flex flex-col">
               <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>PDF Document</span>
-              <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Print-ready format</span>
+              <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Export as PDF</span>
             </div>
           </div>
         </MenuItem>
@@ -1129,6 +998,14 @@ const Dashboard = ({ isPublic = false }) => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
             Refresh
+          </div>
+        </MenuItem>
+        <MenuItem onClick={() => handleExportTilePNG(selectedTile)} disabled={exportingTileId !== null}>
+          <div className="flex items-center gap-2">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Download PNG
           </div>
         </MenuItem>
         <MenuItem onClick={() => handleEditTile(selectedTile)}>

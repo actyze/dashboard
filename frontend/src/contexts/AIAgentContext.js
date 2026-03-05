@@ -179,7 +179,9 @@ export const AIAgentProvider = ({ children }) => {
     setAgentState(AGENT_STATES.PROCESSING);
     
     try {
+      console.log('AIAgentContext: Processing input:', input);
       const result = await DashboardAgentService.processMessage(input, context);
+      console.log('AIAgentContext: Result from DashboardAgentService:', result);
       
       // Add assistant response with results
       if (result.response) {
@@ -189,6 +191,7 @@ export const AIAgentProvider = ({ children }) => {
           nlQuery: result.nlQuery || input,
           queryResults: result.queryResults,
           chartData: result.chartData,
+          chartRecommendation: result.chartRecommendation,
           canOpenInQueryPage: result.canOpenInQueryPage,
         });
         
@@ -196,13 +199,16 @@ export const AIAgentProvider = ({ children }) => {
         if (preferences.ttsEnabled) {
           speak(result.response);
         }
+      } else if (result.error) {
+        // Handle error response from DashboardAgentService
+        addMessage(result.error || 'An error occurred', 'assistant', { error: true });
       }
       
       setAgentState(AGENT_STATES.IDLE);
       return result;
     } catch (error) {
-      console.error('Error processing input:', error);
-      const errorMessage = 'Sorry, I encountered an error. Please try again.';
+      console.error('AIAgentContext: Error processing input:', error);
+      const errorMessage = `Sorry, I encountered an error: ${error.message || 'Unknown error'}. Please try again.`;
       addMessage(errorMessage, 'assistant', { error: true });
       setAgentState(AGENT_STATES.ERROR);
       setTimeout(() => setAgentState(AGENT_STATES.IDLE), 2000);

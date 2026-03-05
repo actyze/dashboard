@@ -25,8 +25,8 @@ NO_BUILD_FLAG=""
 LOGS_FLAG=""
 PROFILE="local"  # Default profile
 
-for arg in "$@"; do
-    case $arg in
+while [[ $# -gt 0 ]]; do
+    case $1 in
         --no-build)
             NO_BUILD_FLAG="true"
             shift
@@ -40,20 +40,25 @@ for arg in "$@"; do
             shift 2
             ;;
         --profile=*)
-            PROFILE="${arg#*=}"
+            PROFILE="${1#*=}"
             shift
             ;;
-        *)
+        -h|--help)
             echo "Usage: $0 [--no-build] [--logs] [--profile PROFILE]"
             echo "  --no-build:        Skip building images (use existing)"
             echo "  --logs:            Follow logs after starting"
             echo "  --profile PROFILE: Docker compose profile to use"
             echo ""
             echo "Available profiles:"
-            echo "  local         - Local PostgreSQL + Trino (default)"
-            echo "  external      - External PostgreSQL + Trino only"
-            echo "  postgres-only - Local PostgreSQL + External Trino"
+            echo "  local         - Local PostgreSQL + Local Trino (default)"
+            echo "  external      - External PostgreSQL + External Trino only"
+            echo "  postgres-only - Local PostgreSQL + External Trino (no local Trino)"
             echo "  trino-only    - External PostgreSQL + Local Trino"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--no-build] [--logs] [--profile PROFILE]"
             exit 1
             ;;
     esac
@@ -77,9 +82,9 @@ max_attempts=60
 attempt=0
 
 while [ $attempt -lt $max_attempts ]; do
-    if docker-compose ps | grep -q "healthy"; then
-        healthy_count=$(docker-compose ps | grep -c "healthy" || echo "0")
-        total_services=5  # postgres, trino, schema-service, nexus, frontend
+    if docker-compose --profile $PROFILE ps | grep -q "healthy"; then
+        healthy_count=$(docker-compose --profile $PROFILE ps | grep -c "healthy" || echo "0")
+        total_services=$(docker-compose --profile $PROFILE ps --services | wc -l | tr -d ' ')
         
         echo "📊 Services healthy: $healthy_count/$total_services"
         

@@ -170,8 +170,9 @@ services:
       TRINO_MAX_ROWS: ${TRINO_MAX_ROWS:-1000}
       TRINO_QUERY_TIMEOUT_SECONDS: ${TRINO_QUERY_TIMEOUT_SECONDS:-300}
       # Query Processing Timeouts
-      DEFAULT_TIMEOUT_SECONDS: ${DEFAULT_TIMEOUT_SECONDS:-30}
-      EXTERNAL_LLM_TIMEOUT: ${EXTERNAL_LLM_TIMEOUT:-30}
+      DEFAULT_TIMEOUT_SECONDS: ${DEFAULT_TIMEOUT_SECONDS:-120}
+      TRINO_EXECUTE_TIMEOUT_SECONDS: ${EXECUTE_TIMEOUT_SECONDS:-120}
+      EXTERNAL_LLM_TIMEOUT: ${EXTERNAL_LLM_TIMEOUT:-120}
       # Schema Service Configuration
       SCHEMA_SERVICE_URL: http://${SCHEMA_SERVICE_HOST:-schema-service}:${SCHEMA_SERVICE_PORT:-8000}
       SCHEMA_SERVICE_KEY: ${SCHEMA_SERVICE_KEY}
@@ -189,7 +190,9 @@ services:
       PERPLEXITY_API_KEY: ${PERPLEXITY_API_KEY:-}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      AWS_REGION_NAME: ${AWS_REGION_NAME:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_REGION_NAME: ${AWS_REGION_NAME:-us-east-2}
+      AWS_BEARER_TOKEN_BEDROCK: ${AWS_BEARER_TOKEN_BEDROCK:-}
       # Enterprise Gateway (set mode=openai-compatible)
       EXTERNAL_LLM_BASE_URL: ${EXTERNAL_LLM_BASE_URL:-}
       EXTERNAL_LLM_API_KEY: ${EXTERNAL_LLM_API_KEY:-}
@@ -230,6 +233,7 @@ services:
     restart: unless-stopped
     profiles:
       - local
+      - postgres-only
 
   # Frontend Service
   frontend:
@@ -238,6 +242,7 @@ services:
       dockerfile: Dockerfile
       args:
         REACT_APP_API_BASE_URL: /api  # Relative path - NGINX proxies to nexus container
+        REACT_APP_EXECUTE_TIMEOUT_SECONDS: ${EXECUTE_TIMEOUT_SECONDS:-120}
     container_name: dashboard-frontend
     ports:
       - "3000:80"
@@ -261,6 +266,7 @@ services:
     restart: unless-stopped
     profiles:
       - local
+      - postgres-only
 
 volumes:
   postgres_data:

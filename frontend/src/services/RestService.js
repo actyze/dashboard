@@ -1,4 +1,4 @@
-import { Network } from './network';
+import { Network, apiInstance } from './network';
 
 /**
  * REST Service for making API requests to Nexus
@@ -40,10 +40,10 @@ export class RestService {
    * Execute SQL query directly
    * @param {string} sql - SQL query to execute
    * @param {number} maxResults - Maximum number of results to return (default: 100)
-   * @param {number} timeoutSeconds - Timeout for execution in seconds (default: 30)
+   * @param {number} timeoutSeconds - Timeout for execution in seconds (default: REACT_APP_EXECUTE_TIMEOUT_SECONDS or 120)
    * @returns {Promise} API response containing query results
    */
-  static async executeSql(sql, maxResults = 500, timeoutSeconds = 30, nlQuery = null, conversationHistory = [], metadata = {}) {
+  static async executeSql(sql, maxResults = 500, timeoutSeconds = parseInt(process.env.REACT_APP_EXECUTE_TIMEOUT_SECONDS) || 120, nlQuery = null, conversationHistory = [], metadata = {}) {
     const endpoint = '/execute-sql';
     const payload = {
       sql,
@@ -56,15 +56,20 @@ export class RestService {
       ...(metadata.chart_recommendation && { chart_recommendation: metadata.chart_recommendation }),
       ...(metadata.model_reasoning && { model_reasoning: metadata.model_reasoning }),
       ...(metadata.schema_recommendations && { schema_recommendations: metadata.schema_recommendations }),
+      ...(metadata.preferred_tables && { preferred_tables: metadata.preferred_tables }),
       ...(metadata.llm_response_time_ms && { llm_response_time_ms: metadata.llm_response_time_ms })
     };
 
+    // Use a per-request HTTP timeout = Trino timeout + 30s buffer
+    // This prevents Axios from dropping the connection before Trino finishes
+    const httpTimeoutMs = (timeoutSeconds + 30) * 1000;
+
     try {
-      const response = await Network.post(endpoint, payload);
-      return response;
+      const response = await apiInstance.post(endpoint, payload, { timeout: httpTimeoutMs });
+      return response.data;
     } catch (error) {
       console.error('Execute SQL failed:', error);
-      throw error;
+      throw Network.handleError(error);
     }
   }
 

@@ -68,6 +68,7 @@ export const useProcessNaturalLanguage = (options = {}) => {
       let generatedSql = null;
       let chartRecommendation = null;
       let schemaRecommendations = null;
+      let preferredTables = null;
       let processingTime = null;
       let reasoning = null;
       let intent = null;
@@ -138,6 +139,7 @@ export const useProcessNaturalLanguage = (options = {}) => {
         
         chartRecommendation = generateResponse.chart_recommendation;
         schemaRecommendations = generateResponse.schema_recommendations;
+        preferredTables = generateResponse.preferred_tables;
         processingTime = generateResponse.processing_time;
         reasoning = generateResponse.model_reasoning;
         intent = generateResponse.intent;  // NEW: ML-detected intent
@@ -165,10 +167,11 @@ export const useProcessNaturalLanguage = (options = {}) => {
       
       try {
         console.log('Stage 2: Executing SQL...');
+        const executeTimeout = parseInt(process.env.REACT_APP_EXECUTE_TIMEOUT_SECONDS) || 120;
         const executeResponse = await RestService.executeSql(
           generatedSql, 
           500, 
-          30, 
+          executeTimeout, 
           nlQuery,
           conversationHistory,
           {
@@ -176,6 +179,7 @@ export const useProcessNaturalLanguage = (options = {}) => {
             chart_recommendation: chartRecommendation,
             model_reasoning: reasoning,
             schema_recommendations: schemaRecommendations,
+            preferred_tables: preferredTables,
             llm_response_time_ms: processingTime ? Math.round(processingTime) : null
           }
         );

@@ -4,6 +4,7 @@ from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
 import os
 import logging
+from app.config import settings
 from app.services.orchestration_service import orchestration_service
 from app.services.user_service import UserService
 from app.services.schema_service import SchemaService
@@ -31,13 +32,14 @@ class GenerateSQLRequest(BaseModel):
 class ExecuteSQLRequest(BaseModel):
     sql: str
     max_results: Optional[int] = 500
-    timeout_seconds: Optional[int] = 30
+    timeout_seconds: Optional[int] = None  # Defaults to settings.trino_execute_timeout_seconds if not provided
     nl_query: Optional[str] = None
     conversation_history: Optional[List[str]] = []
     session_id: Optional[str] = None
     chart_recommendation: Optional[dict] = None
     model_reasoning: Optional[str] = None
     schema_recommendations: Optional[List[dict]] = None
+    preferred_tables: Optional[List[str]] = None  # Preferred table names from generate-sql response
     llm_response_time_ms: Optional[int] = None
 
 # =============================================================================
@@ -219,9 +221,10 @@ async def execute_sql(
     result = await orchestration_service.execute_sql_directly(
         request.sql,
         request.max_results,
-        request.timeout_seconds,
+        request.timeout_seconds or settings.trino_execute_timeout_seconds,
         request.nl_query,
-        request.conversation_history
+        request.conversation_history,
+        user_id=user_id
     )
     
     execution_end = asyncio.get_event_loop().time()

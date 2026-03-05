@@ -25,10 +25,12 @@ class TrinoService:
         self,
         sql: str,
         max_results: int = 500,
-        timeout_seconds: int = 30
+        timeout_seconds: int = None
     ) -> Dict[str, Any]:
         """Execute SQL query against Trino."""
-        
+        if timeout_seconds is None:
+            timeout_seconds = settings.trino_execute_timeout_seconds
+
         # Strip whitespace and trailing semicolon to prevent syntax errors
         sql = sql.strip().rstrip(';')
         

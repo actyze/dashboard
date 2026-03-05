@@ -142,10 +142,6 @@ class OrchestrationService:
                     }
                 
                 recommendations = schema_recommendations.get("recommendations", []) or []
-                
-                # Apply user preference boost if user_id is provided
-                if user_id and recommendations:
-                    recommendations = await self._apply_preference_boost(user_id, recommendations)
             
             else:
                 # REFINE_RESULT, REJECT_RESULT, EXPLAIN_RESULT, FOLLOW_UP_SAME_DOMAIN
@@ -168,10 +164,6 @@ class OrchestrationService:
                     else:
                         # Defensive: Continue even if schema service fails
                         recommendations = []
-                
-                # Apply user preference boost if user_id is provided
-                if user_id and recommendations:
-                    recommendations = await self._apply_preference_boost(user_id, recommendations)
                 
                 # Construct schema_recommendations dict for LLM (CRITICAL FIX)
                 # Only construct if we got recommendations from session/params (not from fallback)
@@ -408,7 +400,7 @@ class OrchestrationService:
                     settings.default_max_results,
                     settings.default_timeout_seconds,
                     settings.max_retries,
-                    self._create_correction_callback(schema_recs_dict, conversation_history)
+                    self._create_correction_callback(schema_recs_dict, conversation_history, preferred_tables)
                 )
                 
                 # Cache successful results
@@ -515,7 +507,7 @@ class OrchestrationService:
                 f"Workflow processing error: {str(e)}", "PROCESSING_ERROR", start_time
             )
     
-    def _create_correction_callback(self, schema_recommendations, conversation_history):
+    def _create_correction_callback(self, schema_recommendations, conversation_history, preferred_tables=None):
         """Create callback function for SQL error correction with enhanced analysis."""
         async def correction_callback(
             original_query, failed_sql, sql_error, error_type, error_history
@@ -540,11 +532,13 @@ class OrchestrationService:
             self.logger.info("Retrying with error correction", 
                             original_error_type=error_type, 
                             analyzed_error_type=analyzed_error_type,
-                            retry_prompt=error_correction_prompt)
+                            retry_prompt=error_correction_prompt,
+                            preferred_tables_count=len(preferred_tables) if preferred_tables else 0)
             
-            # Generate corrected SQL using error correction prompt
+            # Generate corrected SQL using error correction prompt, including preferred tables
             return await self.llm_service.generate_sql(
-                error_correction_prompt, conversation_history, schema_recommendations
+                error_correction_prompt, conversation_history, schema_recommendations,
+                preferred_tables=preferred_tables
             )
         return correction_callback
     
@@ -735,7 +729,8 @@ class OrchestrationService:
         max_results: int = 100,
         timeout_seconds: int = 30,
         nl_query: Optional[str] = None,
-        conversation_history: Optional[List[str]] = None
+        conversation_history: Optional[List[str]] = None,
+        user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Execute SQL directly, with optional retry logic if NL query is provided."""
         
@@ -765,13 +760,26 @@ class OrchestrationService:
             )
             schema_recs_dict = cached_schema if cached_schema else {"success": True, "recommendations": []}
             
+            # Fetch preferred tables for user to include in correction prompts
+            preferred_tables = []
+            if user_id:
+                try:
+                    preferred_tables = await self.preference_service.get_user_preferred_tables_with_metadata(user_id)
+                    self.logger.info(
+                        "Fetched preferred tables for execute-sql correction context",
+                        user_id=user_id,
+                        count=len(preferred_tables)
+                    )
+                except Exception as e:
+                    self.logger.warning("Failed to fetch preferred tables for execute-sql", error=str(e), user_id=user_id)
+            
             result = await self.trino_service.execute_with_retry(
                 nl_query,
                 sql,
                 max_results,
                 timeout_seconds,
                 settings.max_retries,
-                self._create_correction_callback(schema_recs_dict, conversation_history)
+                self._create_correction_callback(schema_recs_dict, conversation_history, preferred_tables)
             )
         else:
             # Simple execution
@@ -842,88 +850,5 @@ class OrchestrationService:
             "message": "Cache cleared successfully" if success else "Failed to clear cache"
         }
     
-    async def _apply_preference_boost(self, user_id: str, recommendations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Apply user preference boost multipliers to schema recommendations."""
-        try:
-            # Get user preferences
-            preferences = await self.preference_service.get_user_preferences(user_id)
-            
-            if not preferences:
-                self.logger.debug("No user preferences found", user_id=user_id)
-                return recommendations
-            
-            # Convert to boost map
-            boost_map = self.preference_service.get_boost_map(preferences)
-            
-            if not boost_map:
-                self.logger.debug("No boost map created", user_id=user_id)
-                return recommendations
-            
-            self.logger.info("Applying preference boost", user_id=user_id, boost_count=len(boost_map))
-            
-            # Apply boost to each recommendation
-            boosted_count = 0
-            for rec in recommendations:
-                full_name = rec.get("full_name", "")
-                catalog = rec.get("catalog", "")
-                schema = rec.get("schema", "")
-                table = rec.get("table", "")
-                
-                original_confidence = rec.get("confidence", 0.0)
-                boost = 1.0
-                matched_key = None
-                
-                # Try to match in order of specificity: database.schema.table > database.schema > database
-                table_key = f"{catalog}.{schema}.{table}"
-                schema_key = f"{catalog}.{schema}"
-                
-                if table_key in boost_map:
-                    boost = boost_map[table_key]
-                    matched_key = table_key
-                elif schema_key in boost_map:
-                    boost = boost_map[schema_key]
-                    matched_key = schema_key
-                elif catalog in boost_map:
-                    boost = boost_map[catalog]
-                    matched_key = catalog
-                
-                # Apply boost by multiplying confidence
-                if boost > 1.0:
-                    boosted_confidence = min(1.0, original_confidence * boost)
-                    rec["confidence"] = boosted_confidence
-                    rec["preference_boost"] = boost
-                    rec["original_confidence"] = original_confidence
-                    boosted_count += 1
-                    
-                    self.logger.debug(
-                        "Boost applied",
-                        table=full_name,
-                        matched_key=matched_key,
-                        original=f"{original_confidence:.4f}",
-                        boost=f"{boost}x",
-                        boosted=f"{boosted_confidence:.4f}"
-                    )
-            
-            # Re-sort by boosted confidence
-            recommendations.sort(key=lambda x: x.get("confidence", 0), reverse=True)
-            
-            # Update ranks
-            for i, rec in enumerate(recommendations):
-                rec["rank"] = i + 1
-            
-            self.logger.info(
-                "Preference boost complete",
-                user_id=user_id,
-                total_recommendations=len(recommendations),
-                boosted_count=boosted_count
-            )
-            
-            return recommendations
-            
-        except Exception as e:
-            self.logger.error("Failed to apply preference boost", error=str(e), user_id=user_id)
-            # Return original recommendations if boost fails
-            return recommendations
-
 # Global orchestration service instance
 orchestration_service = OrchestrationService()

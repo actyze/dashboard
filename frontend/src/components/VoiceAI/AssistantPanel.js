@@ -65,7 +65,7 @@ const AssistantPanel = ({ onClose }) => {
     await processInput(text);
   };
 
-  // Handle opening query in Query page - pass results and chartData directly
+  // Handle opening query in Query page - pass SQL for execution
   const handleOpenInQueryPage = (msg) => {
     navigate('/query/new', {
       state: {
@@ -73,11 +73,10 @@ const AssistantPanel = ({ onClose }) => {
           generated_sql: msg.sql,
           nl_query: msg.nlQuery,
           query_name: msg.nlQuery ? `AI: ${msg.nlQuery.substring(0, 40)}` : 'AI Query',
+          chart_recommendation: msg.chartRecommendation,
         },
-        // Pass results and chartData directly - no need to re-execute
-        queryResults: msg.queryResults,
-        chartData: msg.chartData,
         fromAssistant: true,
+        autoExecute: true, // Signal Query page to auto-execute
       }
     });
     onClose();
@@ -118,8 +117,8 @@ const AssistantPanel = ({ onClose }) => {
         description: msg.nlQuery || null,
         sql_query: msg.sql,
         nl_query: msg.nlQuery || null,
-        chart_type: msg.chartData?.chart?.type || 'bar',
-        chart_config: msg.chartRecommendation || msg.chartData?.chart?.config || {},
+        chart_type: msg.chartRecommendation?.chart_type || 'bar',
+        chart_config: msg.chartRecommendation || {},
         position: { x: 0, y: 0, width: 6, height: 2 },
       };
 
@@ -254,47 +253,16 @@ const AssistantPanel = ({ onClose }) => {
               >
                 {msg.content}
                 
-                {/* Query Results Preview - uses transformed format { data, columns, rowCount } */}
-                {msg.queryResults && msg.queryResults.data && msg.queryResults.data.length > 0 && (
+                {/* Generated SQL Preview */}
+                {msg.sql && (
                   <div className={`mt-2 rounded overflow-hidden ${isDark ? 'bg-black/30' : 'bg-white/50'}`}>
-                    <div className="p-2 text-xs">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                          <thead>
-                            <tr className={isDark ? 'text-gray-400' : 'text-gray-500'}>
-                              {msg.queryResults.columns?.slice(0, 3).map((col, i) => (
-                                <th key={i} className="pr-3 pb-1 font-medium truncate max-w-[100px]">
-                                  {col.name || col.label || col}
-                                </th>
-                              ))}
-                              {msg.queryResults.columns?.length > 3 && (
-                                <th className="pr-2 pb-1 text-gray-500">+{msg.queryResults.columns.length - 3}</th>
-                              )}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {msg.queryResults.data.slice(0, 3).map((row, i) => (
-                              <tr key={i} className={isDark ? 'border-t border-gray-700' : 'border-t border-gray-200'}>
-                                {msg.queryResults.columns?.slice(0, 3).map((col, j) => {
-                                  const colName = col.name || col;
-                                  const val = row[colName];
-                                  return (
-                                    <td key={j} className="pr-3 py-1 truncate max-w-[100px]">
-                                      {val !== null && val !== undefined ? String(val) : '-'}
-                                    </td>
-                                  );
-                                })}
-                                {msg.queryResults.columns?.length > 3 && <td className="text-gray-500">...</td>}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                        {msg.queryResults.data.length > 3 && (
-                          <div className={`pt-1 text-xs italic ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                            +{msg.queryResults.data.length - 3} more rows
-                          </div>
-                        )}
+                    <div className="p-2">
+                      <div className={`text-[10px] uppercase tracking-wide mb-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                        Generated SQL
                       </div>
+                      <pre className={`text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                        {msg.sql}
+                      </pre>
                     </div>
                   </div>
                 )}

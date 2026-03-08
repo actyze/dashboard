@@ -317,7 +317,7 @@ const Dashboard = ({ isPublic = false }) => {
     setTileErrors(prev => ({ ...prev, [tile.id]: null }));
 
     try {
-      const response = await RestService.executeSql(tile.sql_query, 500, 30);
+      const response = await RestService.executeSql(tile.sql_query, 500, parseInt(process.env.REACT_APP_EXECUTE_TIMEOUT_SECONDS) || 900);
       
       if (!response.success) {
         throw new Error(response.error || 'Query execution failed');

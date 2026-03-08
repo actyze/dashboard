@@ -19,7 +19,7 @@ export const useGenerateSql = (options = {}) => {
  */
 export const useExecuteSql = (options = {}) => {
   return useMutation({
-    mutationFn: async ({ sql, maxResults = 500, timeoutSeconds = 30, nlQuery = null, conversationHistory = [] }) => {
+    mutationFn: async ({ sql, maxResults = 500, timeoutSeconds = parseInt(process.env.REACT_APP_EXECUTE_TIMEOUT_SECONDS) || 900, nlQuery = null, conversationHistory = [] }) => {
       const response = await RestService.executeSql(sql, maxResults, timeoutSeconds, nlQuery, conversationHistory);
       
       if (response.success && response.query_results) {
@@ -198,6 +198,14 @@ export const useProcessNaturalLanguage = (options = {}) => {
           };
         }
         
+        // Use corrected SQL from execute response if a retry/correction happened
+        if (executeResponse.generated_sql && executeResponse.generated_sql !== generatedSql) {
+          generatedSql = executeResponse.generated_sql;
+          // Update SQL editor with the corrected SQL so re-runs use the working version
+          if (onSqlGenerated) {
+            onSqlGenerated(generatedSql, chartRecommendation, reasoning);
+          }
+        }
         transformedResults = transformQueryResults(executeResponse.query_results);
         executionTime = executeResponse.execution_time;
         

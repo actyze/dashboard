@@ -727,14 +727,16 @@ class OrchestrationService:
         self,
         sql: str,
         max_results: int = 100,
-        timeout_seconds: int = 30,
+        timeout_seconds: Optional[int] = None,
         nl_query: Optional[str] = None,
         conversation_history: Optional[List[str]] = None,
         user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Execute SQL directly, with optional retry logic if NL query is provided."""
+        if timeout_seconds is None:
+            timeout_seconds = settings.trino_execute_timeout_seconds
         
-        self.logger.info("Executing SQL directly", sql=sql[:100], has_nl_context=bool(nl_query))
+        self.logger.info("Executing SQL directly", sql=sql[:100], has_nl_context=bool(nl_query), timeout_seconds=timeout_seconds)
         
         # Check cache first
         cache_params = {"max_results": max_results, "timeout": timeout_seconds}
@@ -789,12 +791,17 @@ class OrchestrationService:
         if result.get("success"):
             await self.cache_service.cache_query_result(sql, cache_params, result)
         
+        # Use final_sql (corrected) if a retry/correction happened, otherwise original
+        final_sql = result.get("final_sql", sql)
         return {
             "success": result.get("success", False),
             "original_sql": sql,
+            "generated_sql": final_sql,
             "query_results": result.get("query_results"),
             "execution_time": result.get("execution_time"),
-            "error": result.get("error")
+            "error": result.get("error"),
+            "retry_attempts": result.get("retry_attempts", 0),
+            "error_history": result.get("error_history", [])
         }
     
     async def get_health_status(self) -> Dict[str, Any]:

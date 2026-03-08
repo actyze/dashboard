@@ -456,25 +456,19 @@ const QueryPage = () => {
     }
   });
 
-  // Handle results and chartData passed from Actyze AI assistant
-  // Results are already in the correct format: { data, columns, rowCount }
-  // ChartData is already in the correct format: { chart, data, cached }
+  // Handle auto-execution when coming from Actyze AI assistant
+  const autoExecuteTriggeredRef = useRef(false);
+  
   useEffect(() => {
-    if (location.state?.fromAssistant) {
-      const passedResults = location.state?.queryResults;
-      const passedChartData = location.state?.chartData;
-      
-      if (passedResults) {
-        console.log('Loaded results from Actyze AI assistant:', passedResults);
-        setQueryResults(passedResults);
-      }
-      
-      if (passedChartData) {
-        console.log('Loaded chartData from Actyze AI assistant:', passedChartData);
-        setChartData(passedChartData);
-      }
+    if (location.state?.fromAssistant && location.state?.autoExecute && sqlQuery && !autoExecuteTriggeredRef.current) {
+      console.log('Auto-executing query from Actyze AI assistant');
+      autoExecuteTriggeredRef.current = true;
+      // Small delay to ensure component is mounted
+      setTimeout(() => {
+        executeSql({ sql: sqlQuery });
+      }, 100);
     }
-  }, [location.state]);
+  }, [location.state, sqlQuery, executeSql]);
 
   const handleAIQuery = (naturalLanguageQuery) => {
     // Prevent duplicate calls (React StrictMode protection)

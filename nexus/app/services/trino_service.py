@@ -127,6 +127,7 @@ class TrinoService:
             if settings.trino_ssl:
                 conn_args["verify"] = settings.trino_ssl_verify
                 
+            conn_args["request_timeout"] = timeout_seconds
             conn = connect(**conn_args)
             cur = conn.cursor()
             cur.execute(sql)

@@ -19,7 +19,10 @@ from app.models import (
     SchemaRecommendationRequest, 
     SchemaRecommendationResponse,
     IntentDetectionRequest,
-    IntentDetectionResponse
+    IntentDetectionResponse,
+    TableMetadataRequest,
+    TableMetadataResponse,
+    ColumnMetadata
 )
 from app.trino_client import TrinoSchemaService
 from app.embedder import FAISSSchemaEmbedder
@@ -600,9 +603,9 @@ async def add_table(table: Dict[str, Any], auth: dict = Depends(verify_service_a
     """
     try:
         logger.info(f"Adding table to index: {table.get('full_name', 'unknown')}")
-        success = await schema_service.embedder.add_table(table)
+        result = await schema_service.embedder.batch_add_tables([table])
         
-        if success:
+        if result["added_count"] > 0 or result.get("updated_count", 0) > 0:
             return {
                 "status": "success",
                 "message": f"Table {table.get('full_name')} added successfully",
@@ -633,9 +636,9 @@ async def remove_table(catalog: str, schema: str, table: str, auth: dict = Depen
         full_name = f"{catalog}.{schema}.{table}"
         logger.info(f"Removing table from index: {full_name}")
         
-        success = await schema_service.embedder.remove_table(full_name)
+        result = await schema_service.embedder.batch_remove_tables([full_name])
         
-        if success:
+        if result["removed_count"] > 0:
             return {
                 "status": "success",
                 "message": f"Table {full_name} removed successfully",
@@ -652,111 +655,21 @@ async def remove_table(catalog: str, schema: str, table: str, auth: dict = Depen
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/table/batch-remove")
-async def batch_remove_tables(filter_info: Dict[str, Any], auth: dict = Depends(verify_service_auth)):
-    """
-    Remove multiple tables from FAISS index with wildcard matching (for hide operations).
-    
-    Optimized for schema/database-level hiding:
-    - Removes all matching tables in a single operation
-    - Rebuilds FAISS index only once (not N times)
-    - 10-100x faster than multiple DELETE calls
-    
-    Request body:
-    - catalog: string (required)
-    - schema: string (optional - if null, matches all schemas in catalog)
-    - table: string (optional - if null, matches all tables in schema)
-    
-    Examples:
-    - Hide table: {catalog: "db1", schema: "schema1", table: "table1"}
-    - Hide schema: {catalog: "db1", schema: "schema1", table: null}
-    - Hide database: {catalog: "db1", schema: null, table: null}
-    
-    Security: Simple service key authentication (X-Service-Key header)
-    """
-    try:
-        catalog = filter_info.get('catalog')
-        schema_name = filter_info.get('schema')
-        table_name = filter_info.get('table')
-        
-        if not catalog:
-            raise HTTPException(status_code=400, detail="Missing required field: catalog")
-        
-        # Build filter pattern
-        if table_name and schema_name:
-            # Specific table
-            pattern = f"{catalog}.{schema_name}.{table_name}"
-            level = "table"
-        elif schema_name:
-            # All tables in schema
-            pattern = f"{catalog}.{schema_name}."
-            level = "schema"
-        else:
-            # All tables in catalog
-            pattern = f"{catalog}."
-            level = "database"
-        
-        logger.info(f"Batch remove: {level}-level hide for pattern: {pattern}")
-        
-        # Find all matching tables
-        tables_to_remove = []
-        for meta in schema_service.embedder.schema_metadata:
-            full_name = meta.get('full_name', '')
-            if level == "table":
-                if full_name == pattern:
-                    tables_to_remove.append(full_name)
-            else:
-                if full_name.startswith(pattern):
-                    tables_to_remove.append(full_name)
-        
-        logger.info(f"Found {len(tables_to_remove)} tables to remove")
-        
-        # Remove all at once using batch method (rebuilds index only once!)
-        result = await schema_service.embedder.batch_remove_tables(tables_to_remove)
-        
-        return {
-            "status": "success",
-            "message": f"Batch remove completed for {level}",
-            "pattern": pattern,
-            "removed_count": result['removed_count'],
-            "not_found": result.get('not_found', []),
-            "index_size": schema_service.embedder.index.ntotal if schema_service.embedder.index else 0,
-            "total_schemas": len(schema_service.embedder.schema_metadata)
-        }
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception("Failed to batch remove tables")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/table/batch-remove-multi")
-async def batch_remove_tables_multi(items: List[Dict[str, Any]], auth: dict = Depends(verify_service_auth)):
+@app.post("/table/bulk-batch-remove")
+async def bulk_batch_remove_tables(request_body: Dict[str, Any], auth: dict = Depends(verify_service_auth)):
     """
     Remove multiple tables from FAISS index for multiple filter patterns in ONE call.
-    
-    This is optimized for bulk exclusions:
-    - Accepts a list of filter patterns (catalog/schema/table combinations)
-    - Collects ALL matching tables across all patterns
-    - Rebuilds FAISS index only ONCE at the end
-    - 10-100x faster than N separate HTTP calls
-    
-    Request body: List of filter objects, each with:
-    - catalog: string (required)
-    - schema: string (optional - if null, matches all schemas in catalog)
-    - table: string (optional - if null, matches all tables in schema)
-    
-    Example:
-    [
-        {"catalog": "db1", "schema": "schema1", "table": "table1"},
-        {"catalog": "db1", "schema": "schema2", "table": null},
-        {"catalog": "db2", "schema": null, "table": null}
-    ]
-    
+
+    Accepts {items: [{catalog, schema, table}, ...]} — resolves all matching tables
+    across all patterns and rebuilds FAISS exactly ONCE at the end.
+
+    This prevents the race condition that occurs when N concurrent single-item calls
+    each independently read schema_metadata and rebuild the index, overwriting each other.
+
     Security: Simple service key authentication (X-Service-Key header)
     """
     try:
+        items = request_body.get("items", [])
         if not items:
             return {
                 "status": "success",
@@ -764,21 +677,20 @@ async def batch_remove_tables_multi(items: List[Dict[str, Any]], auth: dict = De
                 "removed_count": 0,
                 "patterns_processed": 0
             }
-        
-        # Collect all tables to remove across all patterns
+
+        # Collect all tables to remove across all patterns (deduped)
         all_tables_to_remove = set()
         patterns_processed = 0
-        
+
         for filter_info in items:
             catalog = filter_info.get('catalog')
             schema_name = filter_info.get('schema') or filter_info.get('schema_name')
             table_name = filter_info.get('table') or filter_info.get('table_name')
-            
+
             if not catalog:
                 logger.warning(f"Skipping item without catalog: {filter_info}")
                 continue
-            
-            # Build filter pattern
+
             if table_name and schema_name:
                 pattern = f"{catalog}.{schema_name}.{table_name}"
                 level = "table"
@@ -788,8 +700,7 @@ async def batch_remove_tables_multi(items: List[Dict[str, Any]], auth: dict = De
             else:
                 pattern = f"{catalog}."
                 level = "database"
-            
-            # Find all matching tables for this pattern
+
             for meta in schema_service.embedder.schema_metadata:
                 full_name = meta.get('full_name', '')
                 if level == "table":
@@ -798,11 +709,11 @@ async def batch_remove_tables_multi(items: List[Dict[str, Any]], auth: dict = De
                 else:
                     if full_name.startswith(pattern):
                         all_tables_to_remove.add(full_name)
-            
+
             patterns_processed += 1
-        
-        logger.info(f"Batch remove multi: {patterns_processed} patterns, {len(all_tables_to_remove)} total tables to remove")
-        
+
+        logger.info(f"Bulk batch remove: {patterns_processed} patterns, {len(all_tables_to_remove)} tables to remove")
+
         if not all_tables_to_remove:
             return {
                 "status": "success",
@@ -810,116 +721,124 @@ async def batch_remove_tables_multi(items: List[Dict[str, Any]], auth: dict = De
                 "removed_count": 0,
                 "patterns_processed": patterns_processed
             }
-        
-        # Remove all at once using batch method (rebuilds index only ONCE!)
+
+        # Remove all at once — rebuilds FAISS index only ONCE
         result = await schema_service.embedder.batch_remove_tables(list(all_tables_to_remove))
-        
+
         return {
             "status": "success",
-            "message": f"Batch remove completed for {patterns_processed} patterns",
+            "message": f"Bulk batch remove completed for {patterns_processed} patterns",
             "patterns_processed": patterns_processed,
             "removed_count": result['removed_count'],
             "not_found": result.get('not_found', []),
             "index_size": schema_service.embedder.index.ntotal if schema_service.embedder.index else 0,
             "total_schemas": len(schema_service.embedder.schema_metadata)
         }
-            
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to batch remove tables (multi)")
+        logger.exception("Failed to bulk batch remove tables")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/table/batch-add")
-async def batch_add_tables(filter_info: Dict[str, Any], auth: dict = Depends(verify_service_auth)):
+@app.post("/table/bulk-batch-add")
+async def bulk_batch_add_tables(request_body: Dict[str, Any], auth: dict = Depends(verify_service_auth)):
     """
-    Add multiple tables to FAISS index with wildcard matching (for unhide operations).
-    
-    Optimized for schema/database-level unhiding:
-    - Fetches only the specified tables from Trino
-    - Adds them incrementally (no full rebuild)
-    - 10-100x faster than full refresh
-    
-    Request body:
-    - catalog: string (required)
-    - schema: string (optional - if null, adds all schemas in catalog)
-    - table: string (optional - if null, adds all tables in schema)
-    
-    Examples:
-    - Unhide table: {catalog: "db1", schema: "schema1", table: "table1"}
-    - Unhide schema: {catalog: "db1", schema: "schema1", table: null}
-    - Unhide database: {catalog: "db1", schema: null, table: null}
-    
+    Add multiple tables back to FAISS index for multiple filter patterns in ONE call.
+
+    Accepts {items: [{catalog, schema, table}, ...]} — fetches matching tables from
+    Trino across all patterns, enriches with descriptions, and adds them with a single
+    FAISS rebuild at the end.
+
+    Symmetric to /table/bulk-batch-remove — ensures all unhides (single or multi)
+    trigger exactly ONE Trino fetch + ONE FAISS rebuild regardless of item count.
+
     Security: Simple service key authentication (X-Service-Key header)
     """
     try:
-        catalog = filter_info.get('catalog')
-        schema_name = filter_info.get('schema')
-        table_name = filter_info.get('table')
-        
-        if not catalog:
-            raise HTTPException(status_code=400, detail="Missing required field: catalog")
-        
-        # Determine level
-        if table_name and schema_name:
-            level = "table"
-        elif schema_name:
-            level = "schema"
-        else:
-            level = "database"
-        
-        logger.info(f"Batch add: {level}-level unhide for catalog={catalog}, schema={schema_name}, table={table_name}")
-        
-        # Fetch tables from Trino
+        items = request_body.get("items", [])
+        if not items:
+            return {
+                "status": "success",
+                "message": "No items to add",
+                "added_count": 0,
+                "patterns_processed": 0
+            }
+
+        # Fetch all tables from Trino once
         all_schemas = await schema_service.trino_service.get_all_schemas()
-        
-        # Filter to only the tables we need to add
-        tables_to_add = []
-        for schema in all_schemas:
-            full_name = schema.get('full_name', '')
-            schema_catalog = schema.get('catalog', '')
-            schema_schema = schema.get('schema', '')
-            schema_table = schema.get('table', '')
-            
-            # Match based on level
-            if level == "table":
-                if schema_catalog == catalog and schema_schema == schema_name and schema_table == table_name:
-                    tables_to_add.append(schema)
-            elif level == "schema":
-                if schema_catalog == catalog and schema_schema == schema_name:
-                    tables_to_add.append(schema)
-            else:  # database level
-                if schema_catalog == catalog:
-                    tables_to_add.append(schema)
-        
-        logger.info(f"Found {len(tables_to_add)} tables to add from Trino")
-        
+
+        # Collect all tables matching any of the patterns (deduped by full_name)
+        tables_to_add_map: Dict[str, Any] = {}
+        patterns_processed = 0
+
+        for filter_info in items:
+            catalog = filter_info.get('catalog')
+            schema_name = filter_info.get('schema') or filter_info.get('schema_name')
+            table_name = filter_info.get('table') or filter_info.get('table_name')
+
+            if not catalog:
+                logger.warning(f"Skipping item without catalog: {filter_info}")
+                continue
+
+            if table_name and schema_name:
+                level = "table"
+            elif schema_name:
+                level = "schema"
+            else:
+                level = "database"
+
+            for schema in all_schemas:
+                s_catalog = schema.get('catalog', '')
+                s_schema = schema.get('schema', '')
+                s_table = schema.get('table', '')
+                full_name = schema.get('full_name', '')
+
+                if level == "table":
+                    match = s_catalog == catalog and s_schema == schema_name and s_table == table_name
+                elif level == "schema":
+                    match = s_catalog == catalog and s_schema == schema_name
+                else:
+                    match = s_catalog == catalog
+
+                if match and full_name not in tables_to_add_map:
+                    tables_to_add_map[full_name] = schema
+
+            patterns_processed += 1
+
+        tables_to_add = list(tables_to_add_map.values())
+        logger.info(f"Bulk batch add: {patterns_processed} patterns, {len(tables_to_add)} tables from Trino")
+
+        if not tables_to_add:
+            return {
+                "status": "success",
+                "message": "No matching tables found in Trino",
+                "added_count": 0,
+                "patterns_processed": patterns_processed
+            }
+
         # Enrich with descriptions from Nexus
         enriched_tables = await schema_service.enrich_with_descriptions(tables_to_add)
-        
-        # Add all incrementally
-        added_count = 0
-        for table in enriched_tables:
-            success = await schema_service.embedder.add_table(table)
-            if success:
-                added_count += 1
-        
+
+        # Batch add — encodes all new tables in ONE run_in_executor call,
+        # adds all vectors in one index.add(), updates both caches.
+        result = await schema_service.embedder.batch_add_tables(enriched_tables)
+
         return {
             "status": "success",
-            "message": f"Batch add completed for {level}",
-            "catalog": catalog,
-            "schema": schema_name,
-            "table": table_name,
-            "added_count": added_count,
+            "message": f"Bulk batch add completed for {patterns_processed} patterns",
+            "patterns_processed": patterns_processed,
+            "added_count": result["added_count"],
+            "updated_count": result.get("updated_count", 0),
             "index_size": schema_service.embedder.index.ntotal if schema_service.embedder.index else 0,
             "total_schemas": len(schema_service.embedder.schema_metadata)
         }
-            
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to batch add tables")
+        logger.exception("Failed to bulk batch add tables")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1040,6 +959,124 @@ async def reload_intent_examples(auth: dict = Depends(verify_service_auth)):
     except Exception as e:
         logger.exception("Intent examples reload failed")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Table Metadata API (for Preferred Tables Feature)
+# ============================================================================
+
+@app.post("/table/metadata", response_model=TableMetadataResponse)
+async def get_table_metadata(req: TableMetadataRequest, auth: dict = Depends(verify_service_auth)):
+    """
+    Get complete table metadata including all columns, types, and descriptions.
+    
+    Used by Nexus preferred tables feature to fetch full table information
+    when user marks a table as preferred.
+    
+    Security: Simple service key authentication (X-Service-Key header)
+    
+    Returns:
+        - All columns with names, types, and descriptions (from metadata_descriptions)
+        - Table-level description (from metadata_descriptions)
+        - Connector type (postgresql, mysql, mongodb, etc.)
+        - Full qualified name (catalog.schema.table)
+    """
+    try:
+        full_name = f"{req.catalog}.{req.schema}.{req.table}"
+        logger.info(f"Fetching metadata for preferred table: {full_name}")
+        
+        # Find table in raw schema cache (includes ALL tables, even excluded)
+        # NOTE: raw_schema_cache stores the catalog under the key "database" (not "catalog")
+        table_schema = None
+        for schema in schema_service.embedder.raw_schema_cache:
+            if (schema.get('database') == req.catalog and 
+                schema.get('schema') == req.schema and 
+                schema.get('table') == req.table):
+                table_schema = schema
+                break
+        
+        if not table_schema:
+            # Table not found in cache - might be newly created or cache needs refresh
+            logger.warning(f"Table {full_name} not found in cache, fetching from Trino...")
+            
+            # Fetch from Trino directly
+            all_schemas = await schema_service.trino_service.get_all_schemas()
+            for schema in all_schemas:
+                if (schema.get('catalog') == req.catalog and 
+                    schema.get('schema') == req.schema and 
+                    schema.get('table') == req.table):
+                    table_schema = schema
+                    break
+            
+            if not table_schema:
+                return TableMetadataResponse(
+                    success=False,
+                    catalog=req.catalog,
+                    schema=req.schema,
+                    table=req.table,
+                    full_name=full_name,
+                    error=f"Table {full_name} not found in Trino"
+                )
+        
+        # Enrich with descriptions from Nexus
+        enriched = await schema_service.enrich_with_descriptions([table_schema])
+        if enriched:
+            table_schema = enriched[0]
+        
+        # Build column metadata list
+        columns_metadata = []
+        columns = table_schema.get('columns', [])
+        column_descriptions = table_schema.get('column_descriptions', {})
+        
+        for col in columns:
+            # Handle both string format "name|type" and dict format
+            if isinstance(col, str) and '|' in col:
+                col_name, col_type = col.split('|', 1)
+            elif isinstance(col, dict):
+                col_name = col.get('name', '')
+                col_type = col.get('type', 'unknown')
+            else:
+                continue
+            
+            col_description = column_descriptions.get(col_name)
+            
+            columns_metadata.append(ColumnMetadata(
+                name=col_name,
+                type=col_type,
+                description=col_description
+            ))
+        
+        # Get table-level description
+        table_description = table_schema.get('description')
+        
+        # Get connector type
+        connector_type = table_schema.get('connector_type', 'unknown')
+        
+        logger.info(f"Successfully fetched metadata for {full_name}: {len(columns_metadata)} columns")
+        
+        return TableMetadataResponse(
+            success=True,
+            catalog=req.catalog,
+            schema=req.schema,
+            table=req.table,
+            full_name=full_name,
+            connector_type=connector_type,
+            columns=columns_metadata,
+            table_description=table_description
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Failed to fetch table metadata for {req.catalog}.{req.schema}.{req.table}")
+        return TableMetadataResponse(
+            success=False,
+            catalog=req.catalog,
+            schema=req.schema,
+            table=req.table,
+            full_name=f"{req.catalog}.{req.schema}.{req.table}",
+            error=str(e)
+        )
 
 
 # ============================================================================

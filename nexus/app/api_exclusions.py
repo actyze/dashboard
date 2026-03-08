@@ -1,6 +1,6 @@
 """API endpoints for managing schema exclusions (hiding databases/schemas/tables)."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,6 +51,7 @@ class BulkExclusionResponse(BaseModel):
     created_exclusions: List[ExclusionResponse]
 
 
+
 @router.get("", response_model=List[ExclusionResponse])
 async def get_exclusions(
     db: AsyncSession = Depends(get_db),
@@ -66,41 +67,6 @@ async def get_exclusions(
         return exclusions
     except Exception as e:
         logger.error("Failed to get exclusions", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("", response_model=ExclusionResponse)
-async def add_exclusion(
-    exclusion: ExclusionCreate,
-    db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(get_current_user_id),
-    current_user: dict = Depends(require_admin)
-):
-    """
-    Add a new schema exclusion (admin only).
-    
-    This will hide the specified database/schema/table from AI recommendations
-    for all users. The resource will be removed from the schema service FAISS index.
-    
-    Hierarchy rules:
-    - Database level: catalog only (schema_name and table_name are null)
-    - Schema level: catalog + schema_name (table_name is null)
-    - Table level: catalog + schema_name + table_name
-    """
-    try:
-        result = await ExclusionService.add_exclusion(
-            db=db,
-            catalog=exclusion.catalog,
-            schema_name=exclusion.schema_name,
-            table_name=exclusion.table_name,
-            user_id=uuid.UUID(user_id),
-            reason=exclusion.reason
-        )
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error("Failed to add exclusion", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -139,25 +105,28 @@ async def bulk_add_exclusions(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/{exclusion_id}")
-async def remove_exclusion(
-    exclusion_id: int,
+@router.delete("/bulk")
+async def bulk_remove_exclusions(
+    ids: List[int] = Query(..., description="Exclusion IDs to remove (repeatable: ?ids=1&ids=2)"),
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(require_admin)
 ):
     """
-    Remove a schema exclusion (admin only).
-    
-    This will re-enable the resource and it will be added back to the
-    schema service FAISS index after the next refresh.
+    Bulk remove schema exclusions / unhide multiple resources (admin only).
+
+    Pass IDs as repeatable query params: DELETE /bulk?ids=1&ids=2&ids=3
+
+    Re-enables multiple resources at once. They will be added back to the
+    schema service FAISS index in a single operation (one rebuild).
     """
     try:
-        result = await ExclusionService.remove_exclusion(db, exclusion_id)
+        result = await ExclusionService.bulk_remove_exclusions(
+            db=db,
+            exclusion_ids=ids
+        )
         return result
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.error("Failed to remove exclusion", error=str(e), exclusion_id=exclusion_id)
+        logger.error("Failed to bulk remove exclusions", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 

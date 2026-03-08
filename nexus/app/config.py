@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     
     # FAISS Schema Service Configuration
     schema_service_url: str = "http://dashboard-schema-service:8001"
+    schema_service_key: str = ""  # Service-to-service authentication key
     schema_service_timeout: int = 30
     schema_service_retries: int = 3
     schema_service_retry_delay: float = 1.0
@@ -122,6 +123,9 @@ class Settings(BaseSettings):
     max_query_length: int = 10000
     max_result_rows: int = 1000
     conversation_history_size: int = 5
+    
+    # Preferred Tables Configuration (User-specific table prioritization)
+    max_preferred_tables: int = 25  # Maximum number of tables a user can mark as preferred (editable default)
     
     # =============================================================================
     # Retry and Resilience Configuration

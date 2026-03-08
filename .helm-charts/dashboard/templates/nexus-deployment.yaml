@@ -213,6 +213,9 @@ spec:
           value: "{{ .Values.nexus.env.cache.queryMaxSize | default "100" }}"
         - name: CACHE_QUERY_TTL
           value: "{{ .Values.nexus.env.cache.queryTtl | default "1800" }}"
+        # Preferred Tables Configuration
+        - name: MAX_PREFERRED_TABLES
+          value: "{{ .Values.nexus.env.maxPreferredTables | default "50" }}"
         # Account Provisioning API Key (for external services like marketing dashboard)
         - name: REGISTRATION_API_TOKEN
           valueFrom:

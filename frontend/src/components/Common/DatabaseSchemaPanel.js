@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Text, Button } from '../ui';
 import TableSchema from './TableSchema';
@@ -10,8 +10,13 @@ const DatabaseSchemaPanel = ({
   isCollapsed, 
   onToggle,
   onTableSelect,
-  selectedTable 
+  selectedTable,
+  preferredTables = [] // Array of {database_name, schema_name, table_name}
 }) => {
+  // Build a Set of "db.schema.table" keys for O(1) lookup
+  const preferredSet = new Set(
+    preferredTables.map(p => `${p.database_name}.${p.schema_name}.${p.table_name}`)
+  );
   const { isDark } = useTheme();
   const [expandedDatabases, setExpandedDatabases] = useState(new Set());
   const [expandedSchemas, setExpandedSchemas] = useState(new Set());
@@ -19,6 +24,41 @@ const DatabaseSchemaPanel = ({
   const [objectsCache, setObjectsCache] = useState({}); // Cache objects per schema
   const [tableDetailsCache, setTableDetailsCache] = useState({}); // Cache table details
   const [selectedTableInfo, setSelectedTableInfo] = useState(null); // Track full table info (db, schema, table)
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState(null);
+  const debounceTimer = useRef(null);
+
+  const handleSearchChange = useCallback((e) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    setSearchError(null);
+
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+
+    if (!value.trim()) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    debounceTimer.current = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const response = await RestService.searchDatabaseObjects(value.trim());
+        setSearchResults(response?.results || []);
+      } catch (err) {
+        console.error('Search failed:', err);
+        setSearchError('Search failed');
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+  }, []);
 
   // Fetch all databases
   const { 
@@ -169,9 +209,21 @@ const DatabaseSchemaPanel = ({
             </div>
             <input
               type="text"
-              className={`block w-full pl-8 pr-2 py-1.5 text-xs rounded border-0 ${isDark ? 'bg-[#1c1d1f] text-white placeholder-gray-400' : 'bg-white/60 text-gray-900 placeholder-gray-500'} focus:ring-1 focus:ring-blue-500 focus:outline-none`}
-              placeholder="Search objects"
+              value={searchQuery}
+              onChange={handleSearchChange}
+              className={`block w-full pl-8 pr-6 py-1.5 text-xs rounded border-0 ${isDark ? 'bg-[#1c1d1f] text-white placeholder-gray-400' : 'bg-white/60 text-gray-900 placeholder-gray-500'} focus:ring-1 focus:ring-blue-500 focus:outline-none`}
+              placeholder="Search tables, columns..."
             />
+            {searchQuery && (
+              <button
+                onClick={() => { setSearchQuery(''); setSearchResults([]); setSearchError(null); }}
+                className={`absolute inset-y-0 right-0 pr-2 flex items-center ${isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
 
@@ -179,6 +231,67 @@ const DatabaseSchemaPanel = ({
         <div className="flex-1 flex flex-col min-h-0">
           {/* Table List - Scrollable */}
           <div className={`${selectedTable ? 'flex-1 min-h-0' : 'flex-1'} overflow-y-auto p-2`}>
+
+            {/* ── SEARCH RESULTS VIEW ── */}
+            {searchQuery.trim() ? (
+              <>
+                {isSearching && (
+                  <div className={`text-center py-4 text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Searching...
+                  </div>
+                )}
+                {searchError && (
+                  <div className={`text-center py-4 text-xs ${isDark ? 'text-red-400' : 'text-red-500'}`}>
+                    {searchError}
+                  </div>
+                )}
+                {!isSearching && !searchError && searchResults.length === 0 && (
+                  <div className={`text-center py-4 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                    No results for &quot;{searchQuery}&quot;
+                  </div>
+                )}
+                {!isSearching && searchResults.length > 0 && (
+                  <>
+                    <div className={`mb-2 px-1 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                      {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
+                    </div>
+                    {searchResults.map((result) => {
+                      const isPreferred = preferredSet.has(`${result.database}.${result.schema}.${result.table}`);
+                      return (
+                        <button
+                          key={result.full_name}
+                          onClick={() => handleTableClick(result.database, result.schema, result.table)}
+                          className={`w-full flex flex-col p-2 text-left rounded transition-colors mb-1
+                            ${selectedTable === result.table
+                              ? (isDark ? 'bg-[#5d6ad3] text-white' : 'bg-[#5d6ad3] text-white')
+                              : (isDark ? 'hover:bg-[#1c1d1f] text-gray-300' : 'hover:bg-gray-100/60 text-gray-700')
+                            }
+                          `}
+                        >
+                          <div className="flex items-center space-x-1.5 w-full">
+                            <TableIcon />
+                            <span className="text-xs font-medium flex-1 truncate">{result.table}</span>
+                            {isPreferred && (
+                              <span className="text-yellow-400 text-xs flex-shrink-0" title="Preferred table">★</span>
+                            )}
+                          </div>
+                          <div className={`text-xs mt-0.5 pl-5 truncate ${selectedTable === result.table ? 'text-white/70' : (isDark ? 'text-gray-500' : 'text-gray-400')}`}>
+                            {result.database}.{result.schema}
+                          </div>
+                          {result.match_type === 'column' && result.matching_columns.length > 0 && (
+                            <div className={`text-xs mt-0.5 pl-5 truncate ${selectedTable === result.table ? 'text-white/70' : (isDark ? 'text-gray-500' : 'text-gray-400')}`}>
+                              Columns: {result.matching_columns.slice(0, 3).join(', ')}{result.matching_columns.length > 3 ? '…' : ''}
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+            {/* ── NORMAL TREE VIEW ── */}
             {/* Loading State */}
             {isDatabasesLoading && (
               <div className={`text-center py-4 text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
@@ -245,7 +358,9 @@ const DatabaseSchemaPanel = ({
                                         <div className={`mb-1.5 px-1 py-0.5 rounded text-xs ${isDark ? 'bg-[#1c1d1f] text-gray-400' : 'bg-gray-100/40 text-gray-600'} font-medium uppercase tracking-wide`}>
                                           Tables
                                         </div>
-                                        {objectsCache[schemaKey].tables.filter(table => !table.is_excluded).map((table) => (
+                                        {objectsCache[schemaKey].tables.filter(table => !table.is_excluded).map((table) => {
+                                          const isPreferred = preferredSet.has(`${database.name}.${schema.name}.${table.name}`);
+                                          return (
                                           <button
                                             key={table.name}
                                             onClick={() => handleTableClick(database.name, schema.name, table.name)}
@@ -255,11 +370,16 @@ const DatabaseSchemaPanel = ({
                                                 : (isDark ? 'hover:bg-[#1c1d1f] text-gray-300' : 'hover:bg-gray-100/60 text-gray-700')
                                               }
                                             `}
+                                            title={isPreferred ? 'Preferred table - AI will prioritize this' : table.name}
                                           >
                                             <TableIcon />
-                                            <Text className="text-xs">{table.name}</Text>
+                                            <Text className="text-xs flex-1">{table.name}</Text>
+                                            {isPreferred && (
+                                              <span className="text-yellow-400 text-xs ml-1 flex-shrink-0" title="Preferred table">★</span>
+                                            )}
                                           </button>
-                                        ))}
+                                          );
+                                        })}
                                       </>
                                     )}
                                     
@@ -306,6 +426,8 @@ const DatabaseSchemaPanel = ({
                 )}
               </div>
             ))}
+            </>
+            )}
           </div>
 
           {/* Table Schema at Bottom - Fixed Height when visible */}

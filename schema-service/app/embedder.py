@@ -222,73 +222,87 @@ class FAISSSchemaEmbedder:
 
         return results, embed_time, search_time
 
-    async def add_table(self, table_metadata: Dict[str, Any]) -> bool:
+    async def batch_add_tables(self, tables: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Add a table to FAISS index (for unhide operation).
-        
+        Add multiple tables to FAISS index in a single operation (for unhide).
+
+        Efficient strategy:
+        - Encodes ALL new tables in ONE batch run_in_executor call (not N separate calls)
+        - Appends all new vectors to the index in one index.add() call
+        - No full rebuild needed — IndexFlatIP supports incremental additions
+        - Updates already updates existing tables via update_table
+
         Two-cache logic:
-        1. schema_metadata (FAISS): ADD the table for LLM recommendations
-        2. raw_schema_cache (UI): UPDATE is_excluded=False (table should already exist)
-        
-        Args:
-            table_metadata: Dict with keys: catalog, schema, table, full_name, columns, type
-        
+        1. schema_metadata (FAISS): ADD new tables, delegate duplicates to update_table
+        2. raw_schema_cache (UI): UPDATE is_excluded=False for each table
+
         Returns:
-            bool: True if successful
+            dict with added_count, updated_count, skipped_count
         """
         if self.index is None:
-            logger.error("Cannot add table: FAISS index not initialized")
-            return False
-        
+            logger.error("Cannot add tables: FAISS index not initialized")
+            return {"added_count": 0, "updated_count": 0, "skipped_count": 0}
+
+        if not tables:
+            return {"added_count": 0, "updated_count": 0, "skipped_count": 0}
+
         try:
-            full_name = table_metadata.get('full_name', 'unknown')
-            
-            # Check if table already exists in FAISS index (schema_metadata)
-            existing_idx = -1
-            for idx, meta in enumerate(self.schema_metadata):
-                if meta.get('full_name') == full_name:
-                    existing_idx = idx
-                    break
-            
-            if existing_idx != -1:
-                logger.info(f"Table already exists in FAISS index at position {existing_idx}: {full_name}. Updating instead.")
-                return await self.update_table(table_metadata)
-            
-            logger.info(f"Adding table to FAISS index (unhide): {full_name}")
-            
-            # Step 1: Add to FAISS index and schema_metadata
-            text = self._schema_to_text(table_metadata)
+            existing_full_names = {m.get('full_name') for m in self.schema_metadata}
+
+            new_tables = []       # tables not yet in FAISS
+            update_tables = []    # tables already in FAISS (need update_table)
+
+            for t in tables:
+                fn = t.get('full_name', 'unknown')
+                if fn in existing_full_names:
+                    update_tables.append(t)
+                else:
+                    new_tables.append(t)
+
+            # Handle updates (each needs one encode but those are already in-index)
+            updated_count = 0
+            for t in update_tables:
+                if await self.update_table(t):
+                    updated_count += 1
+
+            if not new_tables:
+                logger.info(f"batch_add_tables: 0 new, {updated_count} updated")
+                return {"added_count": 0, "updated_count": updated_count, "skipped_count": 0}
+
+            logger.info(f"batch_add_tables: encoding {len(new_tables)} new tables in one batch")
+
+            # Batch encode all new tables in ONE executor call
+            texts = [self._schema_to_text(t) for t in new_tables]
             loop = asyncio.get_event_loop()
-            embedding = await loop.run_in_executor(None, self.model.encode, [text])
-            embedding = np.asarray(embedding, dtype=np.float32)
-            faiss.normalize_L2(embedding)
-            self.index.add(embedding)
-            self.schema_metadata.append(table_metadata)
-            
-            # Step 2: Update is_excluded=False in raw_schema_cache (don't add new entry)
-            raw_cache_idx = -1
-            for idx, cache_entry in enumerate(self.raw_schema_cache):
-                if cache_entry.get('full_name') == full_name:
-                    raw_cache_idx = idx
-                    break
-            
-            if raw_cache_idx != -1:
-                # Table exists in raw cache - just update the is_excluded flag
-                self.raw_schema_cache[raw_cache_idx]['is_excluded'] = False
-                logger.info(f"Updated is_excluded=False in raw_schema_cache at index {raw_cache_idx}")
-            else:
-                # Table doesn't exist in raw cache (shouldn't happen, but handle it)
-                logger.warning(f"Table {full_name} not found in raw_schema_cache. Adding new entry.")
-                raw_cache_entry = self._build_raw_schema_cache([table_metadata])
-                if raw_cache_entry:
-                    self.raw_schema_cache.append(raw_cache_entry[0])
-            
-            logger.info(f"Successfully added table to FAISS. Index size: {self.index.ntotal}")
-            return True
-            
+            embeddings = await loop.run_in_executor(None, self.model.encode, texts)
+            embeddings = np.asarray(embeddings, dtype=np.float32)
+            faiss.normalize_L2(embeddings)
+
+            # Add all new vectors in one call (IndexFlatIP supports incremental add)
+            self.index.add(embeddings)
+            self.schema_metadata.extend(new_tables)
+
+            # Update raw_schema_cache for all tables (new + updated)
+            raw_full_name_map = {e.get('full_name'): i for i, e in enumerate(self.raw_schema_cache)}
+
+            for t in new_tables:
+                fn = t.get('full_name', 'unknown')
+                if fn in raw_full_name_map:
+                    self.raw_schema_cache[raw_full_name_map[fn]]['is_excluded'] = False
+                    logger.info(f"Updated is_excluded=False in raw_schema_cache: {fn}")
+                else:
+                    logger.warning(f"Table {fn} not found in raw_schema_cache — adding new entry")
+                    raw_entry = self._build_raw_schema_cache([t])
+                    if raw_entry:
+                        self.raw_schema_cache.append(raw_entry[0])
+
+            self.last_updated = datetime.now()
+            logger.info(f"batch_add_tables complete: {len(new_tables)} added, {updated_count} updated. Index size: {self.index.ntotal}")
+            return {"added_count": len(new_tables), "updated_count": updated_count, "skipped_count": 0}
+
         except Exception as e:
-            logger.error(f"Failed to add table: {e}")
-            return False
+            logger.error(f"Failed to batch add tables: {e}")
+            return {"added_count": 0, "updated_count": 0, "skipped_count": 0}
 
     async def update_table(self, table_metadata: Dict[str, Any]) -> bool:
         """
@@ -346,14 +360,14 @@ class FAISSSchemaEmbedder:
             
             # Update metadata in-place
             self.schema_metadata[found_idx] = table_metadata
-            
+
             # Update raw cache (find the correct index independently)
             raw_cache_idx = -1
             for idx, cache_entry in enumerate(self.raw_schema_cache):
                 if cache_entry.get('full_name') == full_name:
                     raw_cache_idx = idx
                     break
-            
+
             if raw_cache_idx != -1:
                 raw_cache_entry = self._build_raw_schema_cache([table_metadata])
                 if raw_cache_entry:
@@ -361,117 +375,37 @@ class FAISSSchemaEmbedder:
                     logger.info(f"Updated raw_schema_cache at index {raw_cache_idx}")
             else:
                 logger.warning(f"Table {full_name} not found in raw_schema_cache")
-            
-            # Re-encode with new description
+
+            # Re-encode ONLY the changed table (not all N tables).
+            # Retrieve the N existing vectors directly from FAISS (no model.encode),
+            # replace the slot at found_idx, rebuild in one shot.
             text = self._schema_to_text(table_metadata)
-            
             loop = asyncio.get_event_loop()
-            embedding = await loop.run_in_executor(None, self.model.encode, [text])
-            
-            embedding = np.asarray(embedding, dtype=np.float32)
-            faiss.normalize_L2(embedding)
-            
-            # Reconstruct the index with updated vector at the same position
-            # FAISS IndexFlatIP doesn't support in-place updates, so we need to rebuild
-            # but this is still faster than remove+add because we don't delete first
-            all_texts = [self._schema_to_text(s) for s in self.schema_metadata]
-            all_embeddings = await loop.run_in_executor(None, self.model.encode, all_texts)
-            
-            all_embeddings = np.asarray(all_embeddings, dtype=np.float32)
-            faiss.normalize_L2(all_embeddings)
-            
-            # Replace the index
+            new_embedding = await loop.run_in_executor(None, self.model.encode, [text])
+            new_embedding = np.asarray(new_embedding, dtype=np.float32)
+            faiss.normalize_L2(new_embedding)
+
+            # Extract all current vectors from FAISS without re-encoding
+            all_vectors = self.index.reconstruct_n(0, self.index.ntotal)  # shape (N, dim)
+            all_vectors[found_idx] = new_embedding[0]
+
             new_index = faiss.IndexFlatIP(self.dimension)
-            new_index.add(all_embeddings)
+            new_index.add(all_vectors)
             self.index = new_index
-            
-            logger.info(f"Successfully updated table. Index size: {self.index.ntotal}")
+            self.last_updated = datetime.now()
+
+            logger.info(f"Successfully updated table (1 encode, no full re-encode). Index size: {self.index.ntotal}")
             return True
             
         except Exception as e:
             logger.error(f"Failed to update table: {e}")
             return False
 
-    async def remove_table(self, full_table_name: str) -> bool:
-        """
-        Remove a table from FAISS index (for hide operation).
-        
-        Two-cache logic:
-        1. schema_metadata (FAISS): REMOVE the table from LLM recommendations
-        2. raw_schema_cache (UI): UPDATE is_excluded=True (keep table in list for admins)
-        
-        Note: FAISS IndexFlatIP requires full rebuild when removing vectors.
-        
-        Args:
-            full_table_name: Full table name (catalog.schema.table)
-        
-        Returns:
-            bool: True if table was found and removed
-        """
-        if self.index is None:
-            logger.error("Cannot remove table: FAISS index not initialized")
-            return False
-        
-        try:
-            logger.info(f"Removing table from FAISS index (hide): {full_table_name}")
-            
-            # Step 1: Remove from schema_metadata (FAISS)
-            found_idx = -1
-            for idx, meta in enumerate(self.schema_metadata):
-                if meta.get('full_name') == full_table_name:
-                    found_idx = idx
-                    break
-            
-            if found_idx == -1:
-                logger.warning(f"Table not found in FAISS index: {full_table_name}")
-                return False
-            
-            self.schema_metadata.pop(found_idx)
-            
-            # Step 2: Update is_excluded=True in raw_schema_cache (don't delete)
-            raw_cache_idx = -1
-            for idx, cache_entry in enumerate(self.raw_schema_cache):
-                if cache_entry.get('full_name') == full_table_name:
-                    raw_cache_idx = idx
-                    break
-            
-            if raw_cache_idx != -1:
-                # Table exists in raw cache - just update the is_excluded flag
-                self.raw_schema_cache[raw_cache_idx]['is_excluded'] = True
-                logger.info(f"Updated is_excluded=True in raw_schema_cache at index {raw_cache_idx}")
-            else:
-                logger.warning(f"Table {full_table_name} not found in raw_schema_cache (shouldn't happen)")
-            
-            # Step 3: Rebuild FAISS index with remaining tables
-            logger.info(f"Rebuilding FAISS index with {len(self.schema_metadata)} remaining tables")
-            
-            if len(self.schema_metadata) == 0:
-                logger.warning("No tables left in index after removal")
-                self.index = faiss.IndexFlatIP(self.dimension)
-                return True
-            
-            texts = [self._schema_to_text(s) for s in self.schema_metadata]
-            loop = asyncio.get_event_loop()
-            embeddings = await loop.run_in_executor(None, self.model.encode, texts)
-            embeddings = np.asarray(embeddings, dtype=np.float32)
-            faiss.normalize_L2(embeddings)
-            
-            new_index = faiss.IndexFlatIP(self.dimension)
-            new_index.add(embeddings)
-            self.index = new_index
-            
-            logger.info(f"Successfully removed table from FAISS. Index size: {self.index.ntotal}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to remove table: {e}")
-            return False
-
     async def batch_remove_tables(self, full_table_names: List[str]) -> Dict[str, Any]:
         """
         Remove multiple tables from the FAISS index in a single operation.
         
-        This is MUCH more efficient than calling remove_table() N times:
+        This is MUCH more efficient than N individual calls:
         - Removes all tables from metadata at once
         - Rebuilds FAISS index ONCE (not N times)
         - 10-100x faster for large batches
@@ -521,38 +455,40 @@ class FAISSSchemaEmbedder:
                     'not_found': not_found,
                     'index_size': self.index.ntotal
                 }
-            
-            # Update metadata (raw_schema_cache already updated in-place)
+
+            # Determine which positions in the OLD index should be kept
+            # (before we overwrite self.schema_metadata)
+            old_metadata = self.schema_metadata  # still the old list at this point
+            kept_positions = [
+                i for i, m in enumerate(old_metadata)
+                if m.get('full_name') not in tables_to_remove
+            ]
+
+            # Update metadata (raw_schema_cache already updated in-place above)
             self.schema_metadata = new_schema_metadata
             logger.info(f"Removed {removed_count} tables from FAISS, updated is_excluded=True in raw_schema_cache")
-            
-            # Rebuild index ONCE with remaining tables
-            logger.info(f"Rebuilding index with {len(self.schema_metadata)} remaining tables")
-            
+
+            # Rebuild index ONCE — extract existing vectors from FAISS, no re-encoding
+            logger.info(f"Rebuilding index with {len(self.schema_metadata)} remaining tables (no re-encode)")
+
             if len(self.schema_metadata) == 0:
-                # All tables removed - create empty index
                 self.index = faiss.IndexFlatIP(self.dimension)
-                logger.info("All tables removed - index is now empty")
+                logger.info("All tables removed — index is now empty")
             else:
-                texts = [self._schema_to_text(s) for s in self.schema_metadata]
-                
-                loop = asyncio.get_event_loop()
-                embeddings = await loop.run_in_executor(None, self.model.encode, texts)
-                
-                embeddings = np.asarray(embeddings, dtype=np.float32)
-                faiss.normalize_L2(embeddings)
-                
-                # Create new index
+                # Retrieve stored vectors directly from FAISS (O(N) copy, no GPU/model needed)
+                all_vectors = self.index.reconstruct_n(0, len(old_metadata))  # shape (old_N, dim)
+                kept_vectors = all_vectors[kept_positions]                    # shape (new_N, dim)
+
                 new_index = faiss.IndexFlatIP(self.dimension)
-                new_index.add(embeddings)
-                
+                new_index.add(kept_vectors)
+
                 # Atomic swap
                 self.index = new_index
-            
+
             # Update last_updated for health endpoint
             self.last_updated = datetime.now()
-            
-            logger.info(f"Successfully removed {removed_count} tables. Index size: {self.index.ntotal}")
+
+            logger.info(f"Successfully removed {removed_count} tables (zero re-encodes). Index size: {self.index.ntotal}")
             return {
                 'removed_count': removed_count,
                 'not_found': not_found,

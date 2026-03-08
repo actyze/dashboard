@@ -81,7 +81,9 @@ class DashboardAgentServiceClass {
   async createTileFromNL(nlQuery, dashboardId = null, existingTilesCount = 0) {
     try {
       // Generate SQL from natural language
-      const sqlResponse = await RestService.generateSql(nlQuery, this.conversationHistory);
+      // Transform conversation history to strings (API expects string array)
+      const historyStrings = this.conversationHistory.map(m => m.content);
+      const sqlResponse = await RestService.generateSql(nlQuery, [nlQuery, ...historyStrings]);
       
       if (!sqlResponse.success || !sqlResponse.generated_sql) {
         return {
@@ -180,7 +182,11 @@ class DashboardAgentServiceClass {
         // Execution happens when user clicks "Query" or "Dashboard" button
         try {
           console.log('DashboardAgentService: Generating SQL for:', message);
-          const sqlResponse = await RestService.generateSql(message, this.conversationHistory);
+          
+          // Transform conversation history to strings (API expects string array, not objects)
+          const historyStrings = this.conversationHistory.map(m => m.content);
+          
+          const sqlResponse = await RestService.generateSql(message, [message, ...historyStrings]);
           console.log('DashboardAgentService: SQL response:', sqlResponse);
           
           if (!sqlResponse || !sqlResponse.success || !sqlResponse.generated_sql) {

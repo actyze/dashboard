@@ -101,7 +101,7 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null, recentQueries
     
     setQueryPreviewLoading(true);
     try {
-      const response = await RestService.executeSql(sql, 10, 30);
+      const response = await RestService.executeSql(sql, 10, parseInt(process.env.REACT_APP_EXECUTE_TIMEOUT_SECONDS) || 900);
       
       if (response.success) {
         const queryData = transformQueryResults(response.query_results);
@@ -134,7 +134,7 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null, recentQueries
 
     try {
       // Execute with limit to just get columns
-      const response = await RestService.executeSql(sqlQuery, 10, 30);
+      const response = await RestService.executeSql(sqlQuery, 10, parseInt(process.env.REACT_APP_EXECUTE_TIMEOUT_SECONDS) || 900);
       
       if (!response.success) {
         throw new Error(response.error || 'Query execution failed');

@@ -29,7 +29,9 @@ const QueryPage = () => {
   const [activeView, setActiveView] = useState('results');
   const [sqlQuery, setSqlQuery] = useState(queryFromState?.generated_sql || "");
   const [queryError, setQueryError] = useState(null);
-  const [queryResults, setQueryResults] = useState(null);
+  // Initialize with results from navigation state if passed from AI assistant
+  const resultsFromState = location.state?.queryResults;
+  const [queryResults, setQueryResults] = useState(resultsFromState || null);
   const [chartData, setChartData] = useState(null);
   
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -72,7 +74,7 @@ const QueryPage = () => {
   
   const sessionIdRef = useRef(`session-${id || 'new'}-${Date.now()}`);
 
-  // Reset context and clear unsaved flag when query ID changes
+  // Reset context and clear unsaved flag when query ID or state changes
   useEffect(() => {
     setQueryContext({});
     setHasUnsavedChanges(false);
@@ -453,6 +455,20 @@ const QueryPage = () => {
       setQueryError(error.message || 'Failed to execute SQL query');
     }
   });
+
+  // Handle auto-execution when coming from Actyze AI assistant
+  const autoExecuteTriggeredRef = useRef(false);
+  
+  useEffect(() => {
+    if (location.state?.fromAssistant && location.state?.autoExecute && sqlQuery && !autoExecuteTriggeredRef.current) {
+      console.log('Auto-executing query from Actyze AI assistant');
+      autoExecuteTriggeredRef.current = true;
+      // Small delay to ensure component is mounted
+      setTimeout(() => {
+        executeSql({ sql: sqlQuery });
+      }, 100);
+    }
+  }, [location.state, sqlQuery, executeSql]);
 
   const handleAIQuery = (naturalLanguageQuery) => {
     // Prevent duplicate calls (React StrictMode protection)

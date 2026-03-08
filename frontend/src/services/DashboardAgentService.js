@@ -3,9 +3,7 @@
  * Handles multi-step dashboard creation from voice/text commands
  */
 
-import DashboardService from './DashboardService';
 import RestService from './RestService';
-import { transformQueryResults } from '../utils/dataTransformers';
 
 // Chart type recommendations based on data patterns
 const CHART_TYPE_RULES = {
@@ -178,9 +176,9 @@ class DashboardAgentServiceClass {
         
       case 'query':
       default:
-        // For queries, generate SQL, execute it, and show results with option to open in Query page
+        // For queries, generate SQL only - don't execute yet
+        // Execution happens when user clicks "Query" or "Dashboard" button
         try {
-          // Step 1: Generate SQL
           console.log('DashboardAgentService: Generating SQL for:', message);
           const sqlResponse = await RestService.generateSql(message, this.conversationHistory);
           console.log('DashboardAgentService: SQL response:', sqlResponse);
@@ -198,94 +196,24 @@ class DashboardAgentServiceClass {
           const reasoning = sqlResponse.model_reasoning;
           const chartRecommendation = sqlResponse.chart_recommendation;
 
-          // Step 2: Execute the SQL query
-          let queryResults = null;
-          let chartData = null;
-          let executionError = null;
-          
-          try {
-            console.log('DashboardAgentService: Executing SQL:', sql);
-            const executeResponse = await RestService.executeSql(sql, 50, 30, message, this.conversationHistory);
-            console.log('DashboardAgentService: Execute response:', executeResponse);
-            
-            if (executeResponse && executeResponse.success && executeResponse.query_results) {
-              // Transform results to match QueryResults component format
-              // { data: [...], columns: [...], rowCount: number }
-              try {
-                queryResults = transformQueryResults(executeResponse.query_results);
-                console.log('DashboardAgentService: Transformed results:', queryResults);
-              } catch (transformError) {
-                console.error('DashboardAgentService: Transform error:', transformError);
-                executionError = 'Failed to process query results';
-              }
-              
-              // Build chartData in the same format as useExecuteSql/useProcessNaturalLanguage
-              if (queryResults) {
-                if (chartRecommendation && chartRecommendation.x_column && chartRecommendation.y_column) {
-                  // Use LLM chart recommendation
-                  chartData = {
-                    chart: {
-                      type: chartRecommendation.chart_type || 'bar',
-                      config: {
-                        xField: chartRecommendation.x_column,
-                        yField: chartRecommendation.y_column,
-                        series: chartRecommendation.series_column
-                      },
-                      fallback: false,
-                      source: 'llm'
-                    },
-                    data: queryResults,
-                    cached: false
-                  };
-                } else {
-                  // Manual mode - user selects chart axes
-                  chartData = {
-                    chart: {
-                      type: 'bar',
-                      config: {},
-                      fallback: true,
-                      source: 'manual-required'
-                    },
-                    data: queryResults,
-                    cached: false
-                  };
-                }
-              }
-            } else {
-              executionError = executeResponse.error || 'Query execution failed';
-            }
-          } catch (execError) {
-            console.error('Query execution error:', execError);
-            executionError = execError.message || 'Failed to execute query';
-          }
-
           // Update conversation history
           this.conversationHistory.push({ role: 'user', content: message });
           this.conversationHistory.push({ 
             role: 'assistant', 
-            content: reasoning || 'Query executed' 
+            content: reasoning || 'Query generated' 
           });
 
-          // Build response
-          let response = reasoning || 'Here are your results:';
-          if (queryResults) {
-            const rowCount = queryResults.rowCount || queryResults.data?.length || 0;
-            response = `${reasoning || 'Query executed successfully.'} Found ${rowCount} result${rowCount !== 1 ? 's' : ''}.`;
-          } else if (executionError) {
-            response = `${reasoning || 'Query generated.'} However, execution failed: ${executionError}`;
-          }
+          // Build response - show the SQL was generated (not executed)
+          const response = reasoning || 'I generated a query for you. Click "Query" to view results or "Dashboard" to create a tile.';
 
           return {
             success: true,
             sql,
             reasoning,
             chartRecommendation,
-            queryResults,
-            chartData,
-            executionError,
             nlQuery: message,
             response,
-            // Show button to open in Query page
+            // Show buttons to open in Query page or add to Dashboard
             canOpenInQueryPage: true,
           };
         } catch (error) {

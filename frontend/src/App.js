@@ -10,6 +10,8 @@ import { DataIntelligence } from './components/DataIntelligence';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { PaywallProvider } from './contexts/PaywallContext';
+import { AIAgentProvider } from './contexts/AIAgentContext';
+import { FloatingAssistant } from './components/VoiceAI';
 import LicenseCheckDialog from './components/Common/LicenseCheckDialog';
 import axios from 'axios';
 
@@ -96,37 +98,41 @@ function App() {
       <AuthProvider>
         <ToastProvider>
           <PaywallProvider>
-            <BrowserRouter>
-              <Routes>
-                {/* Public Routes */}
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/signup" element={<Signup />} />
-                
-                {/* Public Dashboard Access (no auth required) */}
-                <Route path="/public/dashboard/:id" element={<Dashboard isPublic={true} />} />
+            <AIAgentProvider>
+              <BrowserRouter>
+                <Routes>
+                  {/* Public Routes */}
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/signup" element={<Signup />} />
+                  
+                  {/* Public Dashboard Access (no auth required) */}
+                  <Route path="/public/dashboard/:id" element={<Dashboard isPublic={true} />} />
 
-                {/* Protected Routes */}
-                <Route element={<PrivateRoutes />}>
-                  <Route element={<Layout />}>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/home" element={<Home />} />
-                    <Route path="/dashboards" element={<DashboardsList />} />
-                    <Route path="/dashboard/:id" element={<Dashboard />} />
-                    <Route path="/queries" element={<QueriesList />} />
-                    <Route path="/query/:id" element={<QueryPage />} />
-                    <Route path="/admin" element={<Admin />} />
-                    <Route path="/admin/license" element={<Admin />} />
-                    <Route path="/data-intelligence" element={<DataIntelligence />} />
-                    {/* Legacy route redirect */}
-                    <Route path="/preferences" element={<Navigate to="/data-intelligence" replace />} />
+                  {/* Protected Routes */}
+                  <Route element={<PrivateRoutes />}>
+                    <Route element={<Layout />}>
+                      <Route path="/" element={<Home />} />
+                      <Route path="/home" element={<Home />} />
+                      <Route path="/dashboards" element={<DashboardsList />} />
+                      <Route path="/dashboard/:id" element={<Dashboard />} />
+                      <Route path="/queries" element={<QueriesList />} />
+                      <Route path="/query/:id" element={<QueryPage />} />
+                      <Route path="/admin" element={<Admin />} />
+                      <Route path="/admin/license" element={<Admin />} />
+                      <Route path="/data-intelligence" element={<DataIntelligence />} />
+                      {/* Legacy route redirect */}
+                      <Route path="/preferences" element={<Navigate to="/data-intelligence" replace />} />
+                    </Route>
                   </Route>
-                </Route>
 
-                {/* Catch all */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-              <ToastContainer />
-            </BrowserRouter>
+                  {/* Catch all */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+                <ToastContainer />
+                {/* Actyze AI - Fixed floating button on the right */}
+                <FloatingAssistant />
+              </BrowserRouter>
+            </AIAgentProvider>
           </PaywallProvider>
         </ToastProvider>
       </AuthProvider>

@@ -8,6 +8,11 @@ export { default as DashboardService } from './DashboardService';
 export { default as ExclusionService } from './ExclusionService';
 export { default as LicenseService } from './LicenseService';
 
+// Voice AI services
+export { default as VoiceService } from './VoiceService';
+export { default as TTSService } from './TTSService';
+export { default as DashboardAgentService } from './DashboardAgentService';
+
 // Service configuration
 export const SERVICES_CONFIG = {
   // Toggle between mock and real API calls

@@ -74,6 +74,119 @@ export class RestService {
   }
 
   // =============================================================================
+  // Tile Cache & Refresh API Methods
+  // =============================================================================
+
+  /**
+   * Get cache status for all tiles in a dashboard.
+   * @param {string} dashboardId
+   * @returns {Promise} { summary, latest_job, tiles }
+   */
+  static async getDashboardCacheStatus(dashboardId) {
+    try {
+      const response = await Network.get(`/refresh/dashboard/${dashboardId}/cache-status`);
+      return response;
+    } catch (error) {
+      console.error('Get dashboard cache status failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Enqueue a full refresh for all tiles in a dashboard.
+   * @param {string} dashboardId
+   * @returns {Promise} { job_id, status, total_tiles, ... }
+   */
+  static async refreshDashboard(dashboardId) {
+    try {
+      const response = await Network.post(`/refresh/dashboard/${dashboardId}`, {});
+      return response;
+    } catch (error) {
+      console.error('Refresh dashboard failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get cached data for a single tile.
+   * @param {string} tileId
+   * @returns {Promise} { cache_hit, is_fresh, data, cached_at, ... }
+   */
+  static async getTileCache(tileId) {
+    try {
+      const response = await Network.get(`/refresh/tile/${tileId}/cache`);
+      return response;
+    } catch (error) {
+      console.error('Get tile cache failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Enqueue a single-tile refresh.
+   * @param {string} tileId
+   * @param {string} dashboardId
+   * @returns {Promise} { job_id, status, ... }
+   */
+  static async refreshTile(tileId, dashboardId) {
+    try {
+      const response = await Network.post(
+        `/refresh/tile/${tileId}?dashboard_id=${dashboardId}`,
+        {}
+      );
+      return response;
+    } catch (error) {
+      console.error('Refresh tile failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Hard-delete the cache entry for a tile (e.g. after SQL is edited).
+   * @param {string} tileId
+   */
+  static async invalidateTileCache(tileId) {
+    try {
+      const response = await Network.post(`/refresh/tile/${tileId}/invalidate`, {});
+      return response;
+    } catch (error) {
+      console.warn('Invalidate tile cache failed (non-fatal):', error);
+      return null;
+    }
+  }
+
+  /**
+   * Write-through cache: save live query result to tile cache immediately after execution.
+   * @param {string} tileId
+   * @param {Object} payload - { dashboard_id, sql_query, query_results, execution_time, refresh_interval_seconds }
+   */
+  static async writeTileCache(tileId, payload) {
+    try {
+      const response = await Network.put(`/refresh/tile/${tileId}/cache`, payload);
+      return response;
+    } catch (error) {
+      // Non-fatal — live data is still shown, cache write failure is silent
+      console.warn('Write tile cache failed (non-fatal):', error);
+      return null;
+    }
+  }
+
+  /**
+   * Poll job status and progress.
+   * @param {string} jobId
+   * @returns {Promise} { job_id, status, progress_pct, completed_items, ... }
+   */
+  static async getRefreshJobStatus(jobId) {
+    try {
+      const response = await Network.get(`/refresh/jobs/${jobId}`);
+      return response;
+    } catch (error) {
+      console.error('Get refresh job status failed:', error);
+      throw error;
+    }
+  }
+
+  // =============================================================================
   // Explorer API Methods
   // =============================================================================
 

@@ -14,8 +14,20 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null, recentQueries
   const [chartType, setChartType] = useState('bar');
   const [xAxisColumn, setXAxisColumn] = useState('');
   const [yAxisColumn, setYAxisColumn] = useState('');
+  const [refreshInterval, setRefreshInterval] = useState(7200);
   const [error, setError] = useState(null);
   const [showSidebar, setShowSidebar] = useState(false);
+
+  // Preset options for refresh interval
+  const REFRESH_INTERVAL_OPTIONS = [
+    { label: '15 minutes', value: 900 },
+    { label: '30 minutes', value: 1800 },
+    { label: '1 hour',     value: 3600 },
+    { label: '2 hours',    value: 7200 },
+    { label: '6 hours',    value: 21600 },
+    { label: '12 hours',   value: 43200 },
+    { label: '24 hours',   value: 86400 },
+  ];
   
   // Query preview state
   const [queryColumns, setQueryColumns] = useState([]);
@@ -39,6 +51,7 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null, recentQueries
       const yCol = config.yField || config.y_column || '';
       setXAxisColumn(xCol);
       setYAxisColumn(yCol);
+      setRefreshInterval(initialData.refresh_interval_seconds || 7200);
       setQueryPreviewError(null);
       
       // Parse columns from SQL query directly (no execution needed!)
@@ -64,6 +77,7 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null, recentQueries
       setQueryColumns([]);
       setQueryPreviewError(null);
       setHasPreviewedQuery(false);
+      setRefreshInterval(7200);
     }
     setError(null);
     setShowSidebar(false);
@@ -217,7 +231,8 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null, recentQueries
         yField: yAxisColumn.trim(),
         x_column: xAxisColumn.trim(),
         y_column: yAxisColumn.trim(),
-      } : {}
+      } : {},
+      refresh_interval_seconds: refreshInterval,
     };
 
     onSave(formData);
@@ -390,6 +405,34 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null, recentQueries
                   border outline-none
                 `}
               />
+            </div>
+
+            {/* Refresh Interval */}
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                Cache Refresh Interval
+                <span className={`ml-2 font-normal text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                  How often this tile's data is automatically refreshed
+                </span>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {REFRESH_INTERVAL_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setRefreshInterval(opt.value)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      refreshInterval === opt.value
+                        ? 'bg-[#5d6ad3] text-white'
+                        : isDark
+                          ? 'bg-[#1c1d1f] text-gray-300 border border-gray-600 hover:bg-gray-700'
+                          : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Chart Type Selector */}

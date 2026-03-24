@@ -191,6 +191,29 @@ class Settings(BaseSettings):
     enable_swagger_ui: bool = True
     
     # =============================================================================
+    # Tile Cache & Refresh Scheduler
+    # =============================================================================
+    tile_cache_scheduler_enabled: bool = True   # TILE_CACHE_SCHEDULER_ENABLED
+
+    # How often (seconds) the enqueue sweep scans for stale/uncached tiles.
+    # Should be SHORTER than tile_cache_default_ttl so tiles are picked up
+    # as they expire rather than all bunching into one sweep.
+    # Default = 1800 (30 min) with a 2h TTL → max 30min delay before stale
+    # tiles are detected and enqueued.
+    tile_cache_refresh_interval_seconds: int = 1800   # TILE_CACHE_REFRESH_INTERVAL_SECONDS
+
+    # How often (seconds) each Nexus pod polls for pending jobs.
+    tile_cache_poll_interval_seconds: int = 30        # TILE_CACHE_POLL_INTERVAL_SECONDS
+
+    # Default TTL (seconds) for a cached tile entry.
+    # Individual tiles can override this via refresh_interval_seconds column.
+    # ±15% jitter is automatically applied on write to spread expiry times.
+    tile_cache_default_ttl: int = 7200                # TILE_CACHE_DEFAULT_TTL_SECONDS
+
+    # Max rows fetched per tile during scheduled refresh.
+    tile_cache_max_rows: int = 1000                   # TILE_CACHE_MAX_ROWS
+
+    # =============================================================================
     # Feature Flags
     # =============================================================================
     feature_user_management: bool = True

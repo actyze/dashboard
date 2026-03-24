@@ -41,6 +41,12 @@ const Dashboard = ({ isPublic = false }) => {
   const [loadingTiles, setLoadingTiles] = useState({});
   const [tileData, setTileData] = useState({});
   const [tileErrors, setTileErrors] = useState({});
+
+  // Cache / refresh state
+  const [tileCache, setTileCache] = useState({});           // { [tileId]: { is_fresh, cached_at, ... } }
+  const [refreshJob, setRefreshJob] = useState(null);        // active refresh job
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const refreshPollRef = useRef(null);
   
   // UI state
   const [modalOpen, setModalOpen] = useState(false);
@@ -300,12 +306,119 @@ const Dashboard = ({ isPublic = false }) => {
       setDashboard(response.dashboard);
       const tilesArray = response.tiles || [];
       setTiles(tilesArray);
-      tilesArray.forEach(tile => executeTileQuery(tile));
+
+      // -----------------------------------------------------------------------
+      // CACHE-FIRST STRATEGY
+      // Dashboard view NEVER makes live Trino calls.
+      // Fresh cache  → render immediately from cache.
+      // Stale cache  → render stale data with a "stale" badge, auto-enqueue refresh.
+      // No cache yet → render "pending" state, auto-enqueue refresh.
+      // Live Trino calls only happen via the refresh service in the background.
+      // -----------------------------------------------------------------------
+      const cacheStatus = await RestService.getDashboardCacheStatus(id).catch(() => null);
+      const cacheMap = {};
+      if (cacheStatus?.tiles) {
+        cacheStatus.tiles.forEach(t => { cacheMap[t.tile_id] = t; });
+      }
+      setTileCache(cacheMap);
+      if (cacheStatus?.latest_job) setRefreshJob(cacheStatus.latest_job);
+
+      let needsBackgroundRefresh = false;
+      const uncachedTiles = [];
+
+      for (const tile of tilesArray) {
+        const cached = cacheMap[tile.id];
+        if (cached?.refresh_status === 'success') {
+          // Render from cache — even stale data is better than blocking on Trino
+          await loadTileFromCache(tile);
+          if (!cached.is_fresh) needsBackgroundRefresh = true;
+        } else {
+          // Never-cached tile: run live Trino query so user sees data immediately
+          uncachedTiles.push(tile);
+        }
+      }
+
+      // Execute uncached tiles live (first-time load), then write-through to cache
+      if (uncachedTiles.length > 0) {
+        await Promise.all(uncachedTiles.map(tile => executeTileLiveAndCache(tile)));
+      }
+
+      // Auto-enqueue a background refresh for any stale tiles (uncached ones
+      // were already executed live above, so only stale cache needs refresh).
+      if (needsBackgroundRefresh && !isPublic) {
+        const activeJob = cacheStatus?.latest_job;
+        const alreadyRunning = activeJob && ['pending', 'running'].includes(activeJob.status);
+        if (!alreadyRunning) {
+          RestService.refreshDashboard(id).then(res => {
+            if (res?.job_id) {
+              setRefreshJob(res);
+              pollRefreshJob(res.job_id);
+            }
+          }).catch(() => {});
+        }
+      }
     } catch (error) {
       console.error('Error loading dashboard:', error);
       setDashboardError(error.message);
     } finally {
       setLoadingDashboard(false);
+    }
+  };
+
+  /**
+   * Render a tile from its cache entry. Never falls back to live Trino.
+   * If the cache payload can't be parsed, the tile stays in "pending" state
+   * and the background refresh will populate it.
+   */
+  const loadTileFromCache = async (tile) => {
+    setLoadingTiles(prev => ({ ...prev, [tile.id]: true }));
+    try {
+      const cacheRes = await RestService.getTileCache(tile.id);
+      if (!cacheRes?.cache_hit || !cacheRes.data) return; // stays pending
+
+      const queryData = transformQueryResults(cacheRes.data);
+      if (!queryData) return; // stays pending
+
+      let chartConfig = tile.chart_config || {};
+      if (tile.chart_type !== 'table' && (!chartConfig.xField || !chartConfig.yField)) {
+        if (queryData.columns?.length >= 2) {
+          chartConfig = {
+            ...chartConfig,
+            xField: queryData.columns[0]?.name || 'x',
+            yField: queryData.columns[1]?.name || 'y',
+            x_column: queryData.columns[0]?.name || 'x',
+            y_column: queryData.columns[1]?.name || 'y',
+          };
+        }
+      }
+      const chartData = tile.chart_type !== 'table' ? {
+        chart: {
+          type: tile.chart_type,
+          config: {
+            ...chartConfig,
+            xField: chartConfig.xField || chartConfig.x_column,
+            yField: chartConfig.yField || chartConfig.y_column,
+          },
+          fallback: false,
+          source: 'cache'
+        },
+        data: queryData,
+        cached: true
+      } : null;
+
+      setTileData(prev => ({ ...prev, [tile.id]: { queryResults: queryData, chartData } }));
+      setTileCache(prev => ({
+        ...prev,
+        [tile.id]: {
+          ...prev[tile.id],
+          is_fresh: cacheRes.is_fresh,
+          cached_at: cacheRes.cached_at,
+        },
+      }));
+    } catch {
+      // stays pending — background refresh will populate
+    } finally {
+      setLoadingTiles(prev => ({ ...prev, [tile.id]: false }));
     }
   };
 
@@ -401,6 +514,85 @@ const Dashboard = ({ isPublic = false }) => {
     }
   };
 
+  /**
+   * Execute a tile query live via Trino, render the result immediately,
+   * then write-through to cache so subsequent loads are instant.
+   * Used for first-time / uncached tiles and after tile creation or edit.
+   */
+  const executeTileLiveAndCache = async (tile) => {
+    if (executingTilesRef.current.has(tile.id)) return;
+    executingTilesRef.current.add(tile.id);
+
+    setLoadingTiles(prev => ({ ...prev, [tile.id]: true }));
+    setTileErrors(prev => ({ ...prev, [tile.id]: null }));
+
+    try {
+      const response = await RestService.executeSql(
+        tile.sql_query, 500,
+        parseInt(process.env.REACT_APP_EXECUTE_TIMEOUT_SECONDS) || 900
+      );
+
+      if (!response.success) {
+        throw new Error(response.error || 'Query execution failed');
+      }
+
+      const queryData = transformQueryResults(response.query_results);
+      if (!queryData) throw new Error('No data returned from query');
+
+      let chartConfig = tile.chart_config || {};
+      if (tile.chart_type !== 'table' && (!chartConfig.xField || !chartConfig.yField)) {
+        const detectColumnType = (colName) => {
+          if (!queryData.data || queryData.data.length === 0) return 'string';
+          const sampleValue = queryData.data[0][colName];
+          if (typeof sampleValue === 'number') return 'number';
+          if (!isNaN(parseFloat(sampleValue)) && isFinite(sampleValue)) return 'number';
+          return 'string';
+        };
+        const stringColumn = queryData.columns.find(col => {
+          const colType = col.type || detectColumnType(col.name);
+          return colType === 'string' || colType === 'varchar' || colType === 'date';
+        });
+        const numericColumn = queryData.columns.find(col => {
+          const colType = col.type || detectColumnType(col.name);
+          return colType === 'number' || colType === 'integer' || colType === 'bigint' ||
+                 colType === 'decimal' || colType === 'double';
+        });
+        if (stringColumn && numericColumn) {
+          chartConfig = { ...chartConfig, xField: stringColumn.name, yField: numericColumn.name, x_column: stringColumn.name, y_column: numericColumn.name };
+        } else if (queryData.columns.length >= 2) {
+          chartConfig = { ...chartConfig, xField: queryData.columns[0]?.name || 'x', yField: queryData.columns[1]?.name || 'y', x_column: queryData.columns[0]?.name || 'x', y_column: queryData.columns[1]?.name || 'y' };
+        }
+      }
+
+      let chartData = null;
+      if (tile.chart_type !== 'table') {
+        chartData = {
+          chart: { type: tile.chart_type, config: { ...chartConfig, xField: chartConfig.xField || chartConfig.x_column, yField: chartConfig.yField || chartConfig.y_column }, fallback: false, source: 'live' },
+          data: queryData, cached: false
+        };
+      }
+
+      setTileData(prev => ({ ...prev, [tile.id]: { queryResults: queryData, chartData } }));
+      setTileCache(prev => ({ ...prev, [tile.id]: { is_fresh: true, cached_at: new Date().toISOString() } }));
+
+      // Write-through to cache (fire-and-forget, non-fatal)
+      const dashboardId = tile.dashboard_id || id;
+      RestService.writeTileCache(tile.id, {
+        dashboard_id: dashboardId,
+        sql_query: tile.sql_query,
+        query_results: response.query_results,
+        execution_time: response.execution_time || 0,
+        refresh_interval_seconds: tile.refresh_interval_seconds || 7200,
+      }).catch(() => {});
+    } catch (error) {
+      console.error('Live tile execution failed:', error);
+      setTileErrors(prev => ({ ...prev, [tile.id]: error.message }));
+    } finally {
+      executingTilesRef.current.delete(tile.id);
+      setLoadingTiles(prev => ({ ...prev, [tile.id]: false }));
+    }
+  };
+
   const handleCreateTile = () => {
     setEditingTile(null);
     setModalOpen(true);
@@ -478,9 +670,13 @@ const Dashboard = ({ isPublic = false }) => {
           delete newErrors[updatedTile.id];
           return newErrors;
         });
-        
+
         setTiles(prev => prev.map(t => t.id === updatedTile.id ? updatedTile : t));
-        executeTileQuery(updatedTile);
+        // SQL may have changed — invalidate stale cache, execute live, then write-through
+        RestService.invalidateTileCache(updatedTile.id).catch(() => {});
+        setTileCache(prev => { const n = { ...prev }; delete n[updatedTile.id]; return n; });
+        setTileData(prev => { const n = { ...prev }; delete n[updatedTile.id]; return n; });
+        executeTileLiveAndCache(updatedTile);
       }
     } else {
       // Calculate next position (2 tiles per row)
@@ -500,7 +696,7 @@ const Dashboard = ({ isPublic = false }) => {
         chart_type: tileFormData.chartType,
         chart_config: tileFormData.chartConfig || {},
         position: nextPosition,
-        refresh_interval_seconds: null
+        refresh_interval_seconds: tileFormData.refresh_interval_seconds || null
       });
 
       if (response.success) {
@@ -512,7 +708,8 @@ const Dashboard = ({ isPublic = false }) => {
           position: response.tile.position || nextPosition,
         };
         setTiles(prev => [...prev, newTile]);
-        executeTileQuery(newTile);
+        // Execute the new tile live so user sees data immediately, then cache it
+        executeTileLiveAndCache(newTile);
       }
     }
     
@@ -576,10 +773,109 @@ const Dashboard = ({ isPublic = false }) => {
     setLoadingDashboard(false);
   };
 
-  const handleRefreshTile = (tile) => {
-    executeTileQuery(tile);
+  const handleRefreshTile = async (tile) => {
     handleMenuClose();
+    if (!tile) return;
+    // Manual single-tile refresh: enqueue a tile job and poll until done
+    try {
+      setLoadingTiles(prev => ({ ...prev, [tile.id]: true }));
+      setTileErrors(prev => ({ ...prev, [tile.id]: null }));
+      const res = await RestService.refreshTile(tile.id, tile.dashboard_id || id);
+      if (res?.job_id) {
+        let tilePollCount = 0;
+        const poll = setInterval(async () => {
+          tilePollCount++;
+          if (tilePollCount > 150) { // 150 × 2s = 5 minutes max
+            clearInterval(poll);
+            setLoadingTiles(prev => ({ ...prev, [tile.id]: false }));
+            setTileErrors(prev => ({ ...prev, [tile.id]: 'Refresh timed out — click Refresh to retry' }));
+            return;
+          }
+          try {
+            const job = await RestService.getRefreshJobStatus(res.job_id);
+            if (['completed', 'failed', 'partial'].includes(job.status)) {
+              clearInterval(poll);
+              setLoadingTiles(prev => ({ ...prev, [tile.id]: false }));
+              if (job.status === 'failed') {
+                setTileErrors(prev => ({ ...prev, [tile.id]: 'Refresh failed — click Refresh to retry' }));
+              } else {
+                loadTileFromCache(tile);
+              }
+            }
+          } catch { clearInterval(poll); setLoadingTiles(prev => ({ ...prev, [tile.id]: false })); }
+        }, 2000);
+      } else {
+        setLoadingTiles(prev => ({ ...prev, [tile.id]: false }));
+      }
+    } catch (err) {
+      console.error('Single tile refresh failed:', err);
+      setLoadingTiles(prev => ({ ...prev, [tile.id]: false }));
+      setTileErrors(prev => ({ ...prev, [tile.id]: err.message || 'Refresh failed' }));
+    }
   };
+
+  const handleRefreshDashboard = async () => {
+    if (isRefreshing || !id) return;
+    setIsRefreshing(true);
+    try {
+      const res = await RestService.refreshDashboard(id);
+      if (res?.job_id) {
+        setRefreshJob(res);
+        pollRefreshJob(res.job_id);
+      }
+    } catch (err) {
+      console.error('Refresh dashboard failed:', err);
+      setIsRefreshing(false);
+    }
+  };
+
+  const pollRefreshJob = (jobId) => {
+    if (refreshPollRef.current) clearInterval(refreshPollRef.current);
+    let pollCount = 0;
+    const MAX_POLLS = 120; // 120 × 2.5s = 5 minutes max
+    refreshPollRef.current = setInterval(async () => {
+      pollCount++;
+      if (pollCount > MAX_POLLS) {
+        clearInterval(refreshPollRef.current);
+        refreshPollRef.current = null;
+        setIsRefreshing(false);
+        setRefreshJob(prev => prev ? { ...prev, status: 'failed' } : prev);
+        return;
+      }
+      try {
+        const job = await RestService.getRefreshJobStatus(jobId);
+        setRefreshJob(job);
+        if (['completed', 'failed', 'partial'].includes(job.status)) {
+          clearInterval(refreshPollRef.current);
+          refreshPollRef.current = null;
+          setIsRefreshing(false);
+          // Reload tile data from fresh cache (even on partial — some tiles succeeded)
+          if (job.status !== 'failed') {
+            const cacheStatus = await RestService.getDashboardCacheStatus(id).catch(() => null);
+            if (cacheStatus?.tiles) {
+              const map = {};
+              cacheStatus.tiles.forEach(t => { map[t.tile_id] = t; });
+              setTileCache(map);
+              tiles.forEach(tile => {
+                if (map[tile.id]?.is_fresh) loadTileFromCache(tile);
+              });
+            }
+          }
+        }
+      } catch {
+        clearInterval(refreshPollRef.current);
+        refreshPollRef.current = null;
+        setIsRefreshing(false);
+      }
+    }, 2500);
+  };
+
+  // Cleanup poll on unmount
+  useEffect(() => {
+    return () => {
+      if (refreshPollRef.current) clearInterval(refreshPollRef.current);
+    };
+  }, []);
 
   const handleMenuOpen = (event, tileId) => {
     event.stopPropagation();
@@ -599,11 +895,42 @@ const Dashboard = ({ isPublic = false }) => {
     const loading = loadingTiles[tile.id];
     const error = tileErrors[tile.id];
     const data = tileData[tile.id];
+    const cache = tileCache[tile.id];
+    const refreshing = isRefreshing || (refreshJob && ['pending','running'].includes(refreshJob.status));
 
+    // Loading cache from API
     if (loading) {
       return (
         <div className="flex items-center justify-center h-full">
           <CircularProgress size={24} />
+        </div>
+      );
+    }
+
+    // No cache data yet — tile is pending first population
+    if (!data && !error) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full p-4 gap-2">
+          {refreshing ? (
+            <>
+              <CircularProgress size={20} sx={{ color: isDark ? '#9ca3af' : '#6b7280' }} />
+              <Typography variant="body2" className="text-xs text-center" sx={{ color: isDark ? '#6b7280' : '#9ca3af' }}>
+                Refreshing data…
+              </Typography>
+            </>
+          ) : (
+            <>
+              <svg className={`w-8 h-8 ${isDark ? 'text-gray-600' : 'text-gray-300'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <Typography variant="body2" className="text-xs text-center" sx={{ color: isDark ? '#6b7280' : '#9ca3af' }}>
+                No data yet
+              </Typography>
+              <Typography variant="body2" className="text-[10px] text-center" sx={{ color: isDark ? '#4b5563' : '#d1d5db' }}>
+                Click "Refresh All" to load
+              </Typography>
+            </>
+          )}
         </div>
       );
     }
@@ -789,16 +1116,58 @@ const Dashboard = ({ isPublic = false }) => {
       <div ref={gridContainerRef} className="flex-1 overflow-auto p-4">
         {/* Action Bar */}
         {!isPublic && (
-          <div className="flex items-center justify-end gap-2 mb-4">
-            <button 
-              onClick={handleCreateTile}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-[#5d6ad3] text-white hover:bg-[#4f5bc4] transition-colors"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              New Tile
-            </button>
+          <div className="flex items-center justify-between gap-2 mb-4">
+            {/* Refresh status */}
+            <div className="flex items-center gap-2">
+              {refreshJob && ['pending', 'running'].includes(refreshJob.status) && (
+                <span className={`flex items-center gap-1.5 text-xs ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
+                  <CircularProgress size={12} sx={{ color: 'inherit' }} />
+                  Refreshing tiles… {refreshJob.total_items > 0 ? `${refreshJob.completed_items}/${refreshJob.total_items}` : ''}
+                </span>
+              )}
+              {refreshJob?.status === 'completed' && (
+                <span className={`text-xs ${isDark ? 'text-green-400' : 'text-green-600'}`}>
+                  ✓ Cache refreshed
+                </span>
+              )}
+              {refreshJob?.status === 'failed' && (
+                <span className={`text-xs ${isDark ? 'text-red-400' : 'text-red-600'}`}>
+                  Refresh failed
+                </span>
+              )}
+              {refreshJob?.status === 'partial' && (
+                <span className={`text-xs ${isDark ? 'text-yellow-400' : 'text-yellow-600'}`}>
+                  ⚠ Partial refresh ({refreshJob.failed_items} failed)
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleRefreshDashboard}
+                disabled={isRefreshing}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                  isDark
+                    ? 'bg-gray-700 text-gray-200 hover:bg-gray-600 disabled:opacity-50'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50'
+                }`}
+                title="Refresh all tile data and update cache"
+              >
+                <svg className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {isRefreshing ? 'Refreshing…' : 'Refresh All'}
+              </button>
+              <button 
+                onClick={handleCreateTile}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-[#5d6ad3] text-white hover:bg-[#4f5bc4] transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                New Tile
+              </button>
+            </div>
           </div>
         )}
 
@@ -876,9 +1245,29 @@ const Dashboard = ({ isPublic = false }) => {
                 >
                   {/* Tile Header - Drag Handle */}
                   <div className={`tile-drag-handle flex items-center justify-between px-3 py-2 border-b cursor-move flex-shrink-0 ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
-                    <span className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                      {tile.title}
-                    </span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        {tile.title}
+                      </span>
+                      {/* Cache freshness badge — only shown when cache state is known */}
+                      {tileCache[tile.id]?.refresh_status === 'success' && (
+                        tileCache[tile.id].is_fresh ? (
+                          <span
+                            title={`Cached ${tileCache[tile.id].cached_at ? new Date(tileCache[tile.id].cached_at).toLocaleString() : ''}`}
+                            className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${isDark ? 'bg-green-900/40 text-green-400' : 'bg-green-100 text-green-700'}`}
+                          >
+                            cached
+                          </span>
+                        ) : (
+                          <span
+                            title="Cache has expired — data was re-fetched live. Click Refresh All to update cache."
+                            className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${isDark ? 'bg-yellow-900/40 text-yellow-400' : 'bg-yellow-100 text-yellow-700'}`}
+                          >
+                            stale
+                          </span>
+                        )
+                      )}
+                    </div>
                     {!isPublic && (
                       <IconButton 
                         size="small" 

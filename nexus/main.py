@@ -19,6 +19,9 @@ from app.api_metadata import router as metadata_router
 from app.api_exclusions import router as exclusions_router
 from app.api_license import router as license_router
 from app.api_license_check import router as license_check_router
+from app.api_refresh import router as refresh_router
+from app.services.scheduler_service import start_scheduler, stop_scheduler
+from app.services.refresh_service import refresh_service
 
 # Configure logging
 configure_logging()
@@ -51,13 +54,20 @@ async def lifespan(app: FastAPI):
     
     # Start license validator (validates on startup + every 6 hours)
     await license_validator_service.start()
-    
+
+    # Recover any jobs stuck in 'running' state from a previous pod crash
+    await refresh_service.recover_stuck_jobs()
+
+    # Start tile cache refresh scheduler (APScheduler + SQLAlchemyJobStore)
+    start_scheduler()
+
     logger.info("Service initialized successfully")
     
     yield
     
     # Shutdown
     logger.info("Shutting down Nexus service")
+    stop_scheduler()
     await license_validator_service.stop()
     await orchestration_service.shutdown()
     await db_manager.close()
@@ -97,6 +107,7 @@ app.include_router(exclusions_router)  # Schema exclusions (org-level, admin onl
 app.include_router(license_router)  # License management endpoints (admin only)
 app.include_router(license_check_router)  # License check/initial setup (all users)
 app.include_router(public_router)  # No authentication required
+app.include_router(refresh_router)  # Tile cache & refresh scheduler
 
 
 @app.get("/")

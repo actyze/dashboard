@@ -204,6 +204,13 @@ services:
       CACHE_QUERY_TTL: ${CACHE_QUERY_TTL:-1800}
       # Preferred Tables Configuration
       MAX_PREFERRED_TABLES: 25
+      # Tile Cache & Refresh Scheduler
+      TILE_CACHE_SCHEDULER_ENABLED: ${TILE_CACHE_SCHEDULER_ENABLED:-true}
+      # Sweep every 30min (shorter than TTL so tiles expire gradually, not all at once)
+      TILE_CACHE_REFRESH_INTERVAL_SECONDS: ${TILE_CACHE_REFRESH_INTERVAL_SECONDS:-1800}
+      TILE_CACHE_POLL_INTERVAL_SECONDS: ${TILE_CACHE_POLL_INTERVAL_SECONDS:-30}
+      TILE_CACHE_DEFAULT_TTL_SECONDS: ${TILE_CACHE_DEFAULT_TTL_SECONDS:-7200}
+      TILE_CACHE_MAX_ROWS: ${TILE_CACHE_MAX_ROWS:-1000}
       # Development Settings
       DEBUG: ${DEBUG:-true}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}

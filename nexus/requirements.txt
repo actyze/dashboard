@@ -17,7 +17,7 @@ aioboto3==15.5.0
 
 # Google Vertex AI / Gemini
 google-cloud-aiplatform==1.133.0
-google-genai==1.37.0
+google-genai==1.69.0
 
 # Azure OpenAI
 openai==2.9.0

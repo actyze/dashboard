@@ -1,0 +1,23 @@
+area/frontend:
+  - changed-files:
+      - any-glob-to-any-file: "frontend/**"
+
+area/backend:
+  - changed-files:
+      - any-glob-to-any-file: "nexus/**"
+
+area/schema-service:
+  - changed-files:
+      - any-glob-to-any-file: "schema-service/**"
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: "**/*.md"
+
+infrastructure:
+  - changed-files:
+      - any-glob-to-any-file: "docker/**"
+
+ci/cd:
+  - changed-files:
+      - any-glob-to-any-file: ".github/**"

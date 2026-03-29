@@ -1,166 +1,61 @@
-# Dashboard - Natural Language to SQL
+# Actyze
 
-A comprehensive dashboard application that converts natural language queries to SQL using external LLM APIs.
+**Open-source AI-native analytics platform.**
 
-## 🚀 **Architecture**
+Ask questions in plain English, get SQL queries and interactive charts. Connect any database. Self-host in 2 minutes.
 
-### **Core Components:**
-- **Nexus**: FastAPI orchestration service with intelligent routing
-- **Frontend**: React application with Material-UI and Tailwind CSS
-- **Schema Service**: FAISS-powered schema recommendations with spaCy NER
-- **Trino**: Distributed SQL query engine
-- **PostgreSQL**: Operational database for metadata and user management
+## Key Features
 
-### **AI Model Options:**
-- **External LLM**: OpenAI, Perplexity, Anthropic, Groq, Together.ai, etc. (1-3s inference)
+- **Natural language to SQL** -- ask questions in plain English, get SQL and visualizations
+- **Semantic intelligence layer** -- relationship graph, verified queries, synonyms, KPI definitions
+- **Voice AI assistant** -- interact with your data using voice
+- **Federated querying via Trino** -- connect PostgreSQL, MySQL, Snowflake, BigQuery, and more
+- **Interactive dashboards** -- Plotly-powered charts with drill-down and filtering
+- **100+ LLM providers** -- use Claude, GPT, Llama, Mistral, or any provider via LiteLLM
+- **Self-hosted** -- your data never leaves your infrastructure
 
-## 📋 **Quick Start**
-
-### **Deployment Options:**
-
-#### 🐳 **Docker Compose (Recommended for Local Development)**
-```bash
-# Quick start with local environment
-./scripts/docker-start.sh local -d
-
-# Access at http://localhost:3000
-```
-📖 **[Complete Docker Deployment Guide](docker/DEPLOYMENT.md)**
-
-#### ☸️ **Kubernetes with Helm (Production)**
-```bash
-# Helm charts are in a separate repository
-# Clone the helm-charts repo: https://github.com/actyze/helm-charts
-git clone https://github.com/actyze/helm-charts.git
-cd helm-charts
-
-# Deploy to Kubernetes cluster
-helm install dashboard ./dashboard -f ./dashboard/values-dev.yaml -n dashboard
-```
-
-#### 🚀 **Pre-built Docker Images (Docker Hub)**
-```bash
-# Use pre-built images (no build time required)
-docker pull actyze/dashboard-frontend:latest
-docker pull actyze/dashboard-nexus:latest
-docker pull actyze/dashboard-schema-service:latest
-
-# Deploy with pre-built images
-./scripts/docker-start.sh local -d
-```
-📖 **[CI/CD Pipeline Documentation](.github/workflows/README.md)**
-
-### **Prerequisites:**
-- Docker (for local development)
-- Kubernetes & Helm 3.x (for production deployment)
-- kubectl (for Kubernetes management)
-
-### **Local Development:**
-```bash
-# Use Docker Compose for local development
-./scripts/docker-start.sh local -d
-
-# Access services
-# Frontend: http://localhost:3000
-# Nexus API: http://localhost:8000
-# PostgreSQL: localhost:5432
-```
-
-### **Kubernetes Deployment:**
-```bash
-# Clone helm-charts repository
-git clone https://github.com/actyze/helm-charts.git
-cd helm-charts
-
-# Deploy with Helm
-helm install dashboard ./dashboard \
-  --namespace dashboard \
-  --create-namespace \
-  --values ./dashboard/values-dev.yaml \
-  --values ./dashboard/values-dev-secrets.yaml
-```
-
-## 🎯 **Key Features**
-
-- **Intelligent Schema Detection**: FAISS + spaCy NER for improved table recommendations
-- **External LLM Integration**: Support for multiple providers (OpenAI, Perplexity, Anthropic, Groq)
-- **Production Ready**: Kubernetes-native with health checks and monitoring
-- **Security**: SQL injection prevention, RBAC, API key management
-- **Performance**: 1-3s external LLM inference
-- **User Preferences**: Schema boosting for personalized recommendations
-- **File Upload**: Import CSV/Excel files into user-managed tables
-- **Metadata Catalog**: Organization-level metadata descriptions for improved context
-
-## 📁 **Project Structure**
-
-```
-dashboard/
-├── nexus/                  # FastAPI orchestration service
-├── frontend/               # React dashboard application
-├── schema-service/         # FAISS schema recommendations
-├── docker/                 # Docker Compose setup & documentation
-└── scripts/                # Development and deployment scripts
-```
-
-## 🔧 **Configuration**
-
-### **External LLM Setup:**
-See [EXTERNAL_LLM_SETUP.md](EXTERNAL_LLM_SETUP.md) for complete configuration guide.
-
-### **Helm Charts & Deployment:**
-Helm charts are maintained in a separate repository: [actyze/helm-charts](https://github.com/actyze/helm-charts)
-
-## 🧪 **Testing**
+## Quick Start
 
 ```bash
-# Test natural language query (requires authentication token)
-curl -X POST http://localhost:8000/api/generate-sql \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -d '{"nl_query": "Show customers from California"}'
-
-# Expected response with generated SQL
+git clone https://github.com/actyze/dashboard.git
+cd dashboard/docker
+cp .env.example .env
+# Edit .env — add your LLM API key (Anthropic, OpenAI, etc.)
+docker-compose --profile local up -d
 ```
 
-## 📊 **Performance**
+- Frontend: http://localhost:3000
+- API: http://localhost:8000
 
-| Component | Response Time | Memory | Notes |
-|-----------|---------------|--------|-------|
-| External LLM | 1-3s | Minimal | OpenAI, Perplexity, Anthropic, etc. |
-| Schema Service | < 100ms | 1-2GB | FAISS vector search |
-| Nexus API | < 200ms | 512MB-1GB | Orchestration and caching |
-| Trino Queries | Varies | 2-4GB | Depends on query complexity |
+## Architecture
 
-## 🛠️ **Development**
-
-```bash
-# Build services locally using Docker Compose
-cd docker && docker compose build
-
-# Run all services
-docker compose --profile local up -d
-
-# Run tests
-cd frontend && npm test
-cd nexus && pytest
+```
+Frontend (React) --> Nexus API (FastAPI) --> Trino --> Your Databases
+                         |
+                   Schema Service (FAISS)
+                         |
+                   LLM Provider (Claude, GPT, etc.)
 ```
 
-## 📚 **Documentation**
+| Component | Technology |
+|---|---|
+| Frontend | React 18, Material-UI |
+| Backend (Nexus) | FastAPI, Python 3.11 |
+| Schema Service | FAISS vector search, spaCy NER |
+| Query Engine | Trino (federated SQL) |
+| Database | PostgreSQL |
+| LLM Gateway | LiteLLM (100+ providers) |
 
-- [External LLM Setup](EXTERNAL_LLM_SETUP.md)
-- [Docker Deployment](docker/DEPLOYMENT.md)
-- [Database Migrations](DATABASE_MIGRATIONS.md)
-- [Schema Service](schema-service/README.md)
-- [Nexus API](nexus/API_DOCUMENTATION.md)
-- [Helm Charts Repository](https://github.com/actyze/helm-charts)
+## Documentation
 
-## 🤝 **Contributing**
+- [Docker Deployment Guide](docker/README.md)
+- [Contributing Guide](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
 
-1. Fork the repository
-2. Create feature branch
-3. Make changes with tests
-4. Submit pull request
+## Contributing
 
-## 📄 **License**
+We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to get started.
 
-MIT License - see LICENSE file for details.# Test conditional builds
+## License
+
+[AGPL v3](LICENSE)

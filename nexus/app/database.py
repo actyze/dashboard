@@ -218,50 +218,6 @@ class SchemaExclusion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
-# ============================================================================
-# Licensing System Models
-# ============================================================================
-
-class PlanType(str, enum.Enum):
-    """Subscription plan types."""
-    FREE = "FREE"
-    SMALL = "SMALL"
-    MEDIUM = "MEDIUM"
-    LARGE_ENTERPRISE = "LARGE_ENTERPRISE"
-    MANAGED_SERVICE = "MANAGED_SERVICE"
-
-
-class LicenseStatus(str, enum.Enum):
-    """License status values."""
-    ACTIVE = "ACTIVE"
-    DISABLED = "DISABLED"
-    EXPIRED = "EXPIRED"
-
-
-class TenantLicense(Base):
-    """Tenant licenses for platform access."""
-    __tablename__ = "tenant_licenses"
-    
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    license_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
-    status: Mapped[LicenseStatus] = mapped_column(SQLEnum(LicenseStatus, name="license_status", schema="nexus"), default=LicenseStatus.ACTIVE)
-    plan_type: Mapped[PlanType] = mapped_column(SQLEnum(PlanType, name="plan_type", schema="nexus"), nullable=False)
-    
-    # License limits - NULL or -1 = unlimited
-    max_users: Mapped[Optional[int]] = mapped_column(Integer)  # Maximum users allowed
-    max_dashboards: Mapped[Optional[int]] = mapped_column(Integer)  # Maximum dashboards allowed
-    max_data_sources: Mapped[Optional[int]] = mapped_column(Integer)  # Maximum data sources allowed
-    monthly_cost_usd: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), default=0)  # Monthly cost cached from API
-    
-    issued_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime)  # NULL = perpetual
-    last_validated_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    validation_grace_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    license_metadata: Mapped[Dict[str, Any]] = mapped_column(JSONB, default={})
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-
 class DatabaseManager:
     """Database connection and session management."""
     

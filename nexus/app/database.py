@@ -2,7 +2,7 @@
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import String, Text, DateTime, JSON, Integer, Boolean, ForeignKey, Numeric, Enum as SQLEnum
+from sqlalchemy import String, Text, DateTime, JSON, Integer, Boolean, ForeignKey, Numeric
 from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
 import enum
 from datetime import datetime
@@ -12,12 +12,6 @@ import structlog
 from app.config import settings
 
 logger = structlog.get_logger()
-
-
-class UserState(str, enum.Enum):
-    """User state enum."""
-    ENABLED = "ENABLED"
-    DISABLED = "DISABLED"
 
 
 class Base(DeclarativeBase):
@@ -36,13 +30,6 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[Optional[str]] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    user_state: Mapped[UserState] = mapped_column(
-        SQLEnum(UserState, name='user_state', schema='nexus', create_type=False),
-        default=UserState.ENABLED,
-        index=True
-    )
-    disabled_reason: Mapped[Optional[str]] = mapped_column(String(500))
-    disabled_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

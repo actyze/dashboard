@@ -101,6 +101,15 @@ jobs:
         with:
           version: 'v3.13.0'
 
+      - name: Recover stuck Helm release
+        run: |
+          STATUS=$(helm status ${{ env.HELM_RELEASE }} -n ${{ env.NAMESPACE }} -o json 2>/dev/null | jq -r '.info.status' 2>/dev/null || echo "not-found")
+          echo "Current release status: $STATUS"
+          if [[ "$STATUS" == "pending-install" || "$STATUS" == "pending-upgrade" || "$STATUS" == "pending-rollback" ]]; then
+            echo "Release is stuck in $STATUS — rolling back..."
+            helm rollback ${{ env.HELM_RELEASE }} -n ${{ env.NAMESPACE }} || true
+          fi
+
       - name: Create values-secrets.yaml from GitHub Secrets
         run: |
           cat > /tmp/values-secrets.yaml <<'EOF'

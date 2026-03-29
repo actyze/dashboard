@@ -25,7 +25,7 @@ azure-identity==1.16.1
 azure-keyvault==4.2.0
 
 # Anthropic Claude
-anthropic[vertex]==0.54.0
+anthropic[vertex]==0.86.0
 
 # Data Validation
 pydantic==2.10.5

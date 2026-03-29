@@ -100,6 +100,12 @@ kind-config*.yaml
 OPEN_SOURCE_STRATEGY.md
 ARCHITECTURE_VISION.md
 
+# IDE-specific config
+.cursorrules
+
+# Java/Maven artifacts (not used in this project)
+.mvn/
+
 # Secrets files (DO NOT COMMIT)
 helm/dashboard/values-dev-secrets.yaml
 helm/dashboard/values-production-secrets.yaml

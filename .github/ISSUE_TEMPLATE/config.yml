@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Quick Question / Discussion
+    url: https://discord.gg/actyze
+    about: For quick questions, join our Discord community instead of opening an issue.

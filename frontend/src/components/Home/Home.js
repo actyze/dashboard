@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useTheme } from '../../contexts/ThemeContext';
-import { usePaywall } from '../../contexts/PaywallContext';
 import { QueryManagementService, DashboardService } from '../../services';
 import { getQueryDisplayTitle } from '../../utils/queryTitleGenerator';
 
 const Home = () => {
   const { isDark } = useTheme();
   const navigate = useNavigate();
-  const { wouldExceedLimit, getLimit, isUnlimited, openUpgrade } = usePaywall();
-  
   const [recentQueries, setRecentQueries] = useState([]);
   const [recentDashboards, setRecentDashboards] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -46,25 +43,6 @@ const Home = () => {
   };
 
   const handleCreateNewDashboard = () => {
-    // Check if creating a new dashboard would exceed the license limit
-    const currentDashboardCount = recentDashboards.length;
-    
-    if (wouldExceedLimit('dashboards', currentDashboardCount)) {
-      const limit = getLimit('dashboards');
-      const limitText = isUnlimited('dashboards') ? 'Unlimited' : limit;
-      
-      alert(
-        `Cannot create dashboard: Your current plan allows a maximum of ${limitText} dashboards. ` +
-        `You currently have ${currentDashboardCount} dashboards. Please upgrade your plan to add more dashboards.`
-      );
-      
-      if (window.confirm('Would you like to view upgrade options?')) {
-        openUpgrade();
-      }
-      return;
-    }
-    
-    // Proceed with navigation if limit not exceeded
     navigate('/dashboard/new');
   };
 

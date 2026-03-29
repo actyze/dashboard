@@ -1,6 +1,5 @@
 """Tests for the TelemetryService."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.telemetry_service import TelemetryService

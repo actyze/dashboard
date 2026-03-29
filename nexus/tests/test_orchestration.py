@@ -1,8 +1,7 @@
 """Tests for the orchestration service."""
 
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 from app.services.orchestration_service import OrchestrationService
 
 

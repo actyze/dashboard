@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install ruff
-      - run: ruff check nexus/
+      - run: ruff check nexus/ --config nexus/ruff.toml
 
   test-backend:
     name: Test Backend
@@ -43,7 +43,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r nexus/requirements.txt
-      - run: pip install pytest pytest-cov
+      - run: pip install pytest pytest-cov pytest-asyncio
       - run: pytest nexus/tests/ --cov=nexus -q
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/test

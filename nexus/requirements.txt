@@ -40,7 +40,7 @@ cachetools==5.5.0
 async-lru==2.0.4
 
 # Retry Logic
-tenacity==9.0.0
+tenacity==9.1.4
 
 # Logging
 structlog==24.4.0

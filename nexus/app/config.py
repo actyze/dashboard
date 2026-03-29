@@ -1,5 +1,6 @@
 """Configuration management for Nexus service."""
 
+from pydantic import Field
 from pydantic_settings import BaseSettings
 from typing import Optional, List
 import os
@@ -214,6 +215,12 @@ class Settings(BaseSettings):
     tile_cache_max_rows: int = 1000                   # TILE_CACHE_MAX_ROWS
 
     # =============================================================================
+    # Telemetry (opt-out anonymous usage stats)
+    # =============================================================================
+    telemetry_enabled: bool = Field(default=True, alias="TELEMETRY_ENABLED")
+    telemetry_url: str = Field(default="https://telemetry.actyze.ai/api/telemetry/ping", alias="TELEMETRY_URL")
+
+    # =============================================================================
     # Feature Flags
     # =============================================================================
     feature_user_management: bool = True
@@ -240,6 +247,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
+        populate_by_name = True
 
 
 # Global settings instance

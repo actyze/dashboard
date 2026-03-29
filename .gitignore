@@ -96,6 +96,10 @@ kind-config*.yaml
 *-local.sh
 *-test*.sh
 
+# Internal strategy docs (DO NOT PUBLISH)
+OPEN_SOURCE_STRATEGY.md
+ARCHITECTURE_VISION.md
+
 # Secrets files (DO NOT COMMIT)
 helm/dashboard/values-dev-secrets.yaml
 helm/dashboard/values-production-secrets.yaml

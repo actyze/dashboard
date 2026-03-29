@@ -1,19 +1,17 @@
 /**
  * Site detection utilities
  * Used to conditionally enable features based on the current domain
+ * Configure REACT_APP_SITE_TYPE env var to override detection
  */
 
 export const isDemoSite = () => {
-  return window.location.hostname === 'demo.actyze.ai';
+  return process.env.REACT_APP_SITE_TYPE === 'demo';
 };
 
 export const isProductionSite = () => {
-  return window.location.hostname === 'app.actyze.ai';
+  return process.env.REACT_APP_SITE_TYPE === 'production';
 };
 
 export const getSiteType = () => {
-  const hostname = window.location.hostname;
-  if (hostname === 'demo.actyze.ai') return 'demo';
-  if (hostname === 'app.actyze.ai') return 'production';
-  return 'development';
+  return process.env.REACT_APP_SITE_TYPE || 'development';
 };

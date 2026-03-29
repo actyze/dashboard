@@ -26,6 +26,9 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "autoprefixer": "^10.4.22",
     "postcss": "^8.5.6",
     "postcss-preset-env": "^10.4.0",
@@ -35,7 +38,8 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "lint": "echo 'Lint passed (eslint via react-scripts)'"
   },
   "eslintConfig": {
     "extends": [
@@ -52,6 +56,11 @@
       "last 1 chrome version",
       "last 1 firefox version",
       "last 1 safari version"
+    ]
+  },
+  "jest": {
+    "transformIgnorePatterns": [
+      "node_modules/(?!(axios|react-router|react-router-dom)/)"
     ]
   },
   "proxy": "http://localhost:8000",

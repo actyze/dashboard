@@ -1,0 +1,15 @@
+# Default owners
+* @actyze/core
+
+# Frontend
+frontend/ @actyze/frontend
+
+# Backend
+nexus/ @actyze/backend
+
+# Schema Service
+schema-service/ @actyze/backend
+
+# Infrastructure
+docker/ @actyze/infra
+.github/ @actyze/infra

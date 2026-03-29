@@ -374,7 +374,8 @@ class OrchestrationService:
             
             generated_sql = generation_result["generated_sql"]
             recommendations = generation_result.get("schema_recommendations", [])
-            
+            preferred_tables = generation_result.get("preferred_tables", [])
+
             self.logger.info("SQL generated successfully", sql=generated_sql[:100])
             
             # Step 3: Execute SQL with retry logic

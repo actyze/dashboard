@@ -1,0 +1,28 @@
+name: Stale Issues
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          days-before-stale: 90
+          days-before-close: 30
+          stale-issue-label: stale
+          stale-issue-message: >
+            This issue has been automatically marked as stale because it has not
+            had activity in 90 days. It will be closed in 30 days if no further
+            activity occurs. If this issue is still relevant, please leave a
+            comment or remove the stale label.
+          close-issue-message: >
+            This issue has been closed due to inactivity. Feel free to reopen it
+            if it is still relevant.
+          exempt-issue-labels: pinned,security,good-first-issue

@@ -19,7 +19,7 @@ on:
       - main
 
 env:
-  CLUSTER_NAME: k8s-1-34-1-do-2-fra1-1768176431915
+  CLUSTER_NAME: ${{ secrets.DO_CLUSTER_NAME }}
   NAMESPACE: dashboard
   HELM_RELEASE: dashboard
 
@@ -46,22 +46,22 @@ jobs:
           script: |
             // Get the workflow run that triggered this deployment
             const buildRun = context.payload.workflow_run;
-            
+
             // Get all jobs from the build workflow
             const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
               owner: context.repo.owner,
               repo: context.repo.repo,
               run_id: buildRun.id
             });
-            
+
             // Check if the build-complete job succeeded
             const buildCompleteJob = jobs.jobs.find(job => job.name === 'build-complete');
-            
+
             if (buildCompleteJob && buildCompleteJob.conclusion === 'success') {
-              console.log('✅ build-complete job succeeded - deploying!');
+              console.log('Build succeeded - deploying');
               core.setOutput('should-deploy', 'true');
             } else {
-              console.log('❌ build-complete job did not succeed - skipping deployment');
+              console.log('Build did not succeed - skipping deployment');
               console.log(`Build complete status: ${buildCompleteJob?.conclusion || 'not found'}`);
               core.setOutput('should-deploy', 'false');
             }
@@ -71,23 +71,15 @@ jobs:
     needs: [check-build-status]
     if: |
       always() && (
-        github.event_name == 'workflow_dispatch' || 
+        github.event_name == 'workflow_dispatch' ||
         needs.check-build-status.outputs.should-deploy == 'true'
       )
-    
+
     steps:
       - name: Checkout dashboard repository
         uses: actions/checkout@v4
         with:
           path: dashboard
-
-      # Helm charts are now included in the dashboard repo under .helm-charts/
-      # - name: Checkout helm-charts repository
-      #   uses: actions/checkout@v4
-      #   with:
-      #     repository: ${{ github.repository_owner }}/helm-charts
-      #     path: helm-charts
-      #     token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -115,10 +107,7 @@ jobs:
           secrets:
             create: true
             externalLLM:
-              # LiteLLM Integration - Auto-detects provider from model name
               apiKey: "${{ secrets.ANTHROPIC_API_KEY }}"
-              # For other providers, add their secrets to GitHub:
-              # OPENAI_API_KEY, GEMINI_API_KEY, GROQ_API_KEY, etc.
             trino:
               username: "admin"
               password: ""
@@ -128,11 +117,13 @@ jobs:
             accountProvisioning:
               apiKey: "${{ secrets.ACCOUNT_PROVISIONING_API_KEY }}"
 
-          # Enable Intercom for demo.actyze.ai only
           frontend:
             intercom:
-              enabled: true
-              appId: "e4rc082n"
+              enabled: ${{ secrets.INTERCOM_ENABLED || 'false' }}
+              appId: "${{ secrets.INTERCOM_APP_ID }}"
+            googleAnalytics:
+              enabled: ${{ secrets.GA_ENABLED || 'false' }}
+              trackingId: "${{ secrets.GA_TRACKING_ID }}"
 
           nexus:
             env:
@@ -142,7 +133,7 @@ jobs:
                 catalog: "postgres"
                 schema: "public"
                 ssl: false
-                sslVerify: false  # Matches previous sslVerification: "NONE" behavior
+                sslVerify: false
               schemaServiceKey: "${{ secrets.SCHEMA_SERVICE_KEY }}"
 
           schemaService:
@@ -153,7 +144,7 @@ jobs:
                 catalog: "postgres"
                 schema: "public"
                 ssl: false
-                sslVerify: false  # Matches previous sslVerification: "NONE" behavior
+                sslVerify: false
               schemaServiceKey: "${{ secrets.SCHEMA_SERVICE_KEY }}"
 
           trino:
@@ -163,13 +154,13 @@ jobs:
                 mongodb.connection-url: "${{ secrets.MONGODB_CONNECTION_URL }}"
               snowflake:
                 connector.name: "snowflake"
-                connection-url: "jdbc:snowflake://CDUCMAC-VOC43074.snowflakecomputing.com"
+                connection-url: "${{ secrets.SNOWFLAKE_CONNECTION_URL }}"
                 connection-user: "${{ secrets.SNOWFLAKE_USERNAME }}"
                 connection-password: "${{ secrets.SNOWFLAKE_PASSWORD }}"
-                snowflake.account: "CDUCMAC-VOC43074"
-                snowflake.database: "UNIVERSITY_ANALYTICS"
-                snowflake.role: "SYSADMIN"
-                snowflake.warehouse: "SNOWFLAKE_LEARNING_WH"
+                snowflake.account: "${{ secrets.SNOWFLAKE_ACCOUNT }}"
+                snowflake.database: "${{ secrets.SNOWFLAKE_DATABASE }}"
+                snowflake.role: "${{ secrets.SNOWFLAKE_ROLE }}"
+                snowflake.warehouse: "${{ secrets.SNOWFLAKE_WAREHOUSE }}"
               supabase:
                 connector.name: "postgresql"
                 connection-url: "${{ secrets.SUPABASE_URL }}"
@@ -183,14 +174,10 @@ jobs:
 
       - name: Deploy with Helm
         run: |
-          # Helm charts are in .helm-charts/ directory
           cd dashboard/.helm-charts
-          
-          # Verify Helm chart exists
+
           ls -la dashboard/
-          
-          echo "📦 Deploying with :latest tags (annotations will force pod restart)"
-          
+
           helm upgrade --install ${{ env.HELM_RELEASE }} ./dashboard \
             --namespace ${{ env.NAMESPACE }} \
             --create-namespace \
@@ -211,7 +198,7 @@ jobs:
             --selector=app.kubernetes.io/instance=dashboard \
             --namespace=${{ env.NAMESPACE }} \
             --timeout=300s || true
-          
+
           echo "Deployment status:"
           kubectl get pods -n ${{ env.NAMESPACE }}
           kubectl get services -n ${{ env.NAMESPACE }}
@@ -229,9 +216,9 @@ jobs:
         run: |
           INGRESS_IP=$(kubectl get ingress dashboard-ingress -n ${{ env.NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
           INGRESS_HOST=$(kubectl get ingress dashboard-ingress -n ${{ env.NAMESPACE }} -o jsonpath='{.spec.rules[0].host}')
-          echo "🎉 Deployment successful!"
-          echo "📍 URL: https://$INGRESS_HOST"
-          echo "📍 IP: $INGRESS_IP"
+          echo "Deployment successful!"
+          echo "URL: https://$INGRESS_HOST"
+          echo "IP: $INGRESS_IP"
           echo "::notice title=Deployment Success::Dashboard deployed to https://$INGRESS_HOST"
 
       - name: Cleanup secrets
@@ -247,8 +234,8 @@ jobs:
       - name: Send deployment notification
         run: |
           if [ "${{ needs.deploy.result }}" == "success" ]; then
-            echo "✅ Deployment to DigitalOcean succeeded!"
+            echo "Deployment to DigitalOcean succeeded"
           else
-            echo "❌ Deployment to DigitalOcean failed!"
+            echo "Deployment to DigitalOcean failed"
             exit 1
           fi

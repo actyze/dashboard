@@ -8,7 +8,6 @@ import structlog
 from app.config import settings
 from app.logging import configure_logging
 from app.services.orchestration_service import orchestration_service
-from app.services.license_validator_service import license_validator_service
 from app.database import db_manager
 from app.migrations import run_migrations
 from app.api import router as api_router, auth_router, explorer_router, dashboard_router, public_router
@@ -17,11 +16,10 @@ from app.api_preferences import router as preferences_router
 from app.api_file_upload import router as file_upload_router
 from app.api_metadata import router as metadata_router
 from app.api_exclusions import router as exclusions_router
-from app.api_license import router as license_router
-from app.api_license_check import router as license_check_router
 from app.api_refresh import router as refresh_router
 from app.services.scheduler_service import start_scheduler, stop_scheduler
 from app.services.refresh_service import refresh_service
+from app.services.telemetry_service import telemetry_service
 
 # Configure logging
 configure_logging()
@@ -51,9 +49,9 @@ async def lifespan(app: FastAPI):
     
     # Initialize orchestration service
     await orchestration_service.initialize()
-    
-    # Start license validator (validates on startup + every 6 hours)
-    await license_validator_service.start()
+
+    # Start anonymous telemetry (opt-out via TELEMETRY_ENABLED=false)
+    await telemetry_service.start()
 
     # Recover any jobs stuck in 'running' state from a previous pod crash
     await refresh_service.recover_stuck_jobs()
@@ -67,8 +65,8 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down Nexus service")
+    await telemetry_service.stop()
     stop_scheduler()
-    await license_validator_service.stop()
     await orchestration_service.shutdown()
     await db_manager.close()
     logger.info("Service shutdown complete")
@@ -104,8 +102,6 @@ app.include_router(preferences_router)  # Prefix already in router definition
 app.include_router(file_upload_router)  # File upload endpoints
 app.include_router(metadata_router)  # Metadata catalog descriptions (org-level)
 app.include_router(exclusions_router)  # Schema exclusions (org-level, admin only)
-app.include_router(license_router)  # License management endpoints (admin only)
-app.include_router(license_check_router)  # License check/initial setup (all users)
 app.include_router(public_router)  # No authentication required
 app.include_router(refresh_router)  # Tile cache & refresh scheduler
 

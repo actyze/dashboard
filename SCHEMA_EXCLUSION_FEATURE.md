@@ -13,9 +13,9 @@ Implemented a comprehensive feature to disable/hide unwanted databases, schemas,
   - Priority Boost: Only affects individual user's recommendations
 
 ### 2. **Hierarchical Exclusions**
-- **Database-level**: Hide entire catalog (e.g., `supabase`)
-- **Schema-level**: Hide specific schema within a catalog (e.g., `supabase.auth`)
-- **Table-level**: Hide specific table (e.g., `supabase.actyze_ref.tenants`)
+- **Database-level**: Hide entire catalog (e.g., `internal_db`)
+- **Schema-level**: Hide specific schema within a catalog (e.g., `internal_db.auth`)
+- **Table-level**: Hide specific table (e.g., `internal_db.app_schema.tenants`)
 
 ### 3. **FAISS Index Integration**
 - Excluded resources are automatically removed from schema service FAISS index
@@ -169,7 +169,7 @@ CREATE TABLE nexus.schema_exclusions (
 ```bash
 POST /api/v1/exclusions
 {
-  "catalog": "supabase",
+  "catalog": "internal_db",
   "schema_name": "auth",
   "table_name": null,
   "reason": "Internal authentication tables"

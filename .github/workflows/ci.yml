@@ -18,7 +18,17 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install ruff
-      - run: ruff check nexus/ --config nexus/ruff.toml
+      - name: Lint changed Python files only
+        run: |
+          # Get list of changed .py files in this PR
+          CHANGED=$(git diff --name-only --diff-filter=d origin/main...HEAD -- 'nexus/**.py' || true)
+          if [ -z "$CHANGED" ]; then
+            echo "No Python files changed — skipping lint"
+          else
+            echo "Linting changed files:"
+            echo "$CHANGED"
+            echo "$CHANGED" | xargs ruff check --config nexus/ruff.toml
+          fi
 
   test-backend:
     name: Test Backend

@@ -64,13 +64,15 @@ async def db_engine():
         await conn.run_sync(Base.metadata.create_all)
 
     # Seed roles (ADMIN, USER, READONLY) — idempotent
+    # Include created_at explicitly because SQLAlchemy create_all doesn't add
+    # server-side DEFAULT for Python-side defaults (differs from real migrations).
     async with engine.begin() as conn:
         await conn.execute(text("""
-            INSERT INTO nexus.roles (id, name, description)
+            INSERT INTO nexus.roles (id, name, description, created_at)
             VALUES
-                (gen_random_uuid(), 'ADMIN', 'Full access'),
-                (gen_random_uuid(), 'USER', 'Standard user'),
-                (gen_random_uuid(), 'READONLY', 'Read-only viewer')
+                (gen_random_uuid(), 'ADMIN', 'Full access', NOW()),
+                (gen_random_uuid(), 'USER', 'Standard user', NOW()),
+                (gen_random_uuid(), 'READONLY', 'Read-only viewer', NOW())
             ON CONFLICT (name) DO NOTHING
         """))
 

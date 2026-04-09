@@ -138,14 +138,14 @@ async def create_user(
 
     async with engine.begin() as conn:
         await conn.execute(text("""
-            INSERT INTO nexus.users (id, username, email, password_hash, full_name, is_active)
-            VALUES (:id, :username, :email, :hash, :full_name, true)
+            INSERT INTO nexus.users (id, username, email, password_hash, full_name, is_active, created_at, updated_at)
+            VALUES (:id, :username, :email, :hash, :full_name, true, NOW(), NOW())
         """), {"id": user_id, "username": unique_username, "email": email, "hash": password_hash, "full_name": username.title()})
 
         for role_name in roles:
             await conn.execute(text("""
-                INSERT INTO nexus.user_roles (user_id, role_id)
-                SELECT :uid, id FROM nexus.roles WHERE name = :role
+                INSERT INTO nexus.user_roles (user_id, role_id, assigned_at)
+                SELECT :uid, id, NOW() FROM nexus.roles WHERE name = :role
             """), {"uid": user_id, "role": role_name})
 
     return {

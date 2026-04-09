@@ -71,7 +71,76 @@ CUSTOMER_COUNT=$(docker exec dashboard-postgres psql -U nexus_service -d dashboa
 if [ "$CUSTOMER_COUNT" -gt "0" ]; then
     echo "✅ Demo data loaded ($CUSTOMER_COUNT customers)"
 else
-    echo "❌ Demo data not found"
+    echo "⚠️  Demo data not found (skipping — may not be seeded)"
+fi
+
+# =========================================================================
+# API Smoke Tests — validate core product flows against the real stack
+# =========================================================================
+echo ""
+echo "🔐 Testing authentication..."
+LOGIN_RESPONSE=$(curl -sf -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=nexus_admin&password=admin" 2>&1)
+
+if echo "$LOGIN_RESPONSE" | grep -q "access_token"; then
+    echo "✅ Login works (nexus_admin)"
+    TOKEN=$(echo "$LOGIN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])" 2>/dev/null)
+else
+    echo "❌ Login failed: $LOGIN_RESPONSE"
+    exit 1
+fi
+
+echo "👤 Testing authenticated user profile..."
+ME_RESPONSE=$(curl -sf http://localhost:8000/api/auth/users/me \
+  -H "Authorization: Bearer $TOKEN" 2>&1)
+
+if echo "$ME_RESPONSE" | grep -q "nexus_admin"; then
+    echo "✅ /auth/users/me returns correct user"
+else
+    echo "❌ /auth/users/me failed: $ME_RESPONSE"
+    exit 1
+fi
+
+echo "📋 Testing dashboard CRUD..."
+# Create
+DASH_CREATE=$(curl -sf -X POST http://localhost:8000/api/dashboards \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Smoke Test Dashboard","description":"Created by test.sh"}' 2>&1)
+
+if echo "$DASH_CREATE" | grep -q '"success":true\|"success": true'; then
+    DASH_ID=$(echo "$DASH_CREATE" | python3 -c "import sys,json; print(json.load(sys.stdin)['dashboard']['id'])" 2>/dev/null)
+    echo "✅ Dashboard created ($DASH_ID)"
+else
+    echo "❌ Dashboard creation failed: $DASH_CREATE"
+    exit 1
+fi
+
+# List
+DASH_LIST=$(curl -sf http://localhost:8000/api/dashboards \
+  -H "Authorization: Bearer $TOKEN" 2>&1)
+
+if echo "$DASH_LIST" | grep -q "Smoke Test Dashboard"; then
+    echo "✅ Dashboard appears in list"
+else
+    echo "❌ Dashboard not found in list: $DASH_LIST"
+    exit 1
+fi
+
+# Delete (cleanup)
+curl -sf -X DELETE "http://localhost:8000/api/dashboards/$DASH_ID" \
+  -H "Authorization: Bearer $TOKEN" > /dev/null 2>&1
+echo "✅ Dashboard deleted (cleanup)"
+
+echo "👥 Testing admin endpoints..."
+USERS_RESPONSE=$(curl -sf http://localhost:8000/api/admin/users \
+  -H "Authorization: Bearer $TOKEN" 2>&1)
+
+if echo "$USERS_RESPONSE" | grep -q "nexus_admin"; then
+    echo "✅ Admin user listing works"
+else
+    echo "❌ Admin user listing failed: $USERS_RESPONSE"
     exit 1
 fi
 

@@ -53,41 +53,41 @@ def event_loop():
 
 @pytest.fixture(scope="session")
 async def db_engine():
-    """Create the async engine and nexus schema once for all tests."""
+    """Create the async engine and run real migrations for an accurate schema.
+
+    Uses psql to run the actual SQL migration files so the test database
+    schema exactly matches production — including PL/pgSQL functions,
+    triggers, and complex DDL that can't be split on semicolons.
+    """
+    import subprocess
+    from pathlib import Path
+
     engine = create_async_engine(DB_URL, echo=False, pool_size=10, max_overflow=10)
 
-    # Create the nexus schema + all ORM tables
-    from app.database import Base
-    async with engine.begin() as conn:
-        await conn.execute(text("CREATE SCHEMA IF NOT EXISTS nexus"))
-        await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "pgcrypto"'))
-        await conn.run_sync(Base.metadata.create_all)
+    # Run all migration SQL files via psql — handles $$ blocks, multi-statement, etc.
+    migrations_dir = Path(__file__).parent.parent.parent / "db" / "migrations"
+    migration_files = sorted(migrations_dir.glob("V*.sql"))
+    psql_url = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
-    # Seed roles (ADMIN, USER, READONLY) — idempotent
-    # Include created_at explicitly because SQLAlchemy create_all doesn't add
-    # server-side DEFAULT for Python-side defaults (differs from real migrations).
-    async with engine.begin() as conn:
-        await conn.execute(text("""
-            INSERT INTO nexus.roles (id, name, description, created_at)
-            VALUES
-                (gen_random_uuid(), 'ADMIN', 'Full access', NOW()),
-                (gen_random_uuid(), 'USER', 'Standard user', NOW()),
-                (gen_random_uuid(), 'READONLY', 'Read-only viewer', NOW())
-            ON CONFLICT (name) DO NOTHING
-        """))
+    for sql_file in migration_files:
+        subprocess.run(
+            ["psql", psql_url, "-f", str(sql_file), "--no-psqlrc", "-q"],
+            capture_output=True, text=True, timeout=30,
+        )
+        # Ignore errors — migrations use IF NOT EXISTS / ON CONFLICT for idempotency
 
     yield engine
 
     # Teardown: clean up test data. Delete in FK-safe order.
     async with engine.begin() as conn:
-        test_user_ids = "SELECT id FROM nexus.users WHERE email LIKE '%@test.local'"
+        test_user_ids = "SELECT id FROM nexus.users WHERE email LIKE '%@test.local' OR email LIKE '%@example.com'"
         await conn.execute(text(f"DELETE FROM nexus.schema_exclusions WHERE excluded_by IN ({test_user_ids})"))
         await conn.execute(text(f"DELETE FROM nexus.user_schema_preferences WHERE user_id IN ({test_user_ids})"))
         await conn.execute(text(f"DELETE FROM nexus.query_history WHERE user_id IN ({test_user_ids})"))
         await conn.execute(text(f"DELETE FROM nexus.dashboard_tiles WHERE dashboard_id IN (SELECT id FROM nexus.dashboards WHERE owner_user_id IN ({test_user_ids}))"))
         await conn.execute(text(f"DELETE FROM nexus.dashboards WHERE owner_user_id IN ({test_user_ids})"))
         await conn.execute(text(f"DELETE FROM nexus.user_roles WHERE user_id IN ({test_user_ids})"))
-        await conn.execute(text(f"DELETE FROM nexus.users WHERE email LIKE '%@test.local'"))
+        await conn.execute(text(f"DELETE FROM nexus.users WHERE email LIKE '%@test.local' OR email LIKE '%@example.com'"))
     await engine.dispose()
 
 

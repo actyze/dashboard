@@ -12,7 +12,7 @@
     "@uiw/codemirror-themes": "^4.25.3",
     "@uiw/react-codemirror": "^4.25.3",
     "axios": "^1.4.0",
-    "date-fns": "^2.30.0",
+    "date-fns": "^4.1.0",
     "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.1",

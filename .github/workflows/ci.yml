@@ -54,9 +54,20 @@ jobs:
           python-version: "3.11"
       - run: pip install -r nexus/requirements.txt
       - run: pip install pytest pytest-cov pytest-asyncio
-      - run: pytest nexus/tests/ --cov=nexus -q
+      - name: Ensure psql is available (for integration test migrations)
+        run: psql --version || sudo apt-get install -y postgresql-client
+      - name: Run unit tests
+        run: pytest nexus/tests/ --ignore=nexus/tests/integration --cov=nexus -q
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/test
+      - name: Run integration tests (real database)
+        run: pytest nexus/tests/integration/ -q
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: "5432"
+          POSTGRES_DATABASE: test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
 
   lint-frontend:
     name: Lint Frontend
@@ -87,6 +98,29 @@ jobs:
         working-directory: frontend
       - run: npm test -- --coverage --watchAll=false
         working-directory: frontend
+
+  test-e2e:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run test:e2e
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
 
   docker-build:
     name: Docker Build Verification

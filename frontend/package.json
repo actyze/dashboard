@@ -18,7 +18,7 @@
     "jspdf": "^2.5.1",
     "plotly.js-dist-min": "^2.26.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "react-dom": "^19.2.5",
     "react-grid-layout": "^2.2.3",
     "react-plotly.js": "^2.6.0",
     "react-router": "^7.9.6",

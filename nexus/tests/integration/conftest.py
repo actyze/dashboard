@@ -81,6 +81,8 @@ async def db_engine():
     # Teardown: clean up test data. Delete in FK-safe order.
     async with engine.begin() as conn:
         test_user_ids = "SELECT id FROM nexus.users WHERE email LIKE '%@test.local' OR email LIKE '%@example.com'"
+        await conn.execute(text(f"DELETE FROM kpi_data.kpi_metric_values WHERE metric_id IN (SELECT id FROM nexus.kpi_definitions WHERE owner_user_id IN ({test_user_ids}))"))
+        await conn.execute(text(f"DELETE FROM nexus.kpi_definitions WHERE owner_user_id IN ({test_user_ids})"))
         await conn.execute(text(f"DELETE FROM nexus.schema_exclusions WHERE excluded_by IN ({test_user_ids})"))
         await conn.execute(text(f"DELETE FROM nexus.user_schema_preferences WHERE user_id IN ({test_user_ids})"))
         await conn.execute(text(f"DELETE FROM nexus.query_history WHERE user_id IN ({test_user_ids})"))

@@ -1,17 +1,22 @@
 -- =====================================================
 -- V032: Scheduled KPI Feature (Gold Layer)
 -- =====================================================
--- Enhances kpi_definitions with owner, interval, status
--- columns and moves kpi_metric_values to a dedicated
--- kpi_data schema so it is queryable via Trino/AI
+-- Enhances kpi_definitions with owner, interval, status,
+-- and materialized table columns. Moves kpi_metric_values
+-- to a dedicated kpi_data schema queryable via Trino/AI
 -- (the nexus schema is blocked from AI/query generation).
 --
+-- Each KPI creates a real typed Postgres table in kpi_data
+-- schema, registered with FAISS for AI discovery. Each
+-- collection appends new rows with a collected_at timestamp,
+-- building an additive time-series.
+--
 -- kpi_definitions stays in nexus (system config/metadata).
--- kpi_data.kpi_metric_values holds the queryable time-series.
--- Same pattern as user_uploads.
+-- kpi_data holds materialized KPI tables + metric value log.
+-- Same isolation pattern as user_uploads.
 -- =====================================================
 
--- 1. Enhance kpi_definitions with scheduling columns
+-- 1. Enhance kpi_definitions with scheduling + materialization columns
 ALTER TABLE nexus.kpi_definitions
     ADD COLUMN IF NOT EXISTS owner_user_id UUID REFERENCES nexus.users(id) ON DELETE SET NULL;
 
@@ -24,6 +29,9 @@ ALTER TABLE nexus.kpi_definitions
 
 ALTER TABLE nexus.kpi_definitions
     ADD COLUMN IF NOT EXISTS last_error TEXT;
+
+ALTER TABLE nexus.kpi_definitions
+    ADD COLUMN IF NOT EXISTS materialized_table VARCHAR(63);
 
 CREATE INDEX IF NOT EXISTS idx_kpi_definitions_owner
     ON nexus.kpi_definitions (owner_user_id);
@@ -44,4 +52,4 @@ CREATE INDEX IF NOT EXISTS idx_kpi_metric_values_agg
     ON kpi_data.kpi_metric_values (metric_id, collected_at DESC);
 
 -- 5. Documentation
-COMMENT ON SCHEMA kpi_data IS 'Pre-aggregated KPI metric values — queryable via Trino for dashboards';
+COMMENT ON SCHEMA kpi_data IS 'Pre-aggregated KPI metric values and materialized gold tables — queryable via Trino for dashboards';

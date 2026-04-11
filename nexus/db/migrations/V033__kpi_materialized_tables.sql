@@ -3,8 +3,8 @@
 -- =====================================================
 -- Each KPI now creates a real typed Postgres table in
 -- kpi_data schema, registered with FAISS for AI discovery.
--- On each collection, the table is truncated and refilled
--- with fresh results plus a collected_at timestamp column.
+-- Each collection appends new rows with a collected_at
+-- timestamp, building an additive time-series.
 -- =====================================================
 
 -- 1. Track the materialized table name per KPI

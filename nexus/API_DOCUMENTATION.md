@@ -364,6 +364,51 @@ input SavedQueryInputGQL {
 }
 ```
 
+## Scheduled KPI REST API
+
+Endpoints for managing scheduled KPI definitions, collection, and metric values. All endpoints require authentication. Write operations require ADMIN or USER role.
+
+### KPI Definitions
+
+```
+GET    /api/kpi                          — List all KPI definitions
+POST   /api/kpi                          — Create a new KPI definition
+GET    /api/kpi/{kpi_id}                 — Get a single KPI definition
+PUT    /api/kpi/{kpi_id}                 — Update a KPI definition (owner only)
+DELETE /api/kpi/{kpi_id}                 — Delete a KPI and its materialized table (owner only)
+```
+
+### KPI Collection & Metrics
+
+```
+POST   /api/kpi/{kpi_id}/collect         — Trigger immediate collection (runs in background)
+GET    /api/kpi/{kpi_id}/values          — Get collected metric values (time-series)
+GET    /api/kpi/{kpi_id}/summary         — Get aggregation summary over a time range
+```
+
+### Create KPI Request
+
+```json
+{
+  "name": "Daily Active Users",
+  "description": "Count of distinct users per day",
+  "sql_query": "SELECT COUNT(DISTINCT user_id) AS active_users FROM events WHERE event_date = CURRENT_DATE",
+  "interval_hours": 1,
+  "is_active": true
+}
+```
+
+### Materialized Tables
+
+Each KPI creates a real typed Postgres table in the `kpi_data` schema (e.g., `kpi_data.kpi_daily_active_users`) with columns inferred from the first Trino query execution. Tables are automatically registered with the FAISS schema service for AI discovery. On deletion, the table is dropped and deregistered.
+
+Query the materialized table directly via Trino:
+```sql
+SELECT * FROM postgres.kpi_data.kpi_daily_active_users
+WHERE collected_at >= CURRENT_TIMESTAMP - INTERVAL '7' DAY
+ORDER BY collected_at DESC
+```
+
 ## Authentication & Authorization
 
 Currently, the API operates without authentication. For production deployment, consider implementing:

@@ -363,6 +363,18 @@ const ScheduledKpis = () => {
           ))}
         </div>
 
+        {/* Materialized table */}
+        {kpi.materialized_table && (
+          <div className={`px-5 py-3 border-b ${isDark ? 'border-[#2a2b2e]' : 'border-gray-100'}`}>
+            <p className={`text-xs font-medium mb-1 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Queryable Table</p>
+            <code className={`text-xs px-2 py-1 rounded font-mono ${
+              isDark ? 'bg-[#0a0a0a] text-[#5d6ad3]' : 'bg-gray-50 text-[#5d6ad3]'
+            }`}>
+              postgres.kpi_data.{kpi.materialized_table}
+            </code>
+          </div>
+        )}
+
         {/* SQL preview */}
         <div className={`px-5 py-3 border-b ${isDark ? 'border-[#2a2b2e]' : 'border-gray-100'}`}>
           <p className={`text-xs font-medium mb-1.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>SQL Query</p>
@@ -551,6 +563,11 @@ const ScheduledKpis = () => {
                           <span>Last: {kpi.last_collected_at ? formatDate(kpi.last_collected_at) : 'never'}</span>
                           {kpi.owner_username && <span>by {kpi.owner_username}</span>}
                         </div>
+                        {kpi.materialized_table && (
+                          <div className={`mt-1 text-xs font-mono ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                            kpi_data.{kpi.materialized_table}
+                          </div>
+                        )}
                       </div>
 
                       {/* Action buttons */}

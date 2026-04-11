@@ -1,18 +1,21 @@
 """
-Scheduled KPI Service — CRUD, collection, and aggregation.
+Scheduled KPI Service — CRUD, collection, and materialized gold tables.
 
-KPI definitions hold a SQL query that is executed periodically (every 1-24 hours)
-by the scheduler. Each execution appends a row to kpi_metric_values with the
-result as JSONB, building a time-series that can be aggregated over arbitrary
-time ranges for dashboard consumption.
+Each KPI definition holds a SQL query executed periodically (1-24 hours).
+On first collection the service infers column types from Trino, creates a
+real typed Postgres table in kpi_data schema, registers it with the FAISS
+schema service, and populates it.  Subsequent collections append new rows
+with a collected_at timestamp so dashboards can query the table directly
+via Trino (e.g. SELECT * FROM postgres.kpi_data.daily_revenue).
 """
 
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
-from uuid import UUID
 
+import httpx
 from sqlalchemy import text
 
 from app.config import settings
@@ -23,9 +26,47 @@ logger = logging.getLogger(__name__)
 
 _trino = TrinoService()
 
+# Trino type_code → Postgres column type mapping
+_TRINO_TYPE_MAP = {
+    "varchar": "TEXT",
+    "char": "TEXT",
+    "varbinary": "BYTEA",
+    "boolean": "BOOLEAN",
+    "tinyint": "SMALLINT",
+    "smallint": "SMALLINT",
+    "integer": "INTEGER",
+    "bigint": "BIGINT",
+    "real": "REAL",
+    "double": "DOUBLE PRECISION",
+    "decimal": "NUMERIC",
+    "date": "DATE",
+    "time": "TIME",
+    "timestamp": "TIMESTAMP",
+    "interval": "INTERVAL",
+    "json": "JSONB",
+    "uuid": "UUID",
+    "array": "JSONB",
+    "map": "JSONB",
+    "row": "JSONB",
+}
+
+
+def _sanitize_table_name(name: str) -> str:
+    """Convert a KPI name to a valid Postgres table identifier."""
+    name = name.lower().strip()
+    name = re.sub(r"[^a-z0-9_]", "_", name)
+    name = re.sub(r"_+", "_", name).strip("_")
+    return name[:55]  # leave room for kpi_ prefix
+
+
+def _pg_type(trino_type_str: str) -> str:
+    """Map a Trino type string to a Postgres type."""
+    base = trino_type_str.lower().split("(")[0].strip()
+    return _TRINO_TYPE_MAP.get(base, "TEXT")
+
 
 class KpiService:
-    """CRUD + collection + aggregation for scheduled KPIs."""
+    """CRUD + collection + materialized tables for scheduled KPIs."""
 
     # ------------------------------------------------------------------
     # CRUD
@@ -44,20 +85,32 @@ class KpiService:
         refresh_interval_seconds = interval_hours * 3600
         now = datetime.utcnow()
         next_refresh = now + timedelta(seconds=refresh_interval_seconds)
+        materialized_table = f"kpi_{_sanitize_table_name(name)}"
 
         async with db_manager.get_session() as session:
+            # Ensure unique table name
+            for attempt in range(10):
+                candidate = materialized_table if attempt == 0 else f"{materialized_table}_{attempt}"
+                exists = await session.execute(
+                    text("SELECT 1 FROM nexus.kpi_definitions WHERE materialized_table = :t"),
+                    {"t": candidate},
+                )
+                if not exists.fetchone():
+                    materialized_table = candidate
+                    break
+
             result = await session.execute(
                 text("""
                     INSERT INTO nexus.kpi_definitions (
                         name, description, sql_query,
                         refresh_interval_seconds, interval_hours,
                         is_active, owner_user_id,
-                        next_refresh_at, metadata
+                        next_refresh_at, materialized_table, metadata
                     ) VALUES (
                         :name, :description, :sql_query,
                         :refresh_interval_seconds, :interval_hours,
                         :is_active, :owner_user_id,
-                        :next_refresh_at, CAST(:metadata AS jsonb)
+                        :next_refresh_at, :materialized_table, CAST(:metadata AS jsonb)
                     )
                     RETURNING id, created_at
                 """),
@@ -70,6 +123,7 @@ class KpiService:
                     "is_active": is_active,
                     "owner_user_id": owner_user_id,
                     "next_refresh_at": next_refresh,
+                    "materialized_table": materialized_table,
                     "metadata": json.dumps(metadata or {}),
                 },
             )
@@ -83,6 +137,7 @@ class KpiService:
             "sql_query": sql_query,
             "interval_hours": interval_hours,
             "is_active": is_active,
+            "materialized_table": materialized_table,
             "created_at": row.created_at.isoformat(),
         }
 
@@ -97,7 +152,9 @@ class KpiService:
         if not filtered:
             return await self.get_kpi(kpi_id)
 
-        # If interval_hours changed, sync refresh_interval_seconds and next_refresh_at
+        # If SQL changed, drop the old materialized table so it's recreated on next collection
+        sql_changed = "sql_query" in filtered
+
         if "interval_hours" in filtered:
             filtered["refresh_interval_seconds"] = filtered["interval_hours"] * 3600
             filtered["next_refresh_at"] = datetime.utcnow() + timedelta(
@@ -108,11 +165,17 @@ class KpiService:
         params: Dict[str, Any] = {"kpi_id": kpi_id, "owner_user_id": owner_user_id}
         for key, value in filtered.items():
             if key == "metadata":
-                set_clauses.append(f"metadata = CAST(:metadata AS jsonb)")
+                set_clauses.append("metadata = CAST(:metadata AS jsonb)")
                 params["metadata"] = json.dumps(value)
             else:
                 set_clauses.append(f"{key} = :{key}")
                 params[key] = value
+
+        if sql_changed:
+            # Get old table name before update
+            old_kpi = await self.get_kpi(kpi_id)
+            if old_kpi and old_kpi.get("materialized_table"):
+                await self._drop_materialized_table(old_kpi["materialized_table"])
 
         async with db_manager.get_session() as session:
             result = await session.execute(
@@ -132,6 +195,9 @@ class KpiService:
         return await self.get_kpi(kpi_id)
 
     async def delete_kpi(self, kpi_id: str, owner_user_id: str) -> bool:
+        # Get table name before deleting
+        kpi = await self.get_kpi(kpi_id)
+
         async with db_manager.get_session() as session:
             result = await session.execute(
                 text("""
@@ -143,6 +209,10 @@ class KpiService:
             )
             deleted = result.fetchone() is not None
             await session.commit()
+
+        if deleted and kpi and kpi.get("materialized_table"):
+            await self._drop_materialized_table(kpi["materialized_table"])
+
         return deleted
 
     async def get_kpi(self, kpi_id: str) -> Optional[Dict[str, Any]]:
@@ -154,7 +224,7 @@ class KpiService:
                         kd.refresh_interval_seconds, kd.interval_hours,
                         kd.is_active, kd.owner_user_id,
                         kd.next_refresh_at, kd.last_collected_at,
-                        kd.last_error, kd.metadata,
+                        kd.last_error, kd.materialized_table, kd.metadata,
                         kd.created_at, kd.updated_at,
                         u.username AS owner_username
                     FROM nexus.kpi_definitions kd
@@ -190,7 +260,7 @@ class KpiService:
                         kd.refresh_interval_seconds, kd.interval_hours,
                         kd.is_active, kd.owner_user_id,
                         kd.next_refresh_at, kd.last_collected_at,
-                        kd.last_error, kd.metadata,
+                        kd.last_error, kd.materialized_table, kd.metadata,
                         kd.created_at, kd.updated_at,
                         u.username AS owner_username
                     FROM nexus.kpi_definitions kd
@@ -203,29 +273,43 @@ class KpiService:
             return [self._kpi_to_dict(r) for r in result.fetchall()]
 
     # ------------------------------------------------------------------
-    # COLLECTION (execute SQL, store result)
+    # COLLECTION (execute SQL, materialize into real table)
     # ------------------------------------------------------------------
 
     async def collect_kpi(self, kpi_id: str) -> Dict[str, Any]:
-        """Execute the KPI's SQL query and store the result as a metric value."""
+        """Execute KPI SQL, materialize results into a typed table, store JSONB log."""
         kpi = await self.get_kpi(kpi_id)
         if not kpi:
             return {"success": False, "error": "KPI not found"}
 
+        table_name = kpi.get("materialized_table")
+        if not table_name:
+            return {"success": False, "error": "No materialized table defined"}
+
         try:
-            result = await _trino.execute_query(
-                kpi["sql_query"],
-                max_results=settings.tile_cache_max_rows,
-                timeout_seconds=settings.trino_execute_timeout_seconds,
-            )
+            # Execute via Trino with full column type info
+            result = await self._execute_with_types(kpi["sql_query"])
 
             if not result.get("success"):
                 error = result.get("error", "Query execution failed")
                 await self._update_collection_status(kpi_id, error=error)
                 return {"success": False, "error": error}
 
-            # Store the metric value
-            query_results = result.get("query_results", {})
+            columns = result["columns"]       # [{"name": "x", "type": "varchar"}, ...]
+            rows = result["rows"]
+            query_results = result["query_results"]
+
+            # Create or validate the materialized table
+            table_exists = await self._table_exists(table_name)
+            if not table_exists:
+                await self._create_materialized_table(table_name, columns)
+                await self._notify_faiss_add(table_name, columns)
+
+            # Insert rows with collected_at timestamp
+            if rows:
+                await self._insert_rows(table_name, columns, rows)
+
+            # Also store in kpi_metric_values for historical JSONB log
             async with db_manager.get_session() as session:
                 await session.execute(
                     text("""
@@ -248,17 +332,224 @@ class KpiService:
                 )
                 await session.commit()
 
-            # Update next_refresh_at and last_collected_at
             await self._update_collection_status(kpi_id)
 
-            logger.info(f"KPI {kpi_id} ({kpi['name']}) collected successfully")
-            return {"success": True, "kpi_id": kpi_id, "name": kpi["name"]}
+            logger.info(f"KPI {kpi_id} ({kpi['name']}) collected: {len(rows)} rows → kpi_data.{table_name}")
+            return {"success": True, "kpi_id": kpi_id, "name": kpi["name"], "rows_inserted": len(rows)}
 
         except Exception as exc:
             error_msg = str(exc)[:500]
             logger.error(f"KPI {kpi_id} collection failed: {error_msg}")
             await self._update_collection_status(kpi_id, error=error_msg)
             return {"success": False, "error": error_msg}
+
+    async def _execute_with_types(self, sql: str) -> Dict[str, Any]:
+        """Execute SQL via Trino and return column names + types from cursor.description."""
+        import asyncio
+
+        def _run():
+            import trino
+            from trino.dbapi import connect
+            from trino.auth import BasicAuthentication
+
+            auth = None
+            if settings.trino_password:
+                auth = BasicAuthentication(settings.trino_user, settings.trino_password)
+
+            conn_args = {
+                "host": settings.trino_host,
+                "port": settings.trino_port,
+                "user": settings.trino_user,
+                "catalog": settings.trino_catalog,
+                "schema": settings.trino_schema,
+                "http_scheme": "https" if settings.trino_ssl else "http",
+                "request_timeout": settings.trino_execute_timeout_seconds,
+            }
+            if auth:
+                conn_args["auth"] = auth
+            if settings.trino_ssl:
+                conn_args["verify"] = settings.trino_ssl_verify
+
+            sql_clean = sql.strip().rstrip(";")
+            conn = connect(**conn_args)
+            cur = conn.cursor()
+            cur.execute(sql_clean)
+            rows = cur.fetchmany(settings.tile_cache_max_rows)
+
+            columns = []
+            if cur.description:
+                for desc in cur.description:
+                    col_name = desc[0]
+                    # desc[1] is type_code (string in trino-python-client)
+                    col_type = str(desc[1]) if desc[1] else "varchar"
+                    columns.append({"name": col_name, "type": col_type})
+
+            return columns, rows
+
+        start = asyncio.get_event_loop().time()
+        try:
+            columns, rows = await asyncio.get_event_loop().run_in_executor(None, _run)
+            exec_time = (asyncio.get_event_loop().time() - start) * 1000
+            col_names = [c["name"] for c in columns]
+            return {
+                "success": True,
+                "columns": columns,
+                "rows": rows,
+                "execution_time": exec_time,
+                "query_results": {
+                    "columns": col_names,
+                    "rows": rows,
+                    "row_count": len(rows),
+                },
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    # ------------------------------------------------------------------
+    # MATERIALIZED TABLE MANAGEMENT
+    # ------------------------------------------------------------------
+
+    async def _table_exists(self, table_name: str) -> bool:
+        async with db_manager.get_session() as session:
+            result = await session.execute(
+                text("""
+                    SELECT 1 FROM information_schema.tables
+                    WHERE table_schema = 'kpi_data' AND table_name = :t
+                """),
+                {"t": table_name},
+            )
+            return result.fetchone() is not None
+
+    async def _create_materialized_table(
+        self, table_name: str, columns: List[Dict[str, str]]
+    ) -> None:
+        """Create a real typed Postgres table in kpi_data schema."""
+        col_defs = [f'"{c["name"]}" {_pg_type(c["type"])}' for c in columns]
+        col_defs.append("collected_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP")
+        ddl = f'CREATE TABLE IF NOT EXISTS kpi_data."{table_name}" ({", ".join(col_defs)})'
+
+        async with db_manager.get_session() as session:
+            await session.execute(text(ddl))
+            # Add index on collected_at for time-range queries
+            await session.execute(text(
+                f'CREATE INDEX IF NOT EXISTS "idx_{table_name}_collected_at" '
+                f'ON kpi_data."{table_name}" (collected_at DESC)'
+            ))
+            await session.commit()
+        logger.info(f"Created materialized table kpi_data.{table_name}")
+
+    async def _insert_rows(
+        self, table_name: str, columns: List[Dict[str, str]], rows: list
+    ) -> None:
+        """Insert rows into the materialized table."""
+        if not rows:
+            return
+
+        col_names = [f'"{c["name"]}"' for c in columns]
+        col_names.append("collected_at")
+        placeholders = [f":c{i}" for i in range(len(columns))]
+        placeholders.append("CURRENT_TIMESTAMP")
+
+        insert_sql = (
+            f'INSERT INTO kpi_data."{table_name}" ({", ".join(col_names)}) '
+            f'VALUES ({", ".join(placeholders)})'
+        )
+
+        async with db_manager.get_session() as session:
+            for row in rows:
+                params = {f"c{i}": self._coerce_value(v) for i, v in enumerate(row)}
+                await session.execute(text(insert_sql), params)
+            await session.commit()
+
+    def _coerce_value(self, v: Any) -> Any:
+        """Coerce complex Trino types to JSON-safe values for Postgres."""
+        if isinstance(v, (dict, list)):
+            return json.dumps(v)
+        return v
+
+    async def _drop_materialized_table(self, table_name: str) -> None:
+        """Drop the materialized table and deregister from FAISS."""
+        try:
+            async with db_manager.get_session() as session:
+                await session.execute(text(f'DROP TABLE IF EXISTS kpi_data."{table_name}"'))
+                await session.commit()
+            logger.info(f"Dropped materialized table kpi_data.{table_name}")
+            await self._notify_faiss_remove(table_name)
+        except Exception as exc:
+            logger.error(f"Failed to drop materialized table {table_name}: {exc}")
+
+    # ------------------------------------------------------------------
+    # FAISS SCHEMA SERVICE INTEGRATION
+    # ------------------------------------------------------------------
+
+    async def _notify_faiss_add(
+        self, table_name: str, columns: List[Dict[str, str]]
+    ) -> None:
+        """Register the materialized table with the FAISS schema service."""
+        import os
+
+        schema_service_url = os.getenv("SCHEMA_SERVICE_URL", "http://schema-service:8000")
+        service_key = os.getenv("SCHEMA_SERVICE_KEY", "")
+
+        columns_for_schema = [f"{c['name']}|{_pg_type(c['type']).lower()}" for c in columns]
+        columns_for_schema.append("collected_at|timestamp")
+
+        table_metadata = {
+            "catalog": "postgres",
+            "schema": "kpi_data",
+            "table": table_name,
+            "full_name": f"postgres.kpi_data.{table_name}",
+            "columns": columns_for_schema,
+            "type": "TABLE",
+        }
+
+        headers = {}
+        if service_key:
+            headers["X-Service-Key"] = service_key
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{schema_service_url}/table/add",
+                    json=table_metadata,
+                    headers=headers,
+                    timeout=30.0,
+                )
+                if response.status_code == 200:
+                    logger.info(f"FAISS: registered kpi_data.{table_name}")
+                else:
+                    logger.warning(f"FAISS add failed: {response.status_code} {response.text}")
+        except Exception as e:
+            logger.error(f"FAISS add error for {table_name}: {e}")
+
+    async def _notify_faiss_remove(self, table_name: str) -> None:
+        """Deregister the materialized table from the FAISS schema service."""
+        import os
+
+        schema_service_url = os.getenv("SCHEMA_SERVICE_URL", "http://schema-service:8000")
+        service_key = os.getenv("SCHEMA_SERVICE_KEY", "")
+
+        headers = {}
+        if service_key:
+            headers["X-Service-Key"] = service_key
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.delete(
+                    f"{schema_service_url}/table/postgres/kpi_data/{table_name}",
+                    headers=headers,
+                    timeout=30.0,
+                )
+                if response.status_code == 200:
+                    logger.info(f"FAISS: deregistered kpi_data.{table_name}")
+                else:
+                    logger.warning(f"FAISS remove failed: {response.status_code} {response.text}")
+        except Exception as e:
+            logger.error(f"FAISS remove error for {table_name}: {e}")
+
+    # ------------------------------------------------------------------
+    # COLLECTION STATUS + SCHEDULED SWEEP
+    # ------------------------------------------------------------------
 
     async def _update_collection_status(
         self, kpi_id: str, error: Optional[str] = None
@@ -285,10 +576,6 @@ class KpiService:
                     {"kpi_id": kpi_id},
                 )
             await session.commit()
-
-    # ------------------------------------------------------------------
-    # SCHEDULED COLLECTION (called by scheduler)
-    # ------------------------------------------------------------------
 
     async def collect_due_kpis(self) -> int:
         """Find KPIs whose next_refresh_at has passed and collect them."""
@@ -321,7 +608,6 @@ class KpiService:
         hours: int = 24,
         limit: int = 100,
     ) -> List[Dict[str, Any]]:
-        """Return recent metric values for a KPI within the given time range."""
         since = datetime.utcnow() - timedelta(hours=hours)
         async with db_manager.get_session() as session:
             result = await session.execute(
@@ -351,7 +637,6 @@ class KpiService:
         kpi_id: str,
         hours: int = 24,
     ) -> Dict[str, Any]:
-        """Return aggregation summary for a KPI over the given time range."""
         since = datetime.utcnow() - timedelta(hours=hours)
         async with db_manager.get_session() as session:
             result = await session.execute(
@@ -391,6 +676,7 @@ class KpiService:
             "is_active": row.is_active,
             "owner_user_id": str(row.owner_user_id) if row.owner_user_id else None,
             "owner_username": row.owner_username if hasattr(row, "owner_username") else None,
+            "materialized_table": row.materialized_table if hasattr(row, "materialized_table") else None,
             "next_refresh_at": row.next_refresh_at.isoformat() if row.next_refresh_at else None,
             "last_collected_at": row.last_collected_at.isoformat() if row.last_collected_at else None,
             "last_error": row.last_error,

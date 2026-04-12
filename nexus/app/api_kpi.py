@@ -144,7 +144,7 @@ async def collect_kpi(
 
     user_id = str(current_user.get("id"))
     is_admin = "ADMIN" in current_user.get("roles", [])
-    if not is_admin and kpi.get("owner_user_id") != user_id:
+    if not is_admin and (not kpi.get("owner_user_id") or kpi["owner_user_id"] != user_id):
         raise HTTPException(status_code=403, detail="Only the KPI owner or an admin can trigger collection")
 
     background_tasks.add_task(_collect_kpi_bg, kpi_id)

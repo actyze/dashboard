@@ -13,16 +13,16 @@ Endpoints:
   GET    /api/kpi/{kpi_id}/summary         — get aggregation summary
 """
 
-import logging
 from typing import Optional
 
+import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.auth.dependencies import require_viewer, require_editor
 from app.services.kpi_service import kpi_service
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/kpi", tags=["Scheduled KPIs"])
 

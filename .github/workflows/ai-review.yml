@@ -3,37 +3,64 @@ name: "Claude Code Review"
 on:
   pull_request:
     types: [opened, synchronize]
-  issue_comment:
-    types: [created]
-  pull_request_review_comment:
-    types: [created]
 
 jobs:
   claude-review:
     name: Claude PR Review
     runs-on: ubuntu-latest
-    # Only run on PR events, or on comments that mention @claude
-    if: |
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
 
     permissions:
       contents: read
       pull-requests: write
-      issues: write
-      id-token: write
-
-    # Non-blocking: don't fail the PR if Claude review has issues
-    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v4
-
-      - uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: "Review this pull request for code quality, correctness, and security."
-          claude_args: |
-            --max-turns 5
-            --model claude-sonnet-4-6
+          fetch-depth: 0
+
+      - name: Get PR diff
+        id: diff
+        run: |
+          DIFF=$(git diff origin/${{ github.base_ref }}...HEAD -- '*.py' '*.js' '*.sql' '*.yml' | head -c 90000)
+          echo "diff<<DIFF_EOF" >> $GITHUB_OUTPUT
+          echo "$DIFF" >> $GITHUB_OUTPUT
+          echo "DIFF_EOF" >> $GITHUB_OUTPUT
+
+      - name: Review with Claude API
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_BODY=$(echo '${{ toJSON(github.event.pull_request.body) }}' | head -c 2000)
+
+          REVIEW=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d "$(jq -n \
+              --arg diff "${{ steps.diff.outputs.diff }}" \
+              --arg title "$PR_TITLE" \
+              --arg body "$PR_BODY" \
+              '{
+                model: "claude-sonnet-4-6-20250514",
+                max_tokens: 4096,
+                messages: [{
+                  role: "user",
+                  content: ("Review this pull request.\n\nTitle: " + $title + "\n\nDescription:\n" + $body + "\n\nDiff:\n```\n" + $diff + "\n```\n\nProvide a concise review covering:\n1. **Security** — hardcoded secrets, injection vulnerabilities, auth issues\n2. **Correctness** — logic errors, edge cases, missing error handling\n3. **Code Quality** — naming, structure, unnecessary complexity\n\nKeep it brief. Only flag real issues, not style preferences. If the code looks good, say so in one line.")
+                }]
+              }')" | jq -r '.content[0].text')
+
+          if [ -z "$REVIEW" ] || [ "$REVIEW" = "null" ]; then
+            echo "Claude API returned empty response, skipping review"
+            exit 0
+          fi
+
+          # Post as PR comment
+          gh pr comment "$PR_NUMBER" --body "## Claude Code Review
+
+          $REVIEW
+
+          ---
+          *Automated review by Claude Sonnet 4.6*"

@@ -39,10 +39,16 @@ CREATE INDEX IF NOT EXISTS idx_kpi_definitions_owner
 -- 2. Create dedicated schema for KPI metric data
 CREATE SCHEMA IF NOT EXISTS kpi_data;
 
-GRANT USAGE ON SCHEMA kpi_data TO nexus_service;
-GRANT CREATE ON SCHEMA kpi_data TO nexus_service;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA kpi_data TO nexus_service;
-ALTER DEFAULT PRIVILEGES IN SCHEMA kpi_data GRANT ALL ON TABLES TO nexus_service;
+-- Grant permissions (skip gracefully in CI where nexus_service role may not exist)
+DO $$
+BEGIN
+    EXECUTE 'GRANT USAGE ON SCHEMA kpi_data TO nexus_service';
+    EXECUTE 'GRANT CREATE ON SCHEMA kpi_data TO nexus_service';
+    EXECUTE 'GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA kpi_data TO nexus_service';
+    EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA kpi_data GRANT ALL ON TABLES TO nexus_service';
+EXCEPTION WHEN undefined_object THEN
+    RAISE NOTICE 'Role nexus_service does not exist — skipping grants (CI/test environment)';
+END $$;
 
 -- 3. Move kpi_metric_values from nexus to kpi_data
 ALTER TABLE nexus.kpi_metric_values SET SCHEMA kpi_data;

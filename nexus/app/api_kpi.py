@@ -137,10 +137,15 @@ async def collect_kpi(
     background_tasks: BackgroundTasks,
     current_user: dict = Depends(require_editor),
 ):
-    """Trigger an immediate KPI collection (runs in background)."""
+    """Trigger an immediate KPI collection (owner or admin, runs in background)."""
     kpi = await kpi_service.get_kpi(kpi_id)
     if not kpi:
         raise HTTPException(status_code=404, detail="KPI not found")
+
+    user_id = str(current_user.get("id"))
+    is_admin = "ADMIN" in current_user.get("roles", [])
+    if not is_admin and kpi.get("owner_user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Only the KPI owner or an admin can trigger collection")
 
     background_tasks.add_task(_collect_kpi_bg, kpi_id)
     return {"success": True, "kpi_id": kpi_id, "message": "Collection started"}

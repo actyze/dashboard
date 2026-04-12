@@ -63,6 +63,14 @@ def _pg_type(trino_type_str: str) -> str:
     return _TRINO_TYPE_MAP.get(base, "TEXT")
 
 
+def _sanitize_column_name(name: str) -> str:
+    """Sanitize a column name from Trino for use in DDL.
+    Strips anything that isn't alphanumeric/underscore to prevent
+    quoted-identifier breakout via malicious column names."""
+    clean = re.sub(r"[^a-zA-Z0-9_]", "_", name)
+    return clean[:63] or "col"
+
+
 class KpiService:
     """CRUD + collection + materialized tables for scheduled KPIs."""
 
@@ -139,6 +147,18 @@ class KpiService:
             "created_at": row.created_at.isoformat(),
         }
 
+    # Explicit column-to-SQL mapping — no dynamic column interpolation
+    _UPDATE_COLUMN_MAP = {
+        "name": "name = :name",
+        "description": "description = :description",
+        "sql_query": "sql_query = :sql_query",
+        "interval_hours": "interval_hours = :interval_hours",
+        "is_active": "is_active = :is_active",
+        "metadata": "metadata = CAST(:metadata AS jsonb)",
+        "refresh_interval_seconds": "refresh_interval_seconds = :refresh_interval_seconds",
+        "next_refresh_at": "next_refresh_at = :next_refresh_at",
+    }
+
     async def update_kpi(
         self,
         kpi_id: str,
@@ -151,7 +171,6 @@ class KpiService:
         if not filtered:
             return await self.get_kpi(kpi_id)
 
-        # If SQL changed, drop the old materialized table so it's recreated on next collection
         sql_changed = "sql_query" in filtered
 
         if "interval_hours" in filtered:
@@ -163,37 +182,43 @@ class KpiService:
         set_clauses = []
         params: Dict[str, Any] = {"kpi_id": kpi_id, "owner_user_id": owner_user_id}
         for key, value in filtered.items():
+            clause = self._UPDATE_COLUMN_MAP.get(key)
+            if not clause:
+                continue
             if key == "metadata":
-                set_clauses.append("metadata = CAST(:metadata AS jsonb)")
                 params["metadata"] = json.dumps(value)
             else:
-                set_clauses.append(f"{key} = :{key}")
                 params[key] = value
+            set_clauses.append(clause)
 
-        # If SQL changed, remember old table name so we drop it AFTER commit succeeds
+        if not set_clauses:
+            return await self.get_kpi(kpi_id)
+
         old_table_to_drop = None
         if sql_changed:
             old_kpi = await self.get_kpi(kpi_id)
             if old_kpi and old_kpi.get("materialized_table"):
                 old_table_to_drop = old_kpi["materialized_table"]
 
+        # Two explicit queries — no dynamic WHERE construction
+        update_sql = f"UPDATE nexus.kpi_definitions SET {', '.join(set_clauses)}"
         async with db_manager.get_session() as session:
-            result = await session.execute(
-                text(f"""
-                    UPDATE nexus.kpi_definitions
-                    SET {', '.join(set_clauses)}
-                    WHERE id = :kpi_id {'' if is_admin else 'AND owner_user_id = :owner_user_id'}
-                    RETURNING id
-                """),
-                params,
-            )
+            if is_admin:
+                result = await session.execute(
+                    text(f"{update_sql} WHERE id = :kpi_id RETURNING id"),
+                    params,
+                )
+            else:
+                result = await session.execute(
+                    text(f"{update_sql} WHERE id = :kpi_id AND owner_user_id = :owner_user_id RETURNING id"),
+                    params,
+                )
             row = result.fetchone()
             await session.commit()
 
         if not row:
             return None
 
-        # Drop old materialized table only after DB commit succeeds
         if old_table_to_drop:
             await self._drop_materialized_table(old_table_to_drop)
 
@@ -435,7 +460,7 @@ class KpiService:
         self, table_name: str, columns: List[Dict[str, str]]
     ) -> None:
         """Create a real typed Postgres table in kpi_data schema."""
-        col_defs = [f'"{c["name"]}" {_pg_type(c["type"])}' for c in columns]
+        col_defs = [f'"{_sanitize_column_name(c["name"])}" {_pg_type(c["type"])}' for c in columns]
         col_defs.append("collected_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP")
         ddl = f'CREATE TABLE IF NOT EXISTS kpi_data."{table_name}" ({", ".join(col_defs)})'
 
@@ -456,7 +481,7 @@ class KpiService:
         if not rows:
             return
 
-        col_names = [f'"{c["name"]}"' for c in columns]
+        col_names = [f'"{_sanitize_column_name(c["name"])}"' for c in columns]
         col_names.append("collected_at")
         placeholders = [f":c{i}" for i in range(len(columns))]
         placeholders.append("CURRENT_TIMESTAMP")
@@ -500,7 +525,7 @@ class KpiService:
         schema_service_url = settings.schema_service_url
         service_key = settings.schema_service_key
 
-        columns_for_schema = [f"{c['name']}|{_pg_type(c['type']).lower()}" for c in columns]
+        columns_for_schema = [f"{_sanitize_column_name(c['name'])}|{_pg_type(c['type']).lower()}" for c in columns]
         columns_for_schema.append("collected_at|timestamp")
 
         table_metadata = {

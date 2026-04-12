@@ -63,12 +63,12 @@ def _pg_type(trino_type_str: str) -> str:
     return _TRINO_TYPE_MAP.get(base, "TEXT")
 
 
-def _sanitize_column_name(name: str) -> str:
+def _sanitize_column_name(name: str, index: int = 0) -> str:
     """Sanitize a column name from Trino for use in DDL.
     Strips anything that isn't alphanumeric/underscore to prevent
     quoted-identifier breakout via malicious column names."""
     clean = re.sub(r"[^a-zA-Z0-9_]", "_", name)
-    return clean[:63] or "col"
+    return clean[:63] or f"col_{index}"
 
 
 class KpiService:
@@ -149,7 +149,9 @@ class KpiService:
             "created_at": row.created_at.isoformat(),
         }
 
-    # Explicit column-to-SQL mapping — no dynamic column interpolation
+    # SECURITY: Explicit column-to-SQL mapping prevents SQL injection.
+    # Each value is a hardcoded SQL clause — never interpolate user input here.
+    # To add a new updatable field, add a static entry below.
     _UPDATE_COLUMN_MAP = {
         "name": "name = :name",
         "description": "description = :description",
@@ -281,18 +283,10 @@ class KpiService:
         owner_user_id: Optional[str] = None,
         active_only: bool = False,
     ) -> List[Dict[str, Any]]:
-        conditions = []
-        params: Dict[str, Any] = {}
-        if owner_user_id:
-            conditions.append("kd.owner_user_id = :owner_user_id")
-            params["owner_user_id"] = owner_user_id
-        if active_only:
-            conditions.append("kd.is_active = TRUE")
-
-        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        # Fixed query with filter flags — no dynamic WHERE construction
         async with db_manager.get_session() as session:
             result = await session.execute(
-                text(f"""
+                text("""
                     SELECT
                         kd.id, kd.name, kd.description, kd.sql_query,
                         kd.refresh_interval_seconds, kd.interval_hours,
@@ -303,10 +297,15 @@ class KpiService:
                         u.username AS owner_username
                     FROM nexus.kpi_definitions kd
                     LEFT JOIN nexus.users u ON u.id = kd.owner_user_id
-                    {where}
+                    WHERE (:filter_owner = FALSE OR kd.owner_user_id = CAST(:owner_user_id AS UUID))
+                      AND (:filter_active = FALSE OR kd.is_active = TRUE)
                     ORDER BY kd.created_at DESC
                 """),
-                params,
+                {
+                    "filter_owner": owner_user_id is not None,
+                    "owner_user_id": owner_user_id or "00000000-0000-0000-0000-000000000000",
+                    "filter_active": active_only,
+                },
             )
             return [self._kpi_to_dict(r) for r in result.fetchall()]
 
@@ -462,7 +461,7 @@ class KpiService:
         self, table_name: str, columns: List[Dict[str, str]]
     ) -> None:
         """Create a real typed Postgres table in kpi_data schema."""
-        col_defs = [f'"{_sanitize_column_name(c["name"])}" {_pg_type(c["type"])}' for c in columns]
+        col_defs = [f'"{_sanitize_column_name(c["name"], i)}" {_pg_type(c["type"])}' for i, c in enumerate(columns)]
         col_defs.append("collected_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP")
         ddl = f'CREATE TABLE IF NOT EXISTS kpi_data."{table_name}" ({", ".join(col_defs)})'
 
@@ -483,7 +482,7 @@ class KpiService:
         if not rows:
             return
 
-        col_names = [f'"{_sanitize_column_name(c["name"])}"' for c in columns]
+        col_names = [f'"{_sanitize_column_name(c["name"], i)}"' for i, c in enumerate(columns)]
         col_names.append("collected_at")
         placeholders = [f":c{i}" for i in range(len(columns))]
         placeholders.append("CURRENT_TIMESTAMP")
@@ -527,7 +526,7 @@ class KpiService:
         schema_service_url = settings.schema_service_url
         service_key = settings.schema_service_key
 
-        columns_for_schema = [f"{_sanitize_column_name(c['name'])}|{_pg_type(c['type']).lower()}" for c in columns]
+        columns_for_schema = [f"{_sanitize_column_name(c['name'], i)}|{_pg_type(c['type']).lower()}" for i, c in enumerate(columns)]
         columns_for_schema.append("collected_at|timestamp")
 
         table_metadata = {

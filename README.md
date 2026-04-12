@@ -10,6 +10,7 @@ Ask questions in plain English, get SQL queries and interactive charts. Connect 
 - **Semantic intelligence layer** -- relationship graph, verified queries, synonyms, KPI definitions
 - **Voice AI assistant** -- interact with your data using voice
 - **Federated querying via Trino** -- connect PostgreSQL, MySQL, Snowflake, BigQuery, and more
+- **Scheduled KPIs (gold layer)** -- pre-aggregate metrics on a schedule (1-24h), materialized as real queryable tables
 - **Interactive dashboards** -- Plotly-powered charts with drill-down and filtering
 - **100+ LLM providers** -- use Claude, GPT, Llama, Mistral, or any provider via LiteLLM
 - **Self-hosted** -- your data never leaves your infrastructure

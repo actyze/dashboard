@@ -215,6 +215,13 @@ class Settings(BaseSettings):
     tile_cache_max_rows: int = 1000                   # TILE_CACHE_MAX_ROWS
 
     # =============================================================================
+    # Scheduled KPI Collection
+    # =============================================================================
+    # How often (seconds) the KPI collection sweep checks for due KPIs.
+    # Default 300 (5 min) — actual per-KPI interval is defined in kpi_definitions.
+    kpi_collection_interval_seconds: int = 300        # KPI_COLLECTION_INTERVAL_SECONDS
+
+    # =============================================================================
     # Telemetry (opt-out anonymous usage stats)
     # =============================================================================
     telemetry_enabled: bool = Field(default=True, alias="TELEMETRY_ENABLED")

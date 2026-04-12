@@ -86,6 +86,17 @@ async def _run_process_sweep() -> None:
         logger.error(f"Process sweep failed: {exc}")
 
 
+async def _run_kpi_collection_sweep() -> None:
+    """Collect KPIs whose next_refresh_at has passed."""
+    try:
+        from app.services.kpi_service import kpi_service
+        count = await kpi_service.collect_due_kpis()
+        if count:
+            logger.info(f"KPI collection sweep: {count} KPIs collected")
+    except Exception as exc:
+        logger.error(f"KPI collection sweep failed: {exc}")
+
+
 def start_scheduler() -> None:
     """
     Register scheduled jobs and start the APScheduler.
@@ -133,10 +144,23 @@ def start_scheduler() -> None:
         name="Tile Cache: Process Pending Jobs",
     )
 
+    # Job 3: KPI collection sweep — runs on shared Postgres jobstore so
+    # only ONE pod fires it per interval (avoids duplicate collections).
+    kpi_poll_interval = settings.kpi_collection_interval_seconds
+    scheduler.add_job(
+        _run_kpi_collection_sweep,
+        trigger="interval",
+        seconds=kpi_poll_interval,
+        id="kpi_collection_sweep",
+        replace_existing=True,
+        name="Scheduled KPI: Collect Due Metrics",
+    )
+
     scheduler.start()
     logger.info(
-        f"Tile cache scheduler started — "
-        f"enqueue every {enqueue_interval}s, process every {poll_interval}s"
+        f"Scheduler started — "
+        f"tile enqueue every {enqueue_interval}s, tile process every {poll_interval}s, "
+        f"KPI collection every {kpi_poll_interval}s"
     )
 
 

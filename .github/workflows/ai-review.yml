@@ -3,34 +3,83 @@ name: "Claude Code Review"
 on:
   pull_request:
     types: [opened, synchronize]
-  issue_comment:
-    types: [created]
-  pull_request_review_comment:
-    types: [created]
 
 jobs:
   claude-review:
     name: Claude PR Review
     runs-on: ubuntu-latest
-    # Only run on PR events, or on comments that mention @claude
-    if: |
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude'))
 
     permissions:
       contents: read
       pull-requests: write
-      issues: write
-      id-token: write
 
     steps:
       - uses: actions/checkout@v4
-
-      - uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: "Review this pull request for code quality, correctness, and security."
-          claude_args: |
-            --max-turns 5
-            --model claude-sonnet-4-6
+          fetch-depth: 0
+
+      - name: Review with Claude API
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          # Gather context into files to avoid shell escaping issues
+          git diff "origin/${BASE_REF}...HEAD" -- '*.py' '*.js' '*.ts' '*.tsx' '*.sql' '*.yml' | head -c 90000 > /tmp/pr_diff.txt
+          cat CLAUDE.md > /tmp/standards.txt 2>/dev/null || echo "No CLAUDE.md" > /tmp/standards.txt
+          head -60 README.md > /tmp/readme.txt 2>/dev/null || echo "No README.md" > /tmp/readme.txt
+
+          # Build JSON payload using jq with file inputs (no shell interpolation)
+          jq -n \
+            --rawfile diff /tmp/pr_diff.txt \
+            --rawfile standards /tmp/standards.txt \
+            --rawfile readme /tmp/readme.txt \
+            --arg title "$PR_TITLE" \
+            --arg body "${PR_BODY:0:2000}" \
+            '{
+              model: "claude-sonnet-4-6",
+              max_tokens: 4096,
+              system: ("You are a senior code reviewer for the Actyze project.\n\nProject Overview:\n" + $readme + "\n\nReview Standards:\n" + $standards),
+              messages: [{
+                role: "user",
+                content: ("Review this pull request against the project standards above.\n\nTitle: " + $title + "\n\nDescription:\n" + $body + "\n\nDiff:\n```\n" + $diff + "\n```\n\nProvide a concise review covering:\n1. **Security** — hardcoded secrets, injection vulnerabilities, auth/authz issues\n2. **Correctness** — logic errors, edge cases, missing error handling\n3. **Code Quality** — follows project patterns, no debug statements, migration safety\n4. **Testing** — are new features tested? Are existing tests broken?\n5. **AGPL Compliance** — license headers, compatible dependencies\n\nOnly flag real issues. If the code looks good, say so briefly.")
+              }]
+            }' > /tmp/payload.json
+
+          # Call Claude API
+          RESPONSE=$(curl -s -w "\n%{http_code}" https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d @/tmp/payload.json)
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Claude API returned HTTP $HTTP_CODE"
+            echo "$BODY" | head -5
+            exit 1
+          fi
+
+          REVIEW=$(echo "$BODY" | jq -r '.content[0].text // empty')
+
+          if [ -z "$REVIEW" ]; then
+            echo "Claude API returned empty review, skipping"
+            exit 0
+          fi
+
+          # Post as PR comment (use file to avoid escaping issues)
+          cat > /tmp/comment.md << 'COMMENT_EOF'
+          ## Claude Code Review
+
+          COMMENT_EOF
+          echo "$REVIEW" >> /tmp/comment.md
+          echo "" >> /tmp/comment.md
+          echo "---" >> /tmp/comment.md
+          echo "*Automated review by Claude Sonnet 4.6 | Context: CLAUDE.md + README.md*" >> /tmp/comment.md
+
+          gh pr comment "$PR_NUMBER" --body-file /tmp/comment.md

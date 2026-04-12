@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { SqlEditor } from '../Common';
+import { SqlEditor, SavedQuerySidebar, SavedQueryToggle } from '../Common';
 import { RestService } from '../../services';
 import { transformQueryResults } from '../../utils/dataTransformers';
 import { ChartTypeSelector } from '../Charts';
@@ -268,47 +268,11 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null, recentQueries
           maxWidth: '100%'
         }}
       >
-        {/* Sidebar - Query List */}
-        <div 
-          className={`
-            transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0
-            ${isDark ? 'bg-[#101012] border-r border-[#2a2b2e]' : 'bg-gray-50 border-r border-gray-200'}
-          `}
-          style={{ width: sidebarVisible ? '260px' : '0px' }}
-        >
-          <div className="w-[260px] h-full flex flex-col">
-            <div className={`px-4 py-3 border-b ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
-              <h3 className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                Recent Queries
-              </h3>
-            </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
-              {recentQueries.map((query) => (
-                <button
-                  key={query.id}
-                  type="button"
-                  onClick={() => handleSelectQuery(query)}
-                  className={`
-                    w-full text-left px-3 py-2.5 rounded-lg transition-colors
-                    ${isDark 
-                      ? 'hover:bg-[#1c1d1f] text-gray-300' 
-                      : 'hover:bg-white text-gray-700 hover:shadow-sm'
-                    }
-                  `}
-                >
-                  <div className="font-medium truncate text-sm">
-                    {query.query_name || query.natural_language_query || `Query ${query.id}`}
-                  </div>
-                  {query.generated_sql && (
-                    <div className={`text-xs truncate mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                      {query.generated_sql.substring(0, 40)}...
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        <SavedQuerySidebar
+          queries={recentQueries}
+          visible={sidebarVisible}
+          onSelect={handleSelectQuery}
+        />
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col min-w-0">
@@ -321,21 +285,13 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null, recentQueries
               {initialData ? 'Edit Tile' : 'Create New Tile'}
             </h2>
             <div className="flex items-center gap-2">
-              {!initialData && recentQueries.length > 0 && (
-                <button
-                  onClick={() => setShowSidebar(!showSidebar)}
-                  className={`
-                    px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
-                    ${showSidebar
-                      ? 'bg-[#5d6ad3] text-white'
-                      : isDark 
-                        ? 'bg-[#1c1d1f] text-gray-300 hover:bg-[#2a2b2e]' 
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }
-                  `}
-                >
-                  Use saved queries
-                </button>
+              {!initialData && (
+                <SavedQueryToggle
+                  show={showSidebar}
+                  onToggle={() => setShowSidebar(!showSidebar)}
+                  hasQueries={recentQueries.length > 0}
+                  isDark={isDark}
+                />
               )}
               <button
                 onClick={handleClose}

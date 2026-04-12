@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 """
 Scheduled KPI Service — CRUD, collection, and materialized gold tables.
 
@@ -20,11 +21,8 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database import db_manager
-from app.services.trino_service import TrinoService
 
 logger = logging.getLogger(__name__)
-
-_trino = TrinoService()
 
 # Trino type_code → Postgres column type mapping
 _TRINO_TYPE_MAP = {
@@ -146,6 +144,7 @@ class KpiService:
         kpi_id: str,
         owner_user_id: str,
         updates: Dict[str, Any],
+        is_admin: bool = False,
     ) -> Optional[Dict[str, Any]]:
         allowed = {"name", "description", "sql_query", "interval_hours", "is_active", "metadata"}
         filtered = {k: v for k, v in updates.items() if k in allowed}
@@ -171,18 +170,19 @@ class KpiService:
                 set_clauses.append(f"{key} = :{key}")
                 params[key] = value
 
+        # If SQL changed, remember old table name so we drop it AFTER commit succeeds
+        old_table_to_drop = None
         if sql_changed:
-            # Get old table name before update
             old_kpi = await self.get_kpi(kpi_id)
             if old_kpi and old_kpi.get("materialized_table"):
-                await self._drop_materialized_table(old_kpi["materialized_table"])
+                old_table_to_drop = old_kpi["materialized_table"]
 
         async with db_manager.get_session() as session:
             result = await session.execute(
                 text(f"""
                     UPDATE nexus.kpi_definitions
                     SET {', '.join(set_clauses)}
-                    WHERE id = :kpi_id AND owner_user_id = :owner_user_id
+                    WHERE id = :kpi_id {'' if is_admin else 'AND owner_user_id = :owner_user_id'}
                     RETURNING id
                 """),
                 params,
@@ -192,21 +192,32 @@ class KpiService:
 
         if not row:
             return None
+
+        # Drop old materialized table only after DB commit succeeds
+        if old_table_to_drop:
+            await self._drop_materialized_table(old_table_to_drop)
+
         return await self.get_kpi(kpi_id)
 
-    async def delete_kpi(self, kpi_id: str, owner_user_id: str) -> bool:
+    async def delete_kpi(self, kpi_id: str, owner_user_id: str, is_admin: bool = False) -> bool:
         # Get table name before deleting
         kpi = await self.get_kpi(kpi_id)
 
         async with db_manager.get_session() as session:
-            result = await session.execute(
-                text("""
-                    DELETE FROM nexus.kpi_definitions
-                    WHERE id = :kpi_id AND owner_user_id = :owner_user_id
-                    RETURNING id
-                """),
-                {"kpi_id": kpi_id, "owner_user_id": owner_user_id},
-            )
+            if is_admin:
+                result = await session.execute(
+                    text("DELETE FROM nexus.kpi_definitions WHERE id = :kpi_id RETURNING id"),
+                    {"kpi_id": kpi_id},
+                )
+            else:
+                result = await session.execute(
+                    text("""
+                        DELETE FROM nexus.kpi_definitions
+                        WHERE id = :kpi_id AND owner_user_id = :owner_user_id
+                        RETURNING id
+                    """),
+                    {"kpi_id": kpi_id, "owner_user_id": owner_user_id},
+                )
             deleted = result.fetchone() is not None
             await session.commit()
 
@@ -386,10 +397,10 @@ class KpiService:
 
             return columns, rows
 
-        start = asyncio.get_event_loop().time()
+        start = asyncio.get_running_loop().time()
         try:
-            columns, rows = await asyncio.get_event_loop().run_in_executor(None, _run)
-            exec_time = (asyncio.get_event_loop().time() - start) * 1000
+            columns, rows = await asyncio.get_running_loop().run_in_executor(None, _run)
+            exec_time = (asyncio.get_running_loop().time() - start) * 1000
             col_names = [c["name"] for c in columns]
             return {
                 "success": True,
@@ -486,10 +497,8 @@ class KpiService:
         self, table_name: str, columns: List[Dict[str, str]]
     ) -> None:
         """Register the materialized table with the FAISS schema service."""
-        import os
-
-        schema_service_url = os.getenv("SCHEMA_SERVICE_URL", "http://schema-service:8000")
-        service_key = os.getenv("SCHEMA_SERVICE_KEY", "")
+        schema_service_url = settings.schema_service_url
+        service_key = settings.schema_service_key
 
         columns_for_schema = [f"{c['name']}|{_pg_type(c['type']).lower()}" for c in columns]
         columns_for_schema.append("collected_at|timestamp")
@@ -524,10 +533,8 @@ class KpiService:
 
     async def _notify_faiss_remove(self, table_name: str) -> None:
         """Deregister the materialized table from the FAISS schema service."""
-        import os
-
-        schema_service_url = os.getenv("SCHEMA_SERVICE_URL", "http://schema-service:8000")
-        service_key = os.getenv("SCHEMA_SERVICE_KEY", "")
+        schema_service_url = settings.schema_service_url
+        service_key = settings.schema_service_key
 
         headers = {}
         if service_key:

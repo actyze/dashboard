@@ -18,13 +18,26 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get PR diff
-        id: diff
+      - name: Gather context
+        id: context
         run: |
-          DIFF=$(git diff origin/${{ github.base_ref }}...HEAD -- '*.py' '*.js' '*.sql' '*.yml' | head -c 90000)
+          # PR diff (py, js, sql, yml, tsx, ts files — capped at 90KB)
+          DIFF=$(git diff origin/${{ github.base_ref }}...HEAD -- '*.py' '*.js' '*.ts' '*.tsx' '*.sql' '*.yml' | head -c 90000)
           echo "diff<<DIFF_EOF" >> $GITHUB_OUTPUT
           echo "$DIFF" >> $GITHUB_OUTPUT
           echo "DIFF_EOF" >> $GITHUB_OUTPUT
+
+          # CLAUDE.md has review standards, architecture, and tech stack
+          STANDARDS=$(cat CLAUDE.md 2>/dev/null || echo "No CLAUDE.md found")
+          echo "standards<<STD_EOF" >> $GITHUB_OUTPUT
+          echo "$STANDARDS" >> $GITHUB_OUTPUT
+          echo "STD_EOF" >> $GITHUB_OUTPUT
+
+          # README.md has project overview and key features
+          README=$(head -60 README.md 2>/dev/null || echo "No README.md found")
+          echo "readme<<README_EOF" >> $GITHUB_OUTPUT
+          echo "$README" >> $GITHUB_OUTPUT
+          echo "README_EOF" >> $GITHUB_OUTPUT
 
       - name: Review with Claude API
         env:
@@ -40,15 +53,18 @@ jobs:
             -H "anthropic-version: 2023-06-01" \
             -H "content-type: application/json" \
             -d "$(jq -n \
-              --arg diff "${{ steps.diff.outputs.diff }}" \
+              --arg diff "${{ steps.context.outputs.diff }}" \
               --arg title "$PR_TITLE" \
               --arg body "$PR_BODY" \
+              --arg standards "${{ steps.context.outputs.standards }}" \
+              --arg readme "${{ steps.context.outputs.readme }}" \
               '{
                 model: "claude-sonnet-4-6-20250514",
                 max_tokens: 4096,
+                system: ("You are a senior code reviewer for the Actyze project.\n\nProject Overview:\n" + $readme + "\n\nReview Standards:\n" + $standards),
                 messages: [{
                   role: "user",
-                  content: ("Review this pull request.\n\nTitle: " + $title + "\n\nDescription:\n" + $body + "\n\nDiff:\n```\n" + $diff + "\n```\n\nProvide a concise review covering:\n1. **Security** — hardcoded secrets, injection vulnerabilities, auth issues\n2. **Correctness** — logic errors, edge cases, missing error handling\n3. **Code Quality** — naming, structure, unnecessary complexity\n\nKeep it brief. Only flag real issues, not style preferences. If the code looks good, say so in one line.")
+                  content: ("Review this pull request against the project standards above.\n\nTitle: " + $title + "\n\nDescription:\n" + $body + "\n\nDiff:\n```\n" + $diff + "\n```\n\nProvide a concise review covering:\n1. **Security** — hardcoded secrets, injection vulnerabilities, auth/authz issues\n2. **Correctness** — logic errors, edge cases, missing error handling\n3. **Code Quality** — follows project patterns, no debug statements, migration safety\n4. **Testing** — are new features tested? Are existing tests broken?\n5. **AGPL Compliance** — license headers, compatible dependencies\n\nOnly flag real issues. If the code looks good, say so briefly.")
                 }]
               }')" | jq -r '.content[0].text')
 
@@ -63,4 +79,4 @@ jobs:
           $REVIEW
 
           ---
-          *Automated review by Claude Sonnet 4.6*"
+          *Automated review by Claude Sonnet 4.6 | Context: CLAUDE.md + README.md*"

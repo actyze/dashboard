@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 """
 Scheduled KPI API
 
@@ -18,7 +19,7 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.auth.dependencies import get_current_user, require_viewer, require_editor
+from app.auth.dependencies import require_viewer, require_editor
 from app.services.kpi_service import kpi_service
 
 logger = logging.getLogger(__name__)
@@ -101,10 +102,11 @@ async def update_kpi(
     body: UpdateKpiRequest,
     current_user: dict = Depends(require_editor),
 ):
-    """Update a KPI definition (owner only)."""
+    """Update a KPI definition (owner or admin)."""
     user_id = str(current_user.get("id"))
+    is_admin = "ADMIN" in current_user.get("roles", [])
     updates = body.model_dump(exclude_none=True)
-    result = await kpi_service.update_kpi(kpi_id, user_id, updates)
+    result = await kpi_service.update_kpi(kpi_id, user_id, updates, is_admin=is_admin)
     if not result:
         raise HTTPException(status_code=404, detail="KPI not found or not owned by you")
     return result
@@ -115,9 +117,10 @@ async def delete_kpi(
     kpi_id: str,
     current_user: dict = Depends(require_editor),
 ):
-    """Delete a KPI definition and all its metric values (owner only)."""
+    """Delete a KPI definition and all its metric values (owner or admin)."""
     user_id = str(current_user.get("id"))
-    deleted = await kpi_service.delete_kpi(kpi_id, user_id)
+    is_admin = "ADMIN" in current_user.get("roles", [])
+    deleted = await kpi_service.delete_kpi(kpi_id, user_id, is_admin=is_admin)
     if not deleted:
         raise HTTPException(status_code=404, detail="KPI not found or not owned by you")
     return {"success": True, "deleted_id": kpi_id}

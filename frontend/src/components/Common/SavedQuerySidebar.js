@@ -11,9 +11,9 @@ const SavedQuerySidebar = ({ queries, visible, onSelect }) => {
         transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0
         ${isDark ? 'bg-[#101012] border-r border-[#2a2b2e]' : 'bg-gray-50 border-r border-gray-200'}
       `}
-      style={{ width: visible ? '240px' : '0px' }}
+      style={{ width: visible ? '260px' : '0px' }}
     >
-      <div className="w-[240px] h-full flex flex-col">
+      <div className="w-[260px] h-full flex flex-col">
         <div className={`px-4 py-3 border-b ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
           <h3 className={`text-sm font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
             Saved Queries

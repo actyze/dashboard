@@ -11,18 +11,18 @@ via Trino (e.g. SELECT * FROM postgres.kpi_data.daily_revenue).
 """
 
 import json
-import logging
 import re
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import httpx
+import structlog
 from sqlalchemy import text
 
 from app.config import settings
 from app.database import db_manager
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Trino type_code → Postgres column type mapping
 _TRINO_TYPE_MAP = {
@@ -104,6 +104,8 @@ class KpiService:
                 if not exists.fetchone():
                     materialized_table = candidate
                     break
+            else:
+                raise ValueError(f"Could not generate unique table name for KPI '{name}' after 10 attempts")
 
             result = await session.execute(
                 text("""

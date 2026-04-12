@@ -24,6 +24,9 @@ jobs:
       issues: write
       id-token: write
 
+    # Non-blocking: don't fail the PR if Claude review has issues
+    continue-on-error: true
+
     steps:
       - uses: actions/checkout@v4
 

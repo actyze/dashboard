@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { SavedQuerySidebar, SavedQueryToggle } from '../Common';
+import { QueryResults } from '../QueryExplorer';
 import { KpiService } from '../../services/KpiService';
+import { RestService } from '../../services';
 import QueryManagementService from '../../services/QueryManagementService';
+import { transformQueryResults } from '../../utils/dataTransformers';
 import { formatDistanceToNowStrict, parseISO } from 'date-fns';
 
 const INTERVAL_OPTIONS = Array.from({ length: 24 }, (_, i) => i + 1);
@@ -113,6 +116,9 @@ const ScheduledKpis = () => {
     const [error, setError] = useState(null);
     const [savedQueries, setSavedQueries] = useState([]);
     const [showSidebar, setShowSidebar] = useState(false);
+    const [testLoading, setTestLoading] = useState(false);
+    const [testError, setTestError] = useState(null);
+    const [testResults, setTestResults] = useState(null);
 
     useEffect(() => {
       if (!kpi) {
@@ -129,6 +135,30 @@ const ScheduledKpis = () => {
         sql_query: query.generated_sql || '',
       }));
       setShowSidebar(false);
+      setTestResults(null);
+      setTestError(null);
+    };
+
+    const handleTestQuery = async () => {
+      if (!form.sql_query.trim()) {
+        setTestError('Please enter a SQL query first');
+        return;
+      }
+      setTestLoading(true);
+      setTestError(null);
+      setTestResults(null);
+      try {
+        const response = await RestService.executeSql(form.sql_query, 10);
+        if (!response.success) {
+          setTestError(response.error || 'Query execution failed');
+        } else {
+          setTestResults(transformQueryResults(response.query_results));
+        }
+      } catch (err) {
+        setTestError(err.message || 'Query execution failed');
+      } finally {
+        setTestLoading(false);
+      }
     };
 
     const handleSubmit = async (e) => {
@@ -245,7 +275,7 @@ const ScheduledKpis = () => {
                   required
                   rows={6}
                   value={form.sql_query}
-                  onChange={(e) => setForm({ ...form, sql_query: e.target.value })}
+                  onChange={(e) => { setForm({ ...form, sql_query: e.target.value }); setTestResults(null); setTestError(null); }}
                   className={`w-full px-3 py-2 rounded-lg border text-sm font-mono ${
                     isDark
                       ? 'bg-[#0a0a0a] border-[#2a2b2e] text-white focus:border-[#5d6ad3]'
@@ -253,7 +283,28 @@ const ScheduledKpis = () => {
                   } focus:outline-none focus:ring-1 focus:ring-[#5d6ad3]`}
                   placeholder="SELECT COUNT(*) AS value FROM ..."
                 />
+                <button
+                  type="button"
+                  onClick={handleTestQuery}
+                  disabled={testLoading || !form.sql_query.trim()}
+                  className={`mt-2 px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
+                    isDark
+                      ? 'bg-[#1c1d1f] text-gray-300 hover:bg-[#2a2b2e] disabled:text-gray-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:text-gray-400'
+                  } disabled:cursor-not-allowed`}
+                >
+                  {testLoading ? 'Running...' : 'Test Query'}
+                </button>
               </div>
+
+              {/* Test Results */}
+              {(testResults || testError || testLoading) && (
+                <div className={`rounded-lg border overflow-hidden ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
+                  <div className="max-h-48 overflow-auto">
+                    <QueryResults queryData={testResults} loading={testLoading} error={testError} />
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-4">
                 <div className="flex-1">

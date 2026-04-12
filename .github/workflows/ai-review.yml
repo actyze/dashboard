@@ -40,7 +40,7 @@ jobs:
             --arg title "$PR_TITLE" \
             --arg body "${PR_BODY:0:2000}" \
             '{
-              model: "claude-sonnet-4-6-20250514",
+              model: "claude-sonnet-4-6",
               max_tokens: 4096,
               system: ("You are a senior code reviewer for the Actyze project.\n\nProject Overview:\n" + $readme + "\n\nReview Standards:\n" + $standards),
               messages: [{

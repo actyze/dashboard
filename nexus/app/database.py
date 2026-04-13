@@ -2,7 +2,7 @@
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import String, Text, DateTime, JSON, Integer, Boolean, ForeignKey, Numeric
+from sqlalchemy import String, Text, DateTime, JSON, Integer, Boolean, ForeignKey, Numeric, Float
 from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
 import enum
 from datetime import datetime
@@ -203,6 +203,44 @@ class SchemaExclusion(Base):
     # Metadata tracking
     excluded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("nexus.users.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class TableRelationship(Base):
+    """Table-to-table relationship for semantic graph."""
+    __tablename__ = "table_relationships"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_catalog: Mapped[str] = mapped_column(String(255), nullable=False)
+    source_schema: Mapped[str] = mapped_column(String(255), nullable=False)
+    source_table: Mapped[str] = mapped_column(String(255), nullable=False)
+    target_catalog: Mapped[str] = mapped_column(String(255), nullable=False)
+    target_schema: Mapped[str] = mapped_column(String(255), nullable=False)
+    target_table: Mapped[str] = mapped_column(String(255), nullable=False)
+    join_condition: Mapped[str] = mapped_column(Text, nullable=False)
+    relationship_type: Mapped[str] = mapped_column(String(10), nullable=False, default='1:N')
+    source_method: Mapped[str] = mapped_column(String(20), nullable=False, default='inferred')
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
+    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_disabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    usage_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey('nexus.users.id'), nullable=True)
+    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey('nexus.users.id'), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class RelationshipAuditLog(Base):
+    """Audit trail for relationship changes."""
+    __tablename__ = "relationship_audit_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    relationship_id: Mapped[int] = mapped_column(Integer, ForeignKey('nexus.table_relationships.id', ondelete='CASCADE'), nullable=False)
+    action: Mapped[str] = mapped_column(String(20), nullable=False)
+    old_values: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    new_values: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    changed_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey('nexus.users.id'), nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
 class DatabaseManager:

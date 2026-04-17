@@ -7,6 +7,7 @@ import uuid
 
 from app.auth.dependencies import require_admin, require_viewer, get_current_user_id
 from app.services.relationship_service import relationship_service
+from app.services.relationship_mining_service import mining_service
 import structlog
 
 logger = structlog.get_logger()
@@ -48,6 +49,11 @@ class InferRequest(BaseModel):
         None,
         description="List of table metadata dicts with full_name, table_name, columns"
     )
+
+
+class MineRequest(BaseModel):
+    """Request model for triggering query history mining."""
+    limit: int = Field(1000, ge=1, le=10000, description="Max number of queries to parse")
 
 
 # =============================================================================
@@ -278,4 +284,31 @@ async def trigger_convention_inference(
         }
     except Exception as e:
         logger.error("trigger_inference_error", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/mine")
+async def trigger_query_mining(
+    request: MineRequest,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(require_admin),
+):
+    """Mine JOIN patterns from successful query history (admin only).
+
+    Parses SQL from nexus.query_history, extracts JOIN clauses, and populates
+    the relationship graph with frequency-based confidence scores.
+    Runs in a background task. Returns immediately with accepted status.
+    """
+    try:
+        background_tasks.add_task(
+            mining_service.mine_query_history,
+            limit=request.limit,
+        )
+        return {
+            "success": True,
+            "message": "Query history mining started in background",
+            "limit": request.limit,
+        }
+    except Exception as e:
+        logger.error("trigger_mining_error", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))

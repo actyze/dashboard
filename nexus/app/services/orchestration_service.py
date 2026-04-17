@@ -11,6 +11,7 @@ from app.services.cache_factory import cache_service
 from app.services.user_service import UserService
 from app.services.sql_error_analysis_service import SqlErrorAnalysisService
 from app.services.preference_service import preference_service
+from app.services.relationship_service import relationship_service
 
 logger = structlog.get_logger()
 
@@ -199,11 +200,31 @@ class OrchestrationService:
                     self.logger.warning("Failed to fetch preferred tables", error=str(e), user_id=user_id)
                     preferred_tables = []
             
+            # Fetch relationship graph context (gated by feature flag)
+            relationships_context = []
+            join_paths = []
+            if settings.relationship_graph_enabled:
+                try:
+                    all_table_names = [r.get('full_name', '') for r in recommendations if r.get('full_name')]
+                    all_table_names += [p.get('full_name', '') for p in preferred_tables if p.get('full_name')]
+                    if all_table_names:
+                        relationships_context = await relationship_service.get_relationships_for_tables(all_table_names)
+                        join_paths = relationship_service.find_join_paths(set(all_table_names), relationships_context)
+                        self.logger.info(
+                            "Fetched relationship graph context",
+                            relationships=len(relationships_context),
+                            join_paths=len(join_paths),
+                        )
+                except Exception as e:
+                    self.logger.warning("Failed to fetch relationship graph, falling back", error=str(e))
+                    relationships_context = []
+                    join_paths = []
+
             cache_key = f"{nl_query}_{len(conversation_history)}_{len(recommendations)}_{len(preferred_tables)}"
             cached_response = await self.cache_service.get_llm_response(
                 cache_key, {"type": "sql_generation"}
             )
-            
+
             if cached_response:
                 # Check if cache is old format (string) or new format (dict)
                 if isinstance(cached_response, str):
@@ -215,20 +236,22 @@ class OrchestrationService:
                         "reasoning": "Retrieved from cache"
                     }
                 else:
-                    self.logger.info("Using cached SQL generation (full response)", 
+                    self.logger.info("Using cached SQL generation (full response)",
                         has_chart_rec=bool(cached_response.get("chart_recommendation")),
                         has_reasoning=bool(cached_response.get("reasoning"))
                     )
                     sql_generation = cached_response
             else:
-                # Pass intent, last_sql, and preferred_tables for context-aware prompting
+                # Pass intent, last_sql, preferred_tables, and relationship graph for context-aware prompting
                 sql_generation = await self.llm_service.generate_sql(
-                    nl_query, 
-                    conversation_history, 
+                    nl_query,
+                    conversation_history,
                     schema_recommendations,
-                    preferred_tables=preferred_tables,  # NEW: Pass preferred tables
+                    preferred_tables=preferred_tables,
                     last_sql=last_sql,
-                    intent=intent
+                    intent=intent,
+                    relationships=relationships_context,
+                    join_paths=join_paths,
                 )
                 # Cache the entire response (SQL + chart_recommendation + reasoning)
                 if sql_generation.get("success") and sql_generation.get("sql"):

@@ -204,6 +204,8 @@ services:
       CACHE_QUERY_TTL: ${CACHE_QUERY_TTL:-1800}
       # Preferred Tables Configuration
       MAX_PREFERRED_TABLES: 25
+      # Semantic Relationship Graph
+      RELATIONSHIP_GRAPH_ENABLED: ${RELATIONSHIP_GRAPH_ENABLED:-true}
       # Tile Cache & Refresh Scheduler
       TILE_CACHE_SCHEDULER_ENABLED: ${TILE_CACHE_SCHEDULER_ENABLED:-true}
       # Sweep every 30min (shorter than TTL so tiles expire gradually, not all at once)

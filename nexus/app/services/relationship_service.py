@@ -680,6 +680,47 @@ class RelationshipService:
         await session.flush()
 
     # =========================================================================
+    # Usage Tracking (Phase 5)
+    # =========================================================================
+
+    async def track_usage(self, generated_sql: str, relationships: List[Dict[str, Any]]):
+        """Increment usage_count for relationships whose tables appear in the generated SQL.
+
+        Simple heuristic: if both the source and target table names appear in the SQL,
+        the relationship was likely used. This avoids expensive SQL parsing.
+        """
+        if not generated_sql or not relationships:
+            return
+
+        sql_lower = generated_sql.lower()
+        matched_ids = []
+
+        for rel in relationships:
+            src = rel.get("source_table", "").lower()
+            tgt = rel.get("target_table", "").lower()
+            if src and tgt and src in sql_lower and tgt in sql_lower:
+                matched_ids.append(rel["id"])
+
+        if not matched_ids:
+            return
+
+        async with db_manager.get_session() as session:
+            try:
+                for rel_id in matched_ids:
+                    result = await session.execute(
+                        select(TableRelationship).where(TableRelationship.id == rel_id)
+                    )
+                    rel = result.scalar_one_or_none()
+                    if rel:
+                        rel.usage_count = rel.usage_count + 1
+                        rel.last_used_at = datetime.utcnow()
+                await session.commit()
+                self.logger.debug("Tracked relationship usage", matched=len(matched_ids))
+            except Exception as e:
+                await session.rollback()
+                self.logger.debug("Usage tracking failed", error=str(e))
+
+    # =========================================================================
     # Helpers
     # =========================================================================
 

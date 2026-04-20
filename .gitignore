@@ -109,6 +109,11 @@ ARCHITECTURE_VISION.md
 # IDE-specific config
 .cursorrules
 
+# Claude Code / MCP tools
+.claude/
+.mcp.json
+.playwright-mcp/
+
 # Java/Maven artifacts (not used in this project)
 .mvn/
 

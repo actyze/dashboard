@@ -38,7 +38,8 @@ export const DashboardService = {
         configuration: dashboardData.configuration || {},
         is_public: dashboardData.is_public || false,
         is_favorite: dashboardData.is_favorite || false,
-        tags: dashboardData.tags || []
+        tags: dashboardData.tags || [],
+        view_type: dashboardData.view_type || 'grid',
       };
       
       const response = await apiInstance.post('/dashboards', payload);
@@ -63,7 +64,9 @@ export const DashboardService = {
         is_public: updates.is_public,
         is_anonymous_public: updates.is_anonymous_public,
         is_favorite: updates.is_favorite,
-        tags: updates.tags
+        tags: updates.tags,
+        view_type: updates.view_type,
+        page_data: updates.page_data,
       };
       
       const response = await apiInstance.put(`/dashboards/${dashboardId}`, payload);

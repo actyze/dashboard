@@ -39,6 +39,12 @@ export const useDashboardExport = (isDark) => {
         quality: 1,
         pixelRatio: 2,
         backgroundColor,
+        filter: (node) => {
+          if (node.tagName === 'LINK' && node.rel === 'stylesheet' && node.href && !node.href.startsWith(window.location.origin)) {
+            return false;
+          }
+          return true;
+        },
       });
 
       // Restore buttons
@@ -97,10 +103,20 @@ export const useDashboardExport = (isDark) => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       // Use html-to-image for capture
+      // skipAutoScale avoids re-fetching external CSS (Inter font) which causes
+      // non-fatal insertRule errors for @font-feature-values rules.
       const dataUrl = await toPng(dashboardElement, {
         quality: 1,
         pixelRatio: 2,
         backgroundColor: dashboardBgColor,
+        fetchRequestInit: { mode: 'no-cors' },
+        filter: (node) => {
+          // Skip external link[rel=stylesheet] elements to avoid CSS parse errors
+          if (node.tagName === 'LINK' && node.rel === 'stylesheet' && node.href && !node.href.startsWith(window.location.origin)) {
+            return false;
+          }
+          return true;
+        },
       });
 
       // Restore everything

@@ -356,7 +356,15 @@ class OrchestrationService:
             
             # Cache successful SQL generation for deterministic responses
             await self.cache_service.cache_generated_sql(nl_query, intent, result)
-            
+
+            # Phase 5: Track relationship usage — increment usage_count for relationships
+            # whose join patterns appear in the generated SQL (async, non-blocking)
+            if settings.relationship_graph_enabled and relationships_context and generated_sql:
+                try:
+                    await relationship_service.track_usage(generated_sql, relationships_context)
+                except Exception as e:
+                    self.logger.debug("Relationship usage tracking failed (non-critical)", error=str(e))
+
             return result
             
         except Exception as e:

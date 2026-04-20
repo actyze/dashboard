@@ -280,6 +280,76 @@ async def get_description_by_id(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class BulkDescriptionItem(BaseModel):
+    catalog: str
+    schema_name: Optional[str] = None
+    table_name: Optional[str] = None
+    column_name: Optional[str] = None
+    description: str = Field(..., min_length=1, max_length=2000)
+
+
+class BulkDescriptionRequest(BaseModel):
+    descriptions: List[BulkDescriptionItem] = Field(..., min_length=1, max_length=500)
+
+
+@router.post("/descriptions/bulk")
+async def bulk_import_descriptions(
+    request: BulkDescriptionRequest,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+    background_tasks: BackgroundTasks = None,
+    current_user: dict = Depends(require_write_access)
+):
+    """
+    Bulk upsert metadata descriptions. Accepts up to 500 items.
+    Each item is upserted independently — existing descriptions are updated,
+    new ones are created.
+    """
+    created = 0
+    updated = 0
+    errors = []
+    tables_to_refresh = set()
+
+    for item in request.descriptions:
+        try:
+            result = await metadata_description_service.add_description(
+                db=db,
+                user_id=user_id,
+                catalog=item.catalog,
+                schema_name=item.schema_name,
+                table_name=item.table_name,
+                column_name=item.column_name,
+                description=item.description
+            )
+            if result.get("success"):
+                if "created" in result.get("message", "").lower():
+                    created += 1
+                else:
+                    updated += 1
+                if item.table_name:
+                    tables_to_refresh.add((item.catalog, item.schema_name, item.table_name))
+        except Exception as e:
+            errors.append(f"{item.catalog}.{item.schema_name}.{item.table_name}: {str(e)}")
+
+    # Trigger schema service refresh for affected tables
+    if background_tasks:
+        for catalog, schema_name, table_name in tables_to_refresh:
+            background_tasks.add_task(
+                notify_schema_service_description_updated,
+                catalog=catalog,
+                schema_name=schema_name,
+                table_name=table_name
+            )
+
+    return {
+        "success": True,
+        "created": created,
+        "updated": updated,
+        "errors": errors,
+        "total": len(request.descriptions),
+    }
+
+
 async def notify_schema_service_description_updated(
     catalog: str,
     schema_name: str,

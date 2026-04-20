@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, useSearchParams } from 'react-router';
 import { IconButton, Typography, Menu, MenuItem, CircularProgress } from '@mui/material';
 import GridLayout from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
@@ -14,6 +14,7 @@ import { Chart } from '../Charts';
 import { RestService, QueryManagementService } from '../../services';
 import DashboardService from '../../services/DashboardService';
 import { transformQueryResults } from '../../utils/dataTransformers';
+import { PageBuilderView } from '../PageBuilder';
 
 // Grid configuration constants
 const GRID_COLS = 12;
@@ -27,6 +28,7 @@ const TILE_MIN_H = 2;      // 2 * 80 = 160px minimum height
 const Dashboard = ({ isPublic = false }) => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isDark } = useTheme();
   // Dashboard state
   const [dashboard, setDashboard] = useState(null);
@@ -227,12 +229,14 @@ const Dashboard = ({ isPublic = false }) => {
     
     // Dashboard creation has no limits in open-source edition
     
+    const newViewType = searchParams.get('type') || 'grid';
     const response = await DashboardService.createDashboard({
-      title: 'Untitled Dashboard',
+      title: `Dashboard ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`,
       description: '',
       is_public: false,
       is_anonymous_public: false,
-      configuration: {}
+      configuration: {},
+      view_type: newViewType,
     });
 
     if (response.success && response.dashboard?.id) {
@@ -275,6 +279,12 @@ const Dashboard = ({ isPublic = false }) => {
       }
 
       setDashboard(response.dashboard);
+
+      // Page view dashboards use GrapesJS — skip tile loading
+      if ((response.dashboard?.view_type || 'grid') === 'page') {
+        return;
+      }
+
       const tilesArray = response.tiles || [];
       setTiles(tilesArray);
 
@@ -1085,6 +1095,16 @@ const Dashboard = ({ isPublic = false }) => {
 
       {/* Content */}
       <div ref={gridContainerRef} className="flex-1 overflow-auto p-4">
+        {(dashboard?.view_type || 'grid') === 'page' ? (
+          <div ref={gridContentRef}>
+            <PageBuilderView
+              dashboardId={id}
+              initialPageData={dashboard?.page_data || {}}
+              isPublic={isPublic}
+            />
+          </div>
+        ) : (
+        <>
         {/* Action Bar */}
         {!isPublic && (
           <div className="flex items-center justify-between gap-2 mb-4">
@@ -1261,6 +1281,8 @@ const Dashboard = ({ isPublic = false }) => {
             ))}
           </GridLayout>
           </div>
+        )}
+        </>
         )}
       </div>
 

@@ -9,7 +9,8 @@ const DashboardsList = () => {
   const navigate = useNavigate();
   const [dashboards, setDashboards] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+  const [showNewMenu, setShowNewMenu] = useState(false);
+
   // Filter and sort state
   const [searchQuery, setSearchQuery] = useState('');
   const [sortColumn, setSortColumn] = useState('updated_at');
@@ -223,19 +224,48 @@ const DashboardsList = () => {
           )}
         </div>
         
-        <button
-          onClick={() => navigate('/dashboard/new')}
-          className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded transition-colors ${
-            isDark 
-              ? 'text-gray-300 hover:bg-[#1c1d1f]' 
-              : 'text-gray-700 hover:bg-gray-100'
-          }`}
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          New dashboard
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setShowNewMenu(!showNewMenu)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+              isDark ? 'text-gray-300 hover:bg-[#1c1d1f]' : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New dashboard
+          </button>
+          {showNewMenu && (
+            <>
+              <div className="fixed inset-0 z-20" onClick={() => setShowNewMenu(false)} />
+              <div className={`absolute right-0 top-full mt-1 z-30 w-52 rounded-lg border shadow-lg overflow-hidden ${
+                isDark ? 'bg-[#1c1d1f] border-gray-700' : 'bg-white border-gray-200'
+              }`}>
+                <button onClick={() => { setShowNewMenu(false); navigate('/dashboard/new?type=grid'); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}`}>
+                  <svg className={`w-4 h-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                  </svg>
+                  <div>
+                    <div className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>Grid Dashboard</div>
+                    <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Tiles with charts & tables</div>
+                  </div>
+                </button>
+                <button onClick={() => { setShowNewMenu(false); navigate('/dashboard/new?type=page'); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}`}>
+                  <svg className={`w-4 h-4 ${isDark ? 'text-gray-400' : 'text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <div>
+                    <div className={`text-sm font-medium ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>Page Dashboard</div>
+                    <div className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Visual page builder</div>
+                  </div>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Table */}
@@ -340,7 +370,16 @@ const DashboardsList = () => {
                 `}
               >
                 {/* Title */}
-                <div className="col-span-8 flex items-center min-w-0">
+                <div className="col-span-8 flex items-center gap-2 min-w-0">
+                  {(dashboard.view_type || 'grid') === 'page' ? (
+                    <svg className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Page Dashboard">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  ) : (
+                    <svg className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Grid Dashboard">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                    </svg>
+                  )}
                   <span className={`truncate text-sm ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>
                     {dashboard.title}
                   </span>

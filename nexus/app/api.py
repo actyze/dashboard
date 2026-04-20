@@ -508,6 +508,7 @@ class CreateDashboardRequest(BaseModel):
     layout_config: Optional[Dict[str, Any]] = None
     tags: Optional[List[str]] = None
     is_public: bool = False
+    view_type: Optional[str] = "grid"
 
 class UpdateDashboardRequest(BaseModel):
     title: Optional[str] = None
@@ -518,6 +519,8 @@ class UpdateDashboardRequest(BaseModel):
     is_public: Optional[bool] = None
     is_anonymous_public: Optional[bool] = None
     is_favorite: Optional[bool] = None
+    view_type: Optional[str] = None
+    page_data: Optional[Dict[str, Any]] = None
 
 class CreateTileRequest(BaseModel):
     title: str
@@ -638,7 +641,8 @@ async def create_dashboard(
             configuration=request.configuration,
             layout_config=request.layout_config,
             tags=request.tags,
-            is_public=request.is_public
+            is_public=request.is_public,
+            view_type=request.view_type
         )
         
         return {
@@ -667,9 +671,11 @@ async def update_dashboard(
             tags=request.tags,
             is_public=request.is_public,
             is_anonymous_public=request.is_anonymous_public,
-            is_favorite=request.is_favorite
+            is_favorite=request.is_favorite,
+            view_type=request.view_type,
+            page_data=request.page_data
         )
-        
+
         if not success:
             raise HTTPException(
                 status_code=403,

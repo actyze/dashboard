@@ -190,6 +190,7 @@ class DashboardService:
                         "is_favorite": row.is_favorite,
                         "tags": row.tags or [],
                         "tile_count": row.tile_count,
+                        "view_type": getattr(row, 'view_type', 'grid') or 'grid',
                         "status": getattr(row, 'status', 'draft'),
                         "version": getattr(row, 'version', 1),
                         "published_at": row.published_at.isoformat() if hasattr(row, 'published_at') and row.published_at else None,
@@ -265,6 +266,8 @@ class DashboardService:
                     "is_favorite": row.is_favorite,
                     "tags": row.tags or [],
                     "tile_count": row.tile_count,
+                    "view_type": getattr(row, 'view_type', 'grid') or 'grid',
+                    "page_data": getattr(row, 'page_data', None) or {},
                     "status": row.status,
                     "version": row.version,
                     "published_at": row.published_at.isoformat() if row.published_at else None,
@@ -287,23 +290,24 @@ class DashboardService:
         configuration: Optional[Dict[str, Any]] = None,
         layout_config: Optional[Dict[str, Any]] = None,
         tags: Optional[List[str]] = None,
-        is_public: bool = False
+        is_public: bool = False,
+        view_type: Optional[str] = "grid"
     ) -> Dict[str, Any]:
         """Create new dashboard"""
         try:
             async with db_manager.get_session() as session:
                 query = text("""
                     INSERT INTO nexus.dashboards (
-                        title, description, configuration, layout_config, 
-                        owner_user_id, is_public, tags
+                        title, description, configuration, layout_config,
+                        owner_user_id, is_public, tags, view_type
                     )
                     VALUES (
                         :title, :description, CAST(:configuration AS jsonb), CAST(:layout_config AS jsonb),
-                        :owner_user_id, :is_public, CAST(:tags AS jsonb)
+                        :owner_user_id, :is_public, CAST(:tags AS jsonb), :view_type
                     )
                     RETURNING id, status, version, created_at, updated_at
                 """)
-                
+
                 result = await session.execute(query, {
                     "title": title,
                     "description": description,
@@ -315,20 +319,22 @@ class DashboardService:
                     }),
                     "owner_user_id": user_id,
                     "is_public": is_public,
-                    "tags": json.dumps(tags or [])
+                    "tags": json.dumps(tags or []),
+                    "view_type": view_type or "grid"
                 })
-                
+
                 row = result.fetchone()
                 await session.commit()
-                
+
                 logger.info(f"Created dashboard {row.id} for user {user_id}")
-                
+
                 return {
                     "id": str(row.id),
                     "title": title,
                     "description": description,
                     "status": row.status,
                     "version": row.version,
+                    "view_type": view_type or "grid",
                     "owner_user_id": user_id,
                     "is_public": is_public,
                     "created_at": row.created_at.isoformat(),
@@ -350,7 +356,9 @@ class DashboardService:
         tags: Optional[List[str]] = None,
         is_public: Optional[bool] = None,
         is_anonymous_public: Optional[bool] = None,
-        is_favorite: Optional[bool] = None
+        is_favorite: Optional[bool] = None,
+        view_type: Optional[str] = None,
+        page_data: Optional[Dict[str, Any]] = None
     ) -> bool:
         """Update dashboard (requires edit permission)"""
         try:
@@ -359,43 +367,51 @@ class DashboardService:
             if not has_permission:
                 logger.warning(f"User {user_id} lacks edit permission for dashboard {dashboard_id}")
                 return False
-            
+
             # Build dynamic UPDATE query
             updates = []
             params = {"dashboard_id": dashboard_id}
-            
+
             if title is not None:
                 updates.append("title = :title")
                 params["title"] = title
-            
+
             if description is not None:
                 updates.append("description = :description")
                 params["description"] = description
-            
+
             if configuration is not None:
                 updates.append("configuration = CAST(:configuration AS jsonb)")
                 params["configuration"] = json.dumps(configuration)
-            
+
             if layout_config is not None:
                 updates.append("layout_config = CAST(:layout_config AS jsonb)")
                 params["layout_config"] = json.dumps(layout_config)
-            
+
             if tags is not None:
                 updates.append("tags = CAST(:tags AS jsonb)")
                 params["tags"] = json.dumps(tags)
-            
+
             if is_public is not None:
                 updates.append("is_public = :is_public")
                 params["is_public"] = is_public
-            
+
             if is_anonymous_public is not None:
                 updates.append("is_anonymous_public = :is_anonymous_public")
                 params["is_anonymous_public"] = is_anonymous_public
-            
+
             if is_favorite is not None:
                 updates.append("is_favorite = :is_favorite")
                 params["is_favorite"] = is_favorite
-            
+
+            if view_type is not None:
+                updates.append("view_type = :view_type")
+                params["view_type"] = view_type
+
+            if page_data is not None:
+                updates.append("page_data = CAST(:page_data AS jsonb)")
+                params["page_data"] = json.dumps(page_data)
+
             if not updates:
                 return True  # Nothing to update
             

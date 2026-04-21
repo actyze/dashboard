@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 """Service for managing table relationships and semantic graph traversal."""
 
 import uuid

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 /**
  * Service for managing semantic table relationships (graph edges).
  * Matches the pattern of MetadataService.js and ExclusionService.js.

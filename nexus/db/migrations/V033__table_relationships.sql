@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: AGPL-3.0-only
 -- Semantic Relationship Graph
 -- Stores table-to-table relationships with join conditions for intelligent query generation
 -- Three-layer population: inferred (naming conventions), mined (query history), admin (manual)

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 """Service for mining table relationships from query history."""
 
 import re

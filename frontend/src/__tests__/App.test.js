@@ -63,6 +63,10 @@ jest.mock('../components/DataIntelligence', () => ({
   DataIntelligence: () => null,
 }));
 
+jest.mock('../components/PredictiveIntelligence', () => ({
+  PredictiveIntelligence: () => null,
+}));
+
 // Now import App after all mocks are set up
 const App = require('../App').default;
 

@@ -360,7 +360,7 @@ class KpiService:
                     """),
                     {
                         "metric_id": kpi_id,
-                        "value": json.dumps(query_results),
+                        "value": json.dumps(query_results, default=str),
                         "metadata": json.dumps({
                             "execution_time_ms": result.get("execution_time", 0),
                             "row_count": query_results.get("row_count", 0),
@@ -372,6 +372,16 @@ class KpiService:
             await self._update_collection_status(kpi_id)
 
             logger.info(f"KPI {kpi_id} ({kpi['name']}) collected: {len(rows)} rows → kpi_data.{table_name}")
+
+            # Trigger linked prediction pipelines (after_kpi_collection mode)
+            try:
+                from app.services.prediction_service import prediction_service
+                triggered = await prediction_service.trigger_kpi_linked_pipelines(kpi_id)
+                if triggered:
+                    logger.info(f"KPI {kpi_id}: triggered {triggered} prediction pipeline(s)")
+            except Exception as pred_exc:
+                logger.warning(f"KPI {kpi_id}: prediction trigger failed (non-fatal): {pred_exc}")
+
             return {"success": True, "kpi_id": kpi_id, "name": kpi["name"], "rows_inserted": len(rows)}
 
         except Exception as exc:
@@ -499,7 +509,9 @@ class KpiService:
             await session.commit()
 
     def _coerce_value(self, v: Any) -> Any:
-        """Coerce complex Trino types to JSON-safe values for Postgres."""
+        """Coerce complex Trino types to Postgres-safe values.
+        date/datetime objects are passed through as-is (asyncpg handles them natively).
+        Only dicts/lists need JSON serialization for JSONB columns."""
         if isinstance(v, (dict, list)):
             return json.dumps(v)
         return v

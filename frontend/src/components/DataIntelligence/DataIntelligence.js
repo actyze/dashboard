@@ -1,21 +1,24 @@
 /**
  * Data Intelligence Component
  * Main container for data management features:
- * - Optimise: Combined schema boosting and metadata descriptions
+ * - Schema & Metadata: Combined schema boosting and metadata descriptions
+ * - Relationships: Semantic table relationship graph editor
  * - File Imports
  */
 
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import SchemaOptimise from './SchemaOptimise';
+import RelationshipEditor from './RelationshipEditor';
 import FileImports from './FileImports';
 
 function DataIntelligence() {
   const { isDark } = useTheme();
-  const [activeTab, setActiveTab] = useState('optimise');
+  const [activeTab, setActiveTab] = useState('schema-metadata');
 
   const tabs = [
-    { id: 'optimise', label: 'Optimise', badge: null, component: SchemaOptimise },
+    { id: 'schema-metadata', label: 'Schema & Metadata', badge: null, component: SchemaOptimise },
+    { id: 'relationships', label: 'Relationships', badge: null, component: RelationshipEditor },
     { id: 'file-imports', label: 'File Imports', badge: null, component: FileImports }
   ];
 

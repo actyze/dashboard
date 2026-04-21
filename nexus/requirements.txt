@@ -16,7 +16,7 @@ boto3==1.40.53
 aioboto3==15.5.0
 
 # Google Vertex AI / Gemini
-google-cloud-aiplatform==1.133.0
+google-cloud-aiplatform==1.148.1
 google-genai==1.37.0
 
 # Azure OpenAI

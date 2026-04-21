@@ -84,7 +84,7 @@ const PipelineDetail = ({ pipeline, onBack, onTrain, onDelete, training }) => {
             <div>
               <h1 className="text-lg font-semibold">{p.name}</h1>
               <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                {p.prediction_type === 'forecast' ? '📈 Forecast' : p.prediction_type === 'classify' ? '🎯 Classify' : '🔢 Estimate'}
+                {p.prediction_type === 'forecast' ? 'Forecast' : p.prediction_type === 'classify' ? 'Classify' : 'Estimate'}
                 {' · '}
                 {p.source_type === 'kpi' ? p.kpi_name || 'KPI' : 'Custom SQL'}
                 {' · '}

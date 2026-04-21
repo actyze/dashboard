@@ -8,21 +8,24 @@ import SqlEditor from '../Common/SqlEditor';
 const PREDICTION_TYPES = [
   {
     id: 'forecast',
-    icon: '📈',
+    icon: 'F',
+    color: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
     title: 'Forecast',
     question: 'What will the value be in the future?',
     examples: 'Revenue, demand, costs, traffic',
   },
   {
     id: 'classify',
-    icon: '🎯',
+    icon: 'C',
+    color: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
     title: 'Classify',
     question: 'Which ones will fall into a group?',
     examples: 'Churn, fraud, conversion, lead scoring',
   },
   {
     id: 'estimate',
-    icon: '🔢',
+    icon: 'E',
+    color: 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400',
     title: 'Estimate',
     question: "What's the expected number?",
     examples: 'Customer lifetime value, scoring, pricing',
@@ -202,7 +205,7 @@ const PipelineWizard = ({ onClose, onCreated }) => {
                         !available ? 'opacity-40 cursor-not-allowed' : ''
                       } ${isDark ? 'bg-[#17181a]' : 'bg-white'}`}
                     >
-                      <div className="text-2xl mb-2">{type.icon}</div>
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold mb-2 ${type.color}`}>{type.icon}</div>
                       <h3 className="font-semibold text-sm mb-1">{type.title}</h3>
                       <p className={`text-xs mb-2 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                         {type.question}
@@ -326,7 +329,9 @@ const PipelineWizard = ({ onClose, onCreated }) => {
                       : isDark ? 'bg-red-900/20 border-red-800/30' : 'bg-red-50 border-red-200'
                   }`}>
                     <div className="flex items-center gap-2 mb-1">
-                      <span>{analysis.status === 'good' ? '✅' : analysis.status === 'warning' ? '⚠️' : '❌'}</span>
+                      <span className={`w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold ${
+                        analysis.status === 'good' ? 'bg-green-100 text-green-600' : analysis.status === 'warning' ? 'bg-amber-100 text-amber-600' : 'bg-red-100 text-red-600'
+                      }`}>{analysis.status === 'good' ? '\u2713' : analysis.status === 'warning' ? '!' : '\u2717'}</span>
                       <span className="font-medium text-sm">
                         {analysis.status === 'good'
                           ? `Your data looks good — ${analysis.row_count?.toLocaleString()} rows`
@@ -614,7 +619,7 @@ const PipelineWizard = ({ onClose, onCreated }) => {
               {analysis && analysis.status !== 'good' && (
                 <div className={`rounded-lg p-3 mb-4 ${isDark ? 'bg-amber-900/20' : 'bg-amber-50'}`}>
                   <p className="text-xs text-amber-500">
-                    ⚠️ {analysis.warnings?.length} data quality warning(s) — predictions may be less accurate
+                    {analysis.warnings?.length} data quality warning(s) — predictions may be less accurate
                   </p>
                 </div>
               )}

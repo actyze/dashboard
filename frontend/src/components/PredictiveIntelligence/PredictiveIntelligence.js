@@ -14,9 +14,9 @@ const STATUS_STYLES = {
 };
 
 const TYPE_ICONS = {
-  forecast: '📈',
-  classify: '🎯',
-  estimate: '🔢',
+  forecast: 'F',
+  classify: 'C',
+  estimate: 'E',
 };
 
 const TYPE_LABELS = {
@@ -116,7 +116,11 @@ const PredictiveIntelligence = () => {
           </div>
         ) : pipelines.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 gap-4">
-            <div className="text-4xl">🔮</div>
+            <div className={`text-4xl ${isDark ? 'text-gray-600' : 'text-gray-300'}`}>
+              <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6" />
+              </svg>
+            </div>
             <p className={`text-lg font-medium ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
               No predictions yet
             </p>
@@ -145,7 +149,11 @@ const PredictiveIntelligence = () => {
                   {/* Type + Status */}
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-lg">{TYPE_ICONS[pipeline.prediction_type]}</span>
+                      <span className={`w-5 h-5 flex items-center justify-center rounded text-xs font-bold ${
+                      pipeline.prediction_type === 'forecast' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+                      : pipeline.prediction_type === 'classify' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400'
+                      : 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400'
+                    }`}>{TYPE_ICONS[pipeline.prediction_type]}</span>
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-white/10 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>
                         {TYPE_LABELS[pipeline.prediction_type]}
                       </span>

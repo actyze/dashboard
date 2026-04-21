@@ -37,6 +37,13 @@ The Docker Compose setup is designed for **local development only** with smart d
 4. frontend (React UI)
    └─> depends_on: nexus (required)
        └─> Waits until Nexus is healthy
+
+5. Prediction Workers (profile-gated, no startup dependencies)
+   ├─> prediction-worker-xgboost   (profile: predictions)
+   ├─> prediction-worker-lightgbm  (profile: predictions)
+   └─> prediction-worker-autogluon (profile: predictions-timeseries)
+       Workers read from Trino and write to Postgres directly.
+       Nexus discovers workers via health checks at runtime.
 ```
 
 ## Service Details
@@ -237,6 +244,32 @@ docker-compose --profile postgres-only up
 - ✅ nexus (uses local Postgres, external Trino)
 - ✅ schema-service (uses external Trino)
 - ✅ frontend
+
+### `predictions` Profile
+**Add ML prediction workers (XGBoost + LightGBM):**
+```bash
+docker compose --profile local --profile predictions up
+```
+
+**Starts** (in addition to core services):
+- ✅ prediction-worker-xgboost (port 8401, ~512MB)
+- ✅ prediction-worker-lightgbm (port 8402, ~512MB)
+
+### `predictions-timeseries` Profile
+**Add AutoGluon time-series forecasting:**
+```bash
+docker compose --profile local --profile predictions-timeseries up
+```
+
+**Starts** (in addition to core services):
+- ✅ prediction-worker-autogluon (port 8403, ~2GB)
+
+> **Note:** AutoGluon image is ~3.9GB. Only start when testing time-series forecasting.
+
+### Combined: All prediction workers
+```bash
+docker compose --profile local --profile predictions --profile predictions-timeseries up
+```
 
 ## TPC-H Configuration (Local Only)
 

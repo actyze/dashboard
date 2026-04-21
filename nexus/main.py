@@ -18,6 +18,7 @@ from app.api_metadata import router as metadata_router
 from app.api_exclusions import router as exclusions_router
 from app.api_refresh import router as refresh_router
 from app.api_kpi import router as kpi_router
+from app.api_relationships import router as relationships_router
 from app.services.scheduler_service import start_scheduler, stop_scheduler
 from app.services.refresh_service import refresh_service
 from app.services.telemetry_service import telemetry_service
@@ -106,6 +107,7 @@ app.include_router(exclusions_router)  # Schema exclusions (org-level, admin onl
 app.include_router(public_router)  # No authentication required
 app.include_router(refresh_router)  # Tile cache & refresh scheduler
 app.include_router(kpi_router)     # Scheduled KPI definitions & metrics
+app.include_router(relationships_router)  # Semantic relationship graph
 
 
 @app.get("/")

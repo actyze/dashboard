@@ -46,6 +46,15 @@ const MetadataService = {
   async deleteDescription(id) {
     const response = await apiInstance.delete(`/metadata/descriptions/${id}`);
     return response.data;
+  },
+
+  /**
+   * Bulk import descriptions (up to 500 at once).
+   * Each item: { catalog, schema_name, table_name, column_name, description }
+   */
+  async bulkImportDescriptions(descriptions) {
+    const response = await apiInstance.post('/metadata/descriptions/bulk', { descriptions });
+    return response.data;
   }
 };
 

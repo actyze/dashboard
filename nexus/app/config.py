@@ -236,6 +236,7 @@ class Settings(BaseSettings):
     feature_schema_recommendations: bool = True
     feature_sql_correction: bool = True
     feature_use_litellm: bool = True  # Use LiteLLM for multi-provider support (set to False to use legacy code)
+    relationship_graph_enabled: bool = False  # Enable graph-backed relationships in prompts (safe: falls back to inference when off)
     
     # =============================================================================
     # Backward Compatibility Properties

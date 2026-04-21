@@ -7,7 +7,7 @@ Ask questions in plain English, get SQL queries and interactive charts. Connect 
 ## Key Features
 
 - **Natural language to SQL** -- ask questions in plain English, get SQL and visualizations
-- **Semantic intelligence layer** -- relationship graph, verified queries, synonyms, KPI definitions
+- **Semantic intelligence layer** -- persistent relationship graph with convention inference, query history mining, and admin curation for intelligent JOIN resolution
 - **Voice AI assistant** -- interact with your data using voice
 - **Federated querying via Trino** -- connect PostgreSQL, MySQL, Snowflake, BigQuery, and more
 - **Scheduled KPIs (gold layer)** -- pre-aggregate metrics on a schedule (1-24h), materialized as real queryable tables
@@ -33,7 +33,7 @@ docker-compose --profile local up -d
 ```
 Frontend (React) --> Nexus API (FastAPI) --> Trino --> Your Databases
                          |
-                   Schema Service (FAISS)
+                   Schema Service (FAISS) + Relationship Graph (PostgreSQL)
                          |
                    LLM Provider (Claude, GPT, etc.)
 ```

@@ -119,3 +119,10 @@ helm/dashboard/values-*-secrets.yaml
 *-secrets.yaml
 *.env
 .env*
+
+# Playwright MCP
+.playwright-mcp/
+
+# Claude Code
+.mcp.json
+.claude/

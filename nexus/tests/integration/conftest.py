@@ -95,6 +95,9 @@ async def db_engine():
         await conn.execute(text(f"DELETE FROM nexus.query_history WHERE user_id IN ({test_user_ids})"))
         await conn.execute(text(f"DELETE FROM nexus.dashboard_tiles WHERE dashboard_id IN (SELECT id FROM nexus.dashboards WHERE owner_user_id IN ({test_user_ids}))"))
         await conn.execute(text(f"DELETE FROM nexus.dashboards WHERE owner_user_id IN ({test_user_ids})"))
+        # Relationship graph: audit log has CASCADE, but relationships FK to users
+        await conn.execute(text(f"DELETE FROM nexus.relationship_audit_log WHERE changed_by IN ({test_user_ids})"))
+        await conn.execute(text(f"DELETE FROM nexus.table_relationships WHERE created_by IN ({test_user_ids}) OR updated_by IN ({test_user_ids})"))
         await conn.execute(text(f"DELETE FROM nexus.user_roles WHERE user_id IN ({test_user_ids})"))
         await conn.execute(text(f"DELETE FROM nexus.users WHERE email LIKE '%@test.local' OR email LIKE '%@example.com'"))
     await engine.dispose()

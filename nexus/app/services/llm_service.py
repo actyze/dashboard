@@ -29,7 +29,9 @@ class LLMService:
         schema_recommendations: Optional[Dict[str, Any]] = None,
         preferred_tables: Optional[List[Dict[str, Any]]] = None,
         last_sql: Optional[str] = None,
-        intent: Optional[str] = None
+        intent: Optional[str] = None,
+        relationships: Optional[List[Dict[str, Any]]] = None,
+        join_paths: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         Generate SQL from natural language query using external LLM API.
@@ -59,14 +61,16 @@ class LLMService:
         )
         
         try:
-            # Build the prompt with schema context, preferred tables, and previous SQL (for refinement intents)
+            # Build the prompt with schema context, preferred tables, relationships, and previous SQL
             prompt = self._build_sql_prompt(
-                natural_language_query, 
-                schema_recommendations, 
+                natural_language_query,
+                schema_recommendations,
                 conversation_history,
                 preferred_tables,
                 last_sql,
-                intent
+                intent,
+                relationships=relationships,
+                join_paths=join_paths,
             )
             
             # Call external LLM API
@@ -382,13 +386,15 @@ Generated SQL (Main Data):
         await self.client.aclose()
     
     def _build_sql_prompt(
-        self, 
-        query: str, 
+        self,
+        query: str,
         schema_recommendations: Optional[Dict[str, Any]] = None,
         conversation_history: Optional[List[str]] = None,
         preferred_tables: Optional[List[Dict[str, Any]]] = None,
         last_sql: Optional[str] = None,
-        intent: Optional[str] = None
+        intent: Optional[str] = None,
+        relationships: Optional[List[Dict[str, Any]]] = None,
+        join_paths: Optional[List[str]] = None,
     ) -> str:
         """Build SQL generation prompt with preferred tables, schema context, previous SQL, and chart recommendations."""
         
@@ -472,12 +478,30 @@ Generated SQL (Main Data):
                     table_info += f"\n  Cols: {columns_str}"
                 prompt_parts.append(table_info)
             
-            # Infer and add relationships hint
-            relationships = self._infer_table_relationships(recommendations)
-            if relationships:
-                prompt_parts.append("\n=== TABLE RELATIONSHIPS ===")
-                for rel in relationships:
-                    prompt_parts.append(f"- {rel}")
+            # Three-tier fallback for TABLE RELATIONSHIPS section
+            if settings.relationship_graph_enabled and relationships:
+                # Tier 1: Graph-backed relationships
+                prompt_parts.append("\n=== TABLE RELATIONSHIPS (graph-backed) ===")
+                for rel_item in relationships[:10]:
+                    rel_type = rel_item.get('relationship_type', '1:N')
+                    method = rel_item.get('source_method', 'inferred')
+                    verified = ' verified' if rel_item.get('is_verified') else ''
+                    confidence = rel_item.get('confidence', 0.5)
+                    prompt_parts.append(
+                        f"- {rel_item.get('source_table')} JOIN {rel_item.get('target_table')} "
+                        f"ON {rel_item.get('join_condition')} [{rel_type}, {method}{verified}, confidence: {confidence:.2f}]"
+                    )
+                if join_paths:
+                    prompt_parts.append("\nSUGGESTED JOIN PATH:")
+                    for jp in join_paths[:5]:
+                        prompt_parts.append(f"  {jp}")
+            else:
+                # Tier 2/3: Fall back to existing column-name inference (graph disabled or empty)
+                relationships_inferred = self._infer_table_relationships(recommendations)
+                if relationships_inferred:
+                    prompt_parts.append("\n=== TABLE RELATIONSHIPS ===")
+                    for rel_str in relationships_inferred:
+                        prompt_parts.append(f"- {rel_str}")
             
             prompt_parts.append("="*40 + "\n")
         else:

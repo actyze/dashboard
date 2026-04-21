@@ -17,12 +17,14 @@ const TYPE_ICONS = {
   forecast: 'F',
   classify: 'C',
   estimate: 'E',
+  detect: 'D',
 };
 
 const TYPE_LABELS = {
   forecast: 'Forecast',
   classify: 'Classify',
   estimate: 'Estimate',
+  detect: 'Detect',
 };
 
 const PredictiveIntelligence = () => {
@@ -152,6 +154,7 @@ const PredictiveIntelligence = () => {
                       <span className={`w-5 h-5 flex items-center justify-center rounded text-xs font-bold ${
                       pipeline.prediction_type === 'forecast' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
                       : pipeline.prediction_type === 'classify' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400'
+                      : pipeline.prediction_type === 'detect' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
                       : 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400'
                     }`}>{TYPE_ICONS[pipeline.prediction_type]}</span>
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isDark ? 'bg-white/10 text-gray-300' : 'bg-gray-100 text-gray-600'}`}>

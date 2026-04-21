@@ -34,7 +34,7 @@ router = APIRouter(prefix="/api/predictions", tags=["Predictive Intelligence"])
 
 
 class AnalyzeRequest(BaseModel):
-    prediction_type: str = Field(..., pattern="^(forecast|classify|estimate)$")
+    prediction_type: str = Field(..., pattern="^(forecast|classify|estimate|detect)$")
     source_type: str = Field(default="kpi", pattern="^(kpi|sql)$")
     source_kpi_id: Optional[str] = None
     source_sql: Optional[str] = None
@@ -44,15 +44,16 @@ class AnalyzeRequest(BaseModel):
 
 class CreatePipelineRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
-    prediction_type: str = Field(..., pattern="^(forecast|classify|estimate)$")
+    prediction_type: str = Field(..., pattern="^(forecast|classify|estimate|detect)$")
     source_type: str = Field(default="kpi", pattern="^(kpi|sql)$")
     source_kpi_id: Optional[str] = None
     source_sql: Optional[str] = None
-    target_column: str = Field(..., min_length=1)
+    target_column: Optional[str] = Field(default=None, description="Target column to predict. Not required for anomaly detection.")
     feature_columns: Optional[List[str]] = None
     output_columns: Optional[List[str]] = Field(default=None, description="Columns to include in prediction output (ID/label columns)")
     forecast_horizon: Optional[int] = Field(default=None, ge=1, le=365)
     trigger_mode: str = Field(default="after_kpi_collection", pattern="^(after_kpi_collection|scheduled|manual)$")
+
     schedule_hours: int = Field(default=24, ge=1, le=720)
     description: Optional[str] = None
     train_now: bool = Field(default=True, description="Trigger first training immediately")
@@ -62,6 +63,7 @@ class UpdatePipelineRequest(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     description: Optional[str] = None
     trigger_mode: Optional[str] = Field(default=None, pattern="^(after_kpi_collection|scheduled|manual)$")
+
     schedule_hours: Optional[int] = Field(default=None, ge=1, le=720)
     is_active: Optional[bool] = None
     feature_columns: Optional[List[str]] = None

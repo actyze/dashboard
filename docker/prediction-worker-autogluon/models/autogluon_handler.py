@@ -180,8 +180,12 @@ class AutoGluonHandler:
         train_df = df.iloc[:-backtest_size].copy()
         test_df = df.iloc[-backtest_size:].copy()
 
-        # Keep only required columns for TimeSeriesDataFrame
-        ts_columns = [ts_col, "item_id", target_column]
+        # Detect numeric covariates for multivariate forecasting
+        covariate_cols = [c for c in df.columns
+                         if c not in [ts_col, "item_id", target_column, "collected_at"]
+                         and df[c].dtype in ("float64", "int64", "float32", "int32")]
+
+        ts_columns = [ts_col, "item_id", target_column] + covariate_cols
         train_tsdf = TimeSeriesDataFrame.from_data_frame(
             train_df[ts_columns], id_column="item_id", timestamp_column=ts_col
         )
@@ -195,6 +199,7 @@ class AutoGluonHandler:
             predictor = TimeSeriesPredictor(
                 target=target_column, prediction_length=forecast_horizon,
                 freq=freq, path=model_path, eval_metric="MAPE",
+                known_covariates_names=covariate_cols if covariate_cols else None,
             )
             predictor.fit(train_tsdf, presets=preset, time_limit=time_limit)
 

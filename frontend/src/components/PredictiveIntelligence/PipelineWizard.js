@@ -30,6 +30,14 @@ const PREDICTION_TYPES = [
     question: "What's the expected number?",
     examples: 'Customer lifetime value, scoring, pricing',
   },
+  {
+    id: 'detect',
+    icon: 'D',
+    color: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
+    title: 'Detect',
+    question: 'Which data points are unusual?',
+    examples: 'Fraud, equipment failures, unusual transactions',
+  },
 ];
 
 const HORIZON_OPTIONS = [
@@ -132,7 +140,7 @@ const PipelineWizard = ({ onClose, onCreated }) => {
   useEffect(() => {
     if (!predictionType) return;
     const kpiName = kpis.find((k) => k.id === selectedKpiId)?.name || 'Custom';
-    const typeLabel = predictionType === 'forecast' ? 'Forecast' : predictionType === 'classify' ? 'Classification' : 'Estimate';
+    const typeLabel = predictionType === 'forecast' ? 'Forecast' : predictionType === 'classify' ? 'Classification' : predictionType === 'detect' ? 'Anomaly Detection' : 'Estimate';
     const suffix = predictionType === 'forecast' ? ` - ${forecastHorizon}d` : '';
     setName(`${kpiName} ${typeLabel}${suffix}`);
   }, [predictionType, selectedKpiId, kpis, forecastHorizon]);
@@ -145,7 +153,7 @@ const PipelineWizard = ({ onClose, onCreated }) => {
       source_type: sourceType,
       source_kpi_id: sourceType === 'kpi' ? selectedKpiId : undefined,
       source_sql: sourceType === 'sql' ? sourceSql : undefined,
-      target_column: targetColumn,
+      target_column: targetColumn || undefined,
       feature_columns: featureColumns.length > 0 ? featureColumns : undefined,
       output_columns: outputColumns.length > 0 ? outputColumns : undefined,
       forecast_horizon: predictionType === 'forecast' ? forecastHorizon : undefined,
@@ -159,7 +167,7 @@ const PipelineWizard = ({ onClose, onCreated }) => {
     }
   };
 
-  const canProceedStep2 = analysis && analysis.status !== 'error' && targetColumn;
+  const canProceedStep2 = analysis && analysis.status !== 'error' && (targetColumn || predictionType === 'detect');
   const cardClass = `rounded-xl border p-4 cursor-pointer transition-all ${isDark ? 'border-white/10 hover:border-[#5d6ad3]/50' : 'border-gray-200 hover:border-[#5d6ad3]/50'}`;
   const selectedCardClass = 'border-[#5d6ad3] ring-2 ring-[#5d6ad3]/30';
 
@@ -348,8 +356,8 @@ const PipelineWizard = ({ onClose, onCreated }) => {
                     ))}
                   </div>
 
-                  {/* Target column */}
-                  <div>
+                  {/* Target column (not needed for anomaly detection) */}
+                  {predictionType !== 'detect' && <div>
                     <label className="block text-xs font-medium mb-1">
                       What do you want to predict?
                     </label>
@@ -373,7 +381,16 @@ const PipelineWizard = ({ onClose, onCreated }) => {
                         </option>
                       ))}
                     </select>
-                  </div>
+                  </div>}
+
+                  {/* Detect mode info */}
+                  {predictionType === 'detect' && (
+                    <div className={`rounded-lg p-3 ${isDark ? 'bg-[#17181a]' : 'bg-gray-50'}`}>
+                      <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Anomaly detection analyzes all numeric columns to find unusual data points. No target column is needed — the model identifies outliers automatically.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Forecast horizon */}
                   {predictionType === 'forecast' && (
@@ -562,6 +579,7 @@ const PipelineWizard = ({ onClose, onCreated }) => {
                   {predictionType === 'forecast' && `Forecasting "${targetColumn}" ${forecastHorizon} days ahead`}
                   {predictionType === 'classify' && `Classifying "${targetColumn}"`}
                   {predictionType === 'estimate' && `Estimating "${targetColumn}"`}
+                  {predictionType === 'detect' && 'Detecting anomalies across all numeric columns'}
                 </p>
                 <p className={`text-xs mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                   Source: {sourceType === 'kpi' ? kpis.find((k) => k.id === selectedKpiId)?.name : 'Custom SQL'}

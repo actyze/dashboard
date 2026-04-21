@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS nexus.prediction_pipelines (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     description TEXT,
-    prediction_type TEXT NOT NULL,       -- 'forecast', 'classify', 'estimate' (user-facing)
+    prediction_type TEXT NOT NULL         -- 'forecast', 'classify', 'estimate', 'detect' (user-facing)
+        CHECK (prediction_type IN ('forecast', 'classify', 'estimate', 'detect')),
     model_id UUID REFERENCES nexus.prediction_models(id),  -- auto-selected by service
 
     -- Dual data source: exactly one of (source_kpi_id, source_sql) should be set
@@ -47,7 +48,7 @@ CREATE TABLE IF NOT EXISTS nexus.prediction_pipelines (
     source_kpi_id UUID REFERENCES nexus.kpi_definitions(id) ON DELETE SET NULL,
     source_sql TEXT,                     -- Trino SQL for multi-table joins
 
-    target_column TEXT NOT NULL,
+    target_column TEXT,                   -- NULL for anomaly detection (unsupervised)
     feature_columns TEXT[],              -- auto-detected, user can adjust
     output_columns TEXT[],               -- columns to include in prediction output (ID/label columns)
     forecast_horizon INT,                -- days ahead (forecast only)
@@ -135,5 +136,8 @@ VALUES
      'http://prediction-worker-lightgbm:8400', true, '{"objective": "regression", "metric": "rmse", "n_estimators": 200}'),
     ('AutoGluon TimeSeries', 'autogluon', 'timeseries', 'forecasting',
      'Ensemble time-series forecasting (ARIMA + ETS + Theta + tree models). Best for: revenue forecasting, demand forecasting, cost forecasting.',
-     'http://prediction-worker-autogluon:8400', true, '{"preset": "fast_training", "time_limit": 300}')
+     'http://prediction-worker-autogluon:8400', true, '{"preset": "fast_training", "time_limit": 300}'),
+    ('Isolation Forest', 'xgboost', 'tabular', 'anomaly_detection',
+     'Unsupervised anomaly detection — identifies unusual data points without labeled examples. Best for: fraud detection, equipment failures, unusual transactions, outlier identification.',
+     'http://prediction-worker-xgboost:8400', true, '{"contamination": 0.1, "n_estimators": 200, "random_state": 42}')
 ON CONFLICT DO NOTHING;

@@ -97,6 +97,17 @@ async def _run_kpi_collection_sweep() -> None:
         logger.error(f"KPI collection sweep failed: {exc}")
 
 
+async def _run_prediction_sweep() -> None:
+    """Train prediction pipelines whose next_run_at has passed (scheduled trigger mode)."""
+    try:
+        from app.services.prediction_service import prediction_service
+        count = await prediction_service.process_due_pipelines()
+        if count:
+            logger.info(f"Prediction sweep: {count} pipelines trained")
+    except Exception as exc:
+        logger.error(f"Prediction sweep failed: {exc}")
+
+
 def start_scheduler() -> None:
     """
     Register scheduled jobs and start the APScheduler.
@@ -156,11 +167,27 @@ def start_scheduler() -> None:
         name="Scheduled KPI: Collect Due Metrics",
     )
 
+    # Job 4: Prediction pipeline sweep — trains pipelines with scheduled trigger mode.
+    # Shared Postgres jobstore — only ONE pod fires per interval.
+    if settings.prediction_enabled:
+        prediction_interval = settings.prediction_sweep_interval_seconds
+        scheduler.add_job(
+            _run_prediction_sweep,
+            trigger="interval",
+            seconds=prediction_interval,
+            id="prediction_sweep",
+            replace_existing=True,
+            name="Predictive Intelligence: Train Due Pipelines",
+        )
+    else:
+        prediction_interval = 0
+
     scheduler.start()
     logger.info(
         f"Scheduler started — "
         f"tile enqueue every {enqueue_interval}s, tile process every {poll_interval}s, "
         f"KPI collection every {kpi_poll_interval}s"
+        + (f", prediction sweep every {prediction_interval}s" if prediction_interval else "")
     )
 
 

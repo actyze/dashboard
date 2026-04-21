@@ -277,6 +277,95 @@ services:
       - local
       - postgres-only
 
+  # --------------------------------------------------------------------------
+  # Prediction Workers (on-demand, profile-gated)
+  # Enable with: docker compose --profile predictions up
+  # --------------------------------------------------------------------------
+
+  # XGBoost Worker — tabular classification + regression (default: enabled)
+  prediction-worker-xgboost:
+    build:
+      context: ./prediction-worker-xgboost
+      dockerfile: Dockerfile
+    container_name: prediction-worker-xgboost
+    ports:
+      - "8401:8400"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          memory: 128M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8400/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - dashboard
+    restart: unless-stopped
+    profiles:
+      - predictions
+
+  # LightGBM Worker — tabular classification + regression (default: enabled)
+  prediction-worker-lightgbm:
+    build:
+      context: ./prediction-worker-lightgbm
+      dockerfile: Dockerfile
+    container_name: prediction-worker-lightgbm
+    ports:
+      - "8402:8400"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          memory: 128M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8400/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - dashboard
+    restart: unless-stopped
+    profiles:
+      - predictions
+
+  # AutoGluon TimeSeries Worker — forecasting (default: disabled, enable via helm upgrade)
+  # NOTE: Heavy image (~3.5GB). Only start when needed for time-series testing.
+  prediction-worker-autogluon:
+    build:
+      context: ./prediction-worker-autogluon
+      dockerfile: Dockerfile
+    container_name: prediction-worker-autogluon
+    ports:
+      - "8403:8400"
+    environment:
+      AUTOGLUON_PRESET: ${AUTOGLUON_PRESET:-fast_training}
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8400/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - dashboard
+    restart: unless-stopped
+    profiles:
+      - predictions-timeseries
+
 volumes:
   postgres_data:
     driver: local

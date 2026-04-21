@@ -8,6 +8,7 @@ import { Home } from './components/Home';
 import Admin from './components/Admin/Admin';
 import { DataIntelligence } from './components/DataIntelligence';
 import { ScheduledKpis } from './components/ScheduledKpis';
+import { PredictiveIntelligence } from './components/PredictiveIntelligence';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { AIAgentProvider } from './contexts/AIAgentContext';
@@ -54,6 +55,7 @@ function App() {
                   <Route path="/admin" element={<Admin />} />
                   <Route path="/scheduled-kpis" element={<ScheduledKpis />} />
                   <Route path="/data-intelligence" element={<DataIntelligence />} />
+                  <Route path="/predictive-intelligence" element={<PredictiveIntelligence />} />
                   {/* Legacy route redirect */}
                   <Route path="/preferences" element={<Navigate to="/data-intelligence" replace />} />
                 </Route>

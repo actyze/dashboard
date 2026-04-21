@@ -1,0 +1,8 @@
+fastapi==0.115.0
+uvicorn==0.30.6
+lightgbm==4.5.0
+pandas==2.2.3
+scikit-learn==1.5.2
+numpy==1.26.4
+trino==0.329.0
+psycopg2-binary==2.9.9

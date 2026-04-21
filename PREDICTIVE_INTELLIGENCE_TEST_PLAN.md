@@ -252,3 +252,72 @@ After Test 6 (Estimate):
 SELECT * FROM postgres.prediction_data.pred_customer_spending_estimate LIMIT 5
 -- customer_id | customer_name | total_spent_predicted | predicted_at
 ```
+
+After Test 14 (Anomaly Detection):
+```sql
+SELECT * FROM postgres.prediction_data.pred_customer_orders_anomaly_detection LIMIT 5
+-- customer_name | is_anomaly | anomaly_score | predicted_at
+```
+
+---
+
+## Additional Tests (v2 Features)
+
+### Test 14: Anomaly Detection Pipeline
+1. Navigate to predictions, click "+ New Prediction"
+2. **Step 1**: Select "Detect" card (shows "Which data points are unusual?")
+3. Click Next
+4. **Step 2**:
+   - Select "Customer Orders" KPI
+   - Click "Analyze Data"
+   - Verify: no target column dropdown shown
+   - Verify: info text "Anomaly detection analyzes all numeric columns..."
+   - Verify: output column selection available
+   - Click Next
+5. **Step 3**:
+   - Verify name auto-generated: "Customer Orders Anomaly Detection"
+   - Verify summary: "Detecting anomalies across all numeric columns"
+   - Click "Create & Train Now"
+6. Verify: pipeline shows Ready with "Found X anomalies (10.0%) in Y rows"
+7. Click into detail:
+   - Model shows "Isolation Forest"
+   - Target Column is empty (unsupervised)
+   - Predictions table shows: customer_name, is_anomaly, anomaly_score, predicted_at
+
+### Test 15: Multivariate Forecasting
+1. Create a KPI with multiple numeric columns:
+   ```sql
+   SELECT CAST(orderdate AS VARCHAR) as date,
+     CAST(SUM(totalprice) AS DOUBLE) as revenue,
+     CAST(COUNT(*) AS BIGINT) as order_count,
+     CAST(AVG(totalprice) AS DOUBLE) as avg_order_value
+   FROM tpch.tiny.orders GROUP BY orderdate ORDER BY orderdate
+   ```
+2. Create a Forecast prediction using this KPI, target = revenue
+3. Verify: AutoGluon uses order_count and avg_order_value as covariates
+4. Verify: forecast accuracy may improve compared to univariate (depends on data)
+
+### Test 16: Time-Aggregated Data Warning
+1. Use the "Daily Order Revenue" KPI (time-aggregated, no entity columns)
+2. New Prediction, select "Classify"
+3. Select the KPI, click "Analyze Data"
+4. Verify: amber warning appears with message about time-aggregated data
+5. Verify: warning suggests using a custom SQL query for entity-level data
+
+### Test 17: Explore in Queries
+1. Open a trained pipeline detail page
+2. Click "Explore in Queries" button
+3. Verify: navigates to /query/new with SQL pre-filled and auto-executed
+4. Verify: full dataset visible, CSV export available, Chart tab available
+
+### Test 18: Get Recommendations
+1. Open a trained pipeline detail page
+2. Click "Get Recommendations" button
+3. Verify: navigates to /query/new with NL prompt auto-submitted
+4. Verify: LLM generates analytical SQL, groups data, suggests actions
+
+### Test 19: Predictions Table in Detail View
+1. Open a trained pipeline detail page
+2. Verify: Predictions section shows actual data from the output table
+3. Verify: column headers match output table schema
+4. Verify: "Showing 50 of X rows" pagination notice for large datasets

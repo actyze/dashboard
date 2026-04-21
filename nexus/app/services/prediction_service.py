@@ -107,6 +107,7 @@ class PredictionService:
             "forecast": "forecasting" in available_types or "regression" in available_types,
             "classify": "classification" in available_types,
             "estimate": "regression" in available_types,
+            "detect": "classification" in available_types or "regression" in available_types,
         }
         return {
             "prediction_types": {k: v for k, v in type_map.items() if v},
@@ -132,6 +133,9 @@ class PredictionService:
         elif prediction_type == "estimate":
             model_type = "lightgbm" if row_count > 100_000 and "lightgbm" in healthy else "xgboost"
             task_type = "regression"
+        elif prediction_type == "detect":
+            model_type = "xgboost"
+            task_type = "anomaly_detection"
         else:
             return None
 
@@ -259,6 +263,17 @@ class PredictionService:
         if prediction_type in ("classify", "estimate") and 1000 <= row_count < 5000:
             warnings.append("Limited data. Predictions may not be very accurate.")
 
+        # Detect time-aggregated data used for classify/estimate
+        if prediction_type in ("classify", "estimate"):
+            time_cols = [c for c in columns if any(t in c["type"].lower() for t in ("timestamp", "date", "time"))]
+            non_time_non_numeric = [c for c in columns if c["type"].lower() in ("varchar", "text", "char") and c["name"].lower() not in ("collected_at",)]
+            if time_cols and not non_time_non_numeric:
+                warnings.append(
+                    "This data appears to be time-aggregated (no entity identifiers like customer_id or product_name). "
+                    "Classification and estimation work best with entity-level data — one row per customer, product, or transaction. "
+                    "Consider using a custom SQL query to build a feature table with entity-level rows."
+                )
+
         # Auto-detect target column if not specified (before feature detection)
         recommended_target = None
         if not target_column:
@@ -354,7 +369,7 @@ class PredictionService:
         name: str,
         prediction_type: str,
         source_type: str,
-        target_column: str,
+        target_column: Optional[str],
         owner_user_id: str,
         source_kpi_id: Optional[str] = None,
         source_sql: Optional[str] = None,
@@ -610,6 +625,8 @@ class PredictionService:
                 task_type = "forecasting"
             elif pipeline["prediction_type"] == "classify":
                 task_type = "classification"
+            elif pipeline["prediction_type"] == "detect":
+                task_type = "anomaly_detection"
 
             # Build payload — worker reads from Trino directly and writes to Postgres
             payload = {
@@ -1164,6 +1181,14 @@ class PredictionService:
             mae = metrics.get("mae")
             if mae is not None:
                 return f"Estimates are typically within ±{mae:,.0f} of actual values"
+
+        elif prediction_type == "detect":
+            anomaly_count = metrics.get("anomaly_count", 0)
+            total = metrics.get("total_rows", 0)
+            if total > 0:
+                pct = round(anomaly_count / total * 100, 1)
+                return f"Found {anomaly_count} anomalies ({pct}%) in {total:,} rows"
+            return f"Found {anomaly_count} anomalies"
 
         return "Model trained successfully"
 

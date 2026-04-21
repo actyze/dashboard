@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 /**
  * RelationshipEditor — admin UI for viewing, verifying, disabling, and creating
  * semantic table relationships (graph edges used by the query generation pipeline).

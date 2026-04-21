@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 """API endpoints for managing semantic table relationships."""
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
@@ -27,7 +28,7 @@ class RelationshipCreate(BaseModel):
     target_catalog: str = Field(..., description="Target catalog name")
     target_schema: str = Field(..., description="Target schema name")
     target_table: str = Field(..., description="Target table name")
-    join_condition: str = Field(..., description="SQL join condition")
+    join_condition: str = Field(..., max_length=500, description="SQL join condition")
     relationship_type: str = Field("1:N", description="Relationship type: 1:1, 1:N, N:1, M:N")
     confidence: float = Field(1.0, ge=0.0, le=1.0, description="Confidence score (0-1)")
 

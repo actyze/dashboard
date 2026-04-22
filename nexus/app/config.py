@@ -228,6 +228,18 @@ class Settings(BaseSettings):
     telemetry_url: str = Field(default="https://telemetry.actyze.ai/api/telemetry/ping", alias="TELEMETRY_URL")
 
     # =============================================================================
+    # Predictive Intelligence
+    # =============================================================================
+    prediction_enabled: bool = True                           # PREDICTION_ENABLED
+    prediction_worker_xgboost_url: str = "http://prediction-worker-xgboost:8400"
+    prediction_worker_lightgbm_url: str = "http://prediction-worker-lightgbm:8400"
+    prediction_worker_autogluon_url: str = "http://prediction-worker-autogluon:8400"
+    prediction_worker_timeout: int = 600                      # seconds — training can take minutes
+    prediction_worker_health_timeout: int = 5                 # seconds — health check timeout
+    prediction_worker_secret: str = ""                        # shared secret for worker auth (X-Worker-Secret header)
+    prediction_sweep_interval_seconds: int = 300              # how often to check for due pipelines
+
+    # =============================================================================
     # Feature Flags
     # =============================================================================
     feature_user_management: bool = True

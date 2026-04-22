@@ -38,6 +38,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       nexus: ${{ steps.filter.outputs.nexus }}
       schema: ${{ steps.filter.outputs.schema }}
+      prediction-workers: ${{ steps.filter.outputs.prediction-workers }}
       build-all: ${{ steps.check-build-all.outputs.build-all }}
     steps:
       - name: Checkout repository
@@ -71,6 +72,10 @@ jobs:
               - 'nexus/**'
             schema:
               - 'schema-service/**'
+            prediction-workers:
+              - 'docker/prediction-worker-xgboost/**'
+              - 'docker/prediction-worker-lightgbm/**'
+              - 'docker/prediction-worker-autogluon/**'
 
   build-frontend:
     needs: detect-changes
@@ -248,14 +253,80 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
 
+  build-prediction-workers:
+    needs: detect-changes
+    if: |
+      needs.detect-changes.outputs.prediction-workers == 'true' ||
+      needs.detect-changes.outputs.build-all == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        worker:
+          - name: xgboost
+            context: ./docker/prediction-worker-xgboost
+            image: actyze/prediction-worker-xgboost
+          - name: lightgbm
+            context: ./docker/prediction-worker-lightgbm
+            image: actyze/prediction-worker-lightgbm
+          - name: autogluon
+            context: ./docker/prediction-worker-autogluon
+            image: actyze/prediction-worker-autogluon
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean && sudo rm -rf /var/lib/apt/lists/*
+          docker system prune -af --volumes
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ matrix.worker.image }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.worker.context }}
+          file: ${{ matrix.worker.context }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
   update-deployment-configs:
     runs-on: ubuntu-latest
-    needs: [build-frontend, build-nexus, build-schema-service]
+    needs: [build-frontend, build-nexus, build-schema-service, build-prediction-workers]
     if: |
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && (
+      always() &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
+      !contains(needs.*.result, 'failure') &&
+      (
         needs.build-frontend.result == 'success' ||
         needs.build-nexus.result == 'success' ||
-        needs.build-schema-service.result == 'success'
+        needs.build-schema-service.result == 'success' ||
+        needs.build-prediction-workers.result == 'success'
       )
     steps:
       - name: Checkout repository
@@ -315,7 +386,8 @@ jobs:
       always() && (
         needs.build-frontend.result == 'success' ||
         needs.build-nexus.result == 'success' ||
-        needs.build-schema-service.result == 'success'
+        needs.build-schema-service.result == 'success' ||
+        needs.build-prediction-workers.result == 'success'
       )
     continue-on-error: true
     steps:

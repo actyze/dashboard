@@ -1,8 +1,28 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Integration tests for Predictive Intelligence API — CRUD, capabilities, data quality."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from .conftest import create_user, login, auth_headers
+
+
+# Mock prediction workers globally — no real workers in CI
+MOCK_HEALTHY_WORKERS = {
+    "xgboost": {"status": "healthy", "model_type": "xgboost", "category": "tabular", "task_types": ["classification", "regression", "anomaly_detection"]},
+    "lightgbm": {"status": "healthy", "model_type": "lightgbm", "category": "tabular", "task_types": ["classification", "regression"]},
+}
+
+
+@pytest.fixture(autouse=True)
+def mock_prediction_workers():
+    """Mock worker health checks — no real workers running in CI."""
+    with patch(
+        "app.services.prediction_service.prediction_service.get_healthy_workers",
+        new_callable=AsyncMock,
+        return_value=MOCK_HEALTHY_WORKERS,
+    ):
+        yield
 
 
 @pytest.fixture

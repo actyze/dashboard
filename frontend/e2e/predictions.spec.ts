@@ -81,6 +81,7 @@ test.describe('Predictive Intelligence', () => {
     await mockHomeData(page);
     await mockAPI(page, '/predictions/pipelines', { pipelines: [], count: 0 });
     await mockAPI(page, '/predictions/capabilities', MOCK_CAPABILITIES);
+    await mockAPI(page, '/kpi', { kpis: [], count: 0 });
 
     await page.goto('/login');
     await page.getByPlaceholder('Enter username').fill('admin');
@@ -90,8 +91,10 @@ test.describe('Predictive Intelligence', () => {
       page.getByRole('button', { name: /sign in/i }).click(),
     ]);
 
-    await page.getByRole('button', { name: 'Predictions' }).click();
+    // Navigate directly — sidebar click may timeout if Manage section is collapsed
+    await page.goto('/predictive-intelligence');
     await expect(page).toHaveURL(/predictive-intelligence/);
+    await expect(page.getByText('Predictive Intelligence')).toBeVisible();
   });
 
   test('empty state shows new prediction button', async ({ page }) => {

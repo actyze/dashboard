@@ -628,10 +628,8 @@ class PredictionService:
             elif pipeline["prediction_type"] == "detect":
                 task_type = "anomaly_detection"
 
-            # Build payload — worker reads from Trino directly and writes to Postgres
+            # Build payload — workers read credentials from their own env vars
             payload = {
-                "trino_config": self._get_trino_config(),
-                "postgres_config": self._get_postgres_config(),
                 "sql": training_sql,
                 "target_column": pipeline["target_column"],
                 "feature_columns": pipeline.get("feature_columns") or [],
@@ -646,10 +644,14 @@ class PredictionService:
                 payload["forecast_horizon"] = pipeline.get("forecast_horizon", 30)
 
             # Send to worker — worker handles data loading, training, and writing predictions
+            worker_headers = {}
+            if settings.prediction_worker_secret:
+                worker_headers["X-Worker-Secret"] = settings.prediction_worker_secret
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
                     f"{model_row.worker_endpoint}/train",
                     json=payload,
+                    headers=worker_headers,
                     timeout=settings.prediction_worker_timeout,
                 )
                 if resp.status_code != 200:
@@ -932,28 +934,8 @@ class PredictionService:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-    def _get_trino_config(self) -> Dict[str, Any]:
-        """Return Trino connection config for workers to connect directly."""
-        return {
-            "host": settings.trino_host,
-            "port": settings.trino_port,
-            "user": settings.trino_user,
-            "password": settings.trino_password,
-            "catalog": settings.trino_catalog,
-            "schema": settings.trino_schema,
-            "ssl": settings.trino_ssl,
-            "ssl_verify": settings.trino_ssl_verify,
-        }
-
-    def _get_postgres_config(self) -> Dict[str, Any]:
-        """Return Postgres connection config for workers to write predictions directly."""
-        return {
-            "host": settings.postgres_host,
-            "port": settings.postgres_port,
-            "database": settings.postgres_database,
-            "user": settings.postgres_user,
-            "password": settings.postgres_password,
-        }
+    # Workers read Trino/Postgres credentials from their own environment
+    # variables — no credentials are passed via HTTP.
 
     async def _get_training_sql(self, pipeline: Dict[str, Any]) -> Optional[str]:
         """Build the SQL query that the worker should run against Trino."""

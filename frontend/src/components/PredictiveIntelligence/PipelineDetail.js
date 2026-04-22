@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { PredictionService } from '../../services/PredictionService';
-import { formatDistanceToNowStrict, parseISO, format } from 'date-fns';
+import { formatDistanceToNowStrict, differenceInSeconds, parseISO, format } from 'date-fns';
 
 const STATUS_COLORS = {
   running: 'text-blue-400',
@@ -386,7 +386,7 @@ const PipelineDetail = ({ pipeline, onBack, onTrain, onDelete, training }) => {
                           </td>
                           <td className="px-4 py-2">
                             {run.started_at && run.completed_at
-                              ? formatDistanceToNowStrict(parseISO(run.started_at), { unit: 'second' }).replace(' seconds', 's').replace(' second', 's')
+                              ? `${differenceInSeconds(parseISO(run.completed_at), parseISO(run.started_at))}s`
                               : run.status === 'running' ? '...' : '—'}
                           </td>
                           <td className="px-4 py-2">{run.rows_predicted || '—'}</td>

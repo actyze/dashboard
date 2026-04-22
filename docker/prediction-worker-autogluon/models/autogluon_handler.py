@@ -48,9 +48,17 @@ def _read_trino(trino_config: Dict, sql: str) -> pd.DataFrame:
     return pd.concat(chunks, ignore_index=True)
 
 
+_ALLOWED_SCHEMAS = {"prediction_data"}
+
+
 def _write_postgres(pg_config: Dict, schema: str, table: str, df: pd.DataFrame):
+    import re
     import psycopg2
     from psycopg2.extras import execute_values
+
+    if schema not in _ALLOWED_SCHEMAS:
+        raise ValueError(f"Schema '{schema}' not allowed. Must be one of: {_ALLOWED_SCHEMAS}")
+    table = re.sub(r"[^a-zA-Z0-9_]", "_", table)[:63]
 
     conn = psycopg2.connect(
         host=pg_config["host"], port=pg_config["port"],
@@ -262,7 +270,7 @@ class AutoGluonHandler:
                 {"name": f"{target_column}_upper", "pg_type": "DOUBLE PRECISION"},
             ]
 
-            self._predictor = predictor
+            self._predictor = full_predictor
             self._model_id = str(uuid.uuid4())
             self._last_predictions = out_rows
 

@@ -58,6 +58,12 @@ const Sidebar = ({ isCollapsed, onToggle }) => {
     </svg>
   );
 
+  const PredictiveIcon = () => (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6" />
+    </svg>
+  );
+
   const AdminIcon = () => (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -84,6 +90,7 @@ const Sidebar = ({ isCollapsed, onToggle }) => {
 
   const manageItems = [
     { id: 'scheduled-kpis', label: 'Scheduled KPIs', icon: <ScheduledKpiIcon />, path: '/scheduled-kpis' },
+    { id: 'predictive-intelligence', label: 'Predictions', icon: <PredictiveIcon />, path: '/predictive-intelligence' },
     { id: 'data-intelligence', label: 'Data Intelligence', icon: <DataIntelligenceIcon />, path: '/data-intelligence' },
     { id: 'admin', label: 'Admin', icon: <AdminIcon />, path: '/admin' }
   ];

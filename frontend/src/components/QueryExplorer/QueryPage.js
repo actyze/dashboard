@@ -459,14 +459,26 @@ const QueryPage = () => {
   // Handle auto-execution when coming from Actyze AI assistant
   const autoExecuteTriggeredRef = useRef(false);
   
+  // Store handleAIQuery in a ref to avoid circular dependency in useEffect
+  const handleAIQueryRef = useRef(null);
+
   useEffect(() => {
-    if (location.state?.fromAssistant && location.state?.autoExecute && sqlQuery && !autoExecuteTriggeredRef.current) {
-      console.log('Auto-executing query from Actyze AI assistant');
-      autoExecuteTriggeredRef.current = true;
-      // Small delay to ensure component is mounted
-      setTimeout(() => {
-        executeSql({ sql: sqlQuery });
-      }, 100);
+    if (location.state?.fromAssistant && location.state?.autoExecute && !autoExecuteTriggeredRef.current) {
+      if (sqlQuery) {
+        console.log('Auto-executing query from Actyze AI assistant');
+        autoExecuteTriggeredRef.current = true;
+        setTimeout(() => {
+          executeSql({ sql: sqlQuery });
+        }, 100);
+      } else if (location.state?.query?.nl_query && handleAIQueryRef.current) {
+        // Auto-submit NL query (e.g., from Predictions "Get Recommendations")
+        console.log('Auto-submitting NL query from navigation state');
+        autoExecuteTriggeredRef.current = true;
+        const nlQuery = location.state.query.nl_query;
+        setTimeout(() => {
+          handleAIQueryRef.current(nlQuery);
+        }, 300);
+      }
     }
   }, [location.state, sqlQuery, executeSql]);
 
@@ -508,6 +520,9 @@ const QueryPage = () => {
       context
     });
   };
+
+  // Keep ref in sync for auto-NL-query from navigation state
+  handleAIQueryRef.current = handleAIQuery;
 
   const handleClearHistory = () => {
     clearHistory();

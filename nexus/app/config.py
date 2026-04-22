@@ -236,6 +236,7 @@ class Settings(BaseSettings):
     prediction_worker_autogluon_url: str = "http://prediction-worker-autogluon:8400"
     prediction_worker_timeout: int = 600                      # seconds — training can take minutes
     prediction_worker_health_timeout: int = 5                 # seconds — health check timeout
+    prediction_worker_secret: str = ""                        # shared secret for worker auth (X-Worker-Secret header)
     prediction_sweep_interval_seconds: int = 300              # how often to check for due pipelines
 
     # =============================================================================

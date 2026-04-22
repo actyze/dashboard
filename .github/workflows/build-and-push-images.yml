@@ -319,7 +319,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-frontend, build-nexus, build-schema-service, build-prediction-workers]
     if: |
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && (
+      always() &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
+      !contains(needs.*.result, 'failure') &&
+      (
         needs.build-frontend.result == 'success' ||
         needs.build-nexus.result == 'success' ||
         needs.build-schema-service.result == 'success' ||

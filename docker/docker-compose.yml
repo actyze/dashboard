@@ -290,6 +290,18 @@ services:
     container_name: prediction-worker-xgboost
     ports:
       - "8401:8400"
+    environment:
+      TRINO_HOST: ${TRINO_HOST:-trino}
+      TRINO_PORT: ${TRINO_PORT:-8080}
+      TRINO_USER: ${TRINO_USER:-admin}
+      TRINO_PASSWORD: ${TRINO_PASSWORD:-}
+      TRINO_CATALOG: ${TRINO_CATALOG:-postgres}
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DATABASE: ${POSTGRES_DB:-dashboard}
+      POSTGRES_USER: ${POSTGRES_USER:-nexus_service}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      WORKER_SECRET: ${WORKER_SECRET:-}
     deploy:
       resources:
         limits:
@@ -317,6 +329,18 @@ services:
     container_name: prediction-worker-lightgbm
     ports:
       - "8402:8400"
+    environment:
+      TRINO_HOST: ${TRINO_HOST:-trino}
+      TRINO_PORT: ${TRINO_PORT:-8080}
+      TRINO_USER: ${TRINO_USER:-admin}
+      TRINO_PASSWORD: ${TRINO_PASSWORD:-}
+      TRINO_CATALOG: ${TRINO_CATALOG:-postgres}
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DATABASE: ${POSTGRES_DB:-dashboard}
+      POSTGRES_USER: ${POSTGRES_USER:-nexus_service}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      WORKER_SECRET: ${WORKER_SECRET:-}
     deploy:
       resources:
         limits:
@@ -347,6 +371,17 @@ services:
       - "8403:8400"
     environment:
       AUTOGLUON_PRESET: ${AUTOGLUON_PRESET:-fast_training}
+      TRINO_HOST: ${TRINO_HOST:-trino}
+      TRINO_PORT: ${TRINO_PORT:-8080}
+      TRINO_USER: ${TRINO_USER:-admin}
+      TRINO_PASSWORD: ${TRINO_PASSWORD:-}
+      TRINO_CATALOG: ${TRINO_CATALOG:-postgres}
+      POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DATABASE: ${POSTGRES_DB:-dashboard}
+      POSTGRES_USER: ${POSTGRES_USER:-nexus_service}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      WORKER_SECRET: ${WORKER_SECRET:-}
     deploy:
       resources:
         limits:

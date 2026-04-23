@@ -9,8 +9,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router';
 import { useTheme } from '../../contexts/ThemeContext';
-import useOnboarding from '../../hooks/useOnboarding';
-
 const STEP_TARGETS = {
   schema:        { path: '/data-intelligence', state: { tab: 'schema-metadata' } },
   relationships: { path: '/data-intelligence', state: { tab: 'relationships' } },
@@ -36,10 +34,17 @@ const StepMarker = ({ index, done, isDark }) => {
   );
 };
 
-const OnboardingChecklist = () => {
+/**
+ * The parent is expected to own the useOnboarding hook and pass it in, so
+ * the same detection result drives both the checklist and any neighboring
+ * layout (e.g. compacting the Quick Action cards while onboarding is
+ * active). Standalone users can call useOnboarding themselves and pass
+ * the result in.
+ */
+const OnboardingChecklist = ({ onboarding }) => {
   const { isDark } = useTheme();
   const navigate = useNavigate();
-  const { loading, steps, completeCount, allDone, collapsed, toggleCollapsed } = useOnboarding();
+  const { loading, steps, completeCount, allDone, collapsed, toggleCollapsed } = onboarding;
 
   // Don't show while loading (avoids flash) or once everything is done.
   if (loading || allDone) return null;

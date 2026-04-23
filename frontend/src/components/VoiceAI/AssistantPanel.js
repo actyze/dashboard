@@ -95,9 +95,21 @@ const TypingIndicator = () => {
 // ── Panel ──────────────────────────────────────────────────────────────
 
 const STARTER_PROMPTS = [
-  'Show me the top 10 rows from any table',
-  'Create a dashboard for sales',
-  'What tables do we have?',
+  {
+    text: 'Show me the top 10 rows from any table',
+    hint: 'Quick query',
+    icon: 'M3 10h18M3 14h18M3 6h18M3 18h18', // four horizontal rows
+  },
+  {
+    text: 'Create a dashboard for sales',
+    hint: 'Multi-tile dashboard',
+    icon: 'M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 12a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1v-7z',
+  },
+  {
+    text: 'What tables do we have?',
+    hint: 'Explore the schema',
+    icon: 'M4 7h16M4 12h16M4 17h10', // stacked lines
+  },
 ];
 
 const AssistantPanel = ({ onClose }) => {
@@ -285,17 +297,42 @@ const AssistantPanel = ({ onClose }) => {
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
         {state.messages.length === 0 && !state.generating ? (
           <div className="h-full flex flex-col justify-center">
-            <p className={`text-[13px] font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Ask anything about your data.</p>
-            <p className={`text-[11px] mt-1 mb-3 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>I can generate a SQL query — or build an entire dashboard.</p>
-            <div className="flex flex-col gap-1.5">
+            <p className={`text-[15px] font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Ask anything about your data.</p>
+            <p className={`text-[12px] mt-1 mb-4 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Generate a SQL query — or build an entire dashboard.</p>
+            <div className={`text-[10px] font-medium uppercase tracking-wider mb-2 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Try asking</div>
+            <div className="flex flex-col gap-1">
               {STARTER_PROMPTS.map(p => (
-                <button key={p} onClick={() => sendMessage(p)}
-                  className={`text-left text-[12px] px-2.5 py-1.5 rounded-md border transition-colors ${
+                <button key={p.text} onClick={() => sendMessage(p.text)}
+                  className={`group relative flex items-center gap-3 w-full pl-3 pr-2.5 py-2.5 rounded-lg text-left transition-all ${
                     isDark
-                      ? 'border-white/10 text-gray-400 hover:text-white hover:border-white/20 hover:bg-white/5'
-                      : 'border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 hover:bg-gray-50'
+                      ? 'hover:bg-white/[0.04]'
+                      : 'hover:bg-gray-50'
                   }`}>
-                  {p}
+                  <span aria-hidden className={`absolute left-0 top-2.5 bottom-2.5 w-[2px] rounded-full transition-all ${
+                    isDark ? 'bg-[#5d6ad3]/0 group-hover:bg-[#5d6ad3]' : 'bg-[#5d6ad3]/0 group-hover:bg-[#5d6ad3]'
+                  }`} />
+                  <span className={`flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center transition-colors ${
+                    isDark
+                      ? 'bg-white/[0.04] text-gray-400 group-hover:text-[#5d6ad3]'
+                      : 'bg-gray-100 text-gray-500 group-hover:text-[#5d6ad3] group-hover:bg-[#5d6ad3]/10'
+                  }`}>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d={p.icon} />
+                    </svg>
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className={`block text-[13px] leading-snug ${isDark ? 'text-gray-200 group-hover:text-white' : 'text-gray-800 group-hover:text-gray-900'}`}>
+                      {p.text}
+                    </span>
+                    <span className={`block text-[10px] mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                      {p.hint}
+                    </span>
+                  </span>
+                  <svg className={`flex-shrink-0 w-3 h-3 transition-all translate-x-0 group-hover:translate-x-0.5 ${
+                    isDark ? 'text-gray-600 group-hover:text-[#5d6ad3]' : 'text-gray-400 group-hover:text-[#5d6ad3]'
+                  }`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
                 </button>
               ))}
             </div>

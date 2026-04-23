@@ -200,7 +200,7 @@ const ScheduledKpis = () => {
           <div className="flex-1 flex flex-col min-w-0">
             <div className={`px-6 py-4 border-b flex items-center justify-between ${isDark ? 'border-[#2a2b2e]' : 'border-gray-100'}`}>
               <h2 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                {kpi ? 'Edit KPI' : 'New Scheduled KPI'}
+                {kpi ? 'Edit KPI' : 'New Tracked KPI'}
               </h2>
               <div className="flex items-center gap-2">
                 {!kpi && (
@@ -532,7 +532,7 @@ const ScheduledKpis = () => {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              Scheduled KPIs
+              Tracked KPIs
             </h1>
             <p className={`text-sm mt-1 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
               Define SQL-based KPIs that are collected at regular intervals for aggregation and trending.
@@ -569,7 +569,7 @@ const ScheduledKpis = () => {
                   </svg>
                 </div>
                 <h3 className={`text-sm font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                  No Scheduled KPIs yet
+                  No Tracked KPIs yet
                 </h3>
                 <p className={`text-xs mb-4 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
                   Create your first KPI to start collecting pre-aggregated metrics at regular intervals.
@@ -690,8 +690,8 @@ const ScheduledKpis = () => {
 
                     {/* Error display */}
                     {kpi.last_error && (
-                      <div className="mt-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20">
-                        <p className="text-xs text-red-400 truncate">{kpi.last_error}</p>
+                      <div className="mt-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20 overflow-hidden">
+                        <p className="text-xs text-red-400 break-words line-clamp-3">{kpi.last_error}</p>
                       </div>
                     )}
                   </div>

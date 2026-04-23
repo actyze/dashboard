@@ -98,7 +98,7 @@ const PredictiveIntelligence = () => {
           <div>
             <h1 className="text-xl font-semibold">Predictive Intelligence</h1>
             <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-              Create predictions from your KPI data — no ML knowledge required
+              Create predictions from your KPI data
             </p>
           </div>
           <button

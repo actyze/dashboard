@@ -4,7 +4,7 @@
  * semantic table relationships (graph edges used by the query generation pipeline).
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, useId } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -43,6 +43,7 @@ const ConfidenceBar = ({ value, isDark }) => (
 // ─── Create modal ─────────────────────────────────────────────────
 
 const CreateRelationshipModal = ({ isDark, onClose, onCreate }) => {
+  const fieldId = useId(); // stable prefix for htmlFor/id pairs
   const [form, setForm] = useState({
     source_catalog: '', source_schema: '', source_table: '',
     target_catalog: '', target_schema: '', target_table: '',
@@ -53,6 +54,10 @@ const CreateRelationshipModal = ({ isDark, onClose, onCreate }) => {
   const [schemaCache, setSchemaCache] = useState({});  // { catalog: [{name}, ...] }
   const [tableCache, setTableCache] = useState({});    // { "catalog.schema": [{name}, ...] }
 
+  // In-flight guards — kept in a ref so the effects below don't have to
+  // depend on the caches (which would re-fire the effect on every update).
+  const inflight = useRef({ schemas: new Set(), tables: new Set() });
+
   // Load databases on mount
   useEffect(() => {
     RestService.getDatabases()
@@ -60,26 +65,28 @@ const CreateRelationshipModal = ({ isDark, onClose, onCreate }) => {
       .catch(() => setDatabases([]));
   }, []);
 
-  // Load schemas when either catalog is selected
+  // Load schemas when either catalog changes. No dep on schemaCache — the
+  // inflight ref prevents duplicate fetches without tying the effect to
+  // state updates it triggers.
   useEffect(() => {
-    const catalogs = [form.source_catalog, form.target_catalog].filter(Boolean);
-    catalogs.forEach(cat => {
-      if (schemaCache[cat]) return;
+    [form.source_catalog, form.target_catalog].filter(Boolean).forEach(cat => {
+      if (inflight.current.schemas.has(cat)) return;
+      inflight.current.schemas.add(cat);
       RestService.getDatabaseSchemas(cat)
         .then(res => setSchemaCache(prev => ({ ...prev, [cat]: res?.schemas || [] })))
         .catch(() => setSchemaCache(prev => ({ ...prev, [cat]: [] })));
     });
-  }, [form.source_catalog, form.target_catalog, schemaCache]);
+  }, [form.source_catalog, form.target_catalog]);
 
-  // Load tables when either schema is selected
+  // Load tables when either catalog.schema pair changes
   useEffect(() => {
-    const pairs = [
+    [
       [form.source_catalog, form.source_schema],
       [form.target_catalog, form.target_schema],
-    ].filter(([c, s]) => c && s);
-    pairs.forEach(([cat, sch]) => {
+    ].filter(([c, s]) => c && s).forEach(([cat, sch]) => {
       const key = `${cat}.${sch}`;
-      if (tableCache[key]) return;
+      if (inflight.current.tables.has(key)) return;
+      inflight.current.tables.add(key);
       RestService.getSchemaObjects(cat, sch)
         .then(res => {
           const tables = res?.objects?.tables || [];
@@ -88,7 +95,7 @@ const CreateRelationshipModal = ({ isDark, onClose, onCreate }) => {
         })
         .catch(() => setTableCache(prev => ({ ...prev, [key]: [] })));
     });
-  }, [form.source_catalog, form.source_schema, form.target_catalog, form.target_schema, tableCache]);
+  }, [form.source_catalog, form.source_schema, form.target_catalog, form.target_schema]);
 
   const handleSubmit = async () => {
     if (!form.source_table || !form.target_table || !form.join_condition) return;
@@ -110,16 +117,19 @@ const CreateRelationshipModal = ({ isDark, onClose, onCreate }) => {
     backgroundSize: '1rem 1rem',
   };
 
-  const selectField = (label, value, options, onChange, disabled = false, placeholder = 'Select...') => (
-    <div>
-      <label className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{label}</label>
-      <select value={value} onChange={onChange} disabled={disabled || options.length === 0}
-        className={selectClass} style={chevronStyle}>
-        <option value="">{placeholder}</option>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </div>
-  );
+  const selectField = (label, name, value, options, onChange, disabled = false, placeholder = 'Select...') => {
+    const inputId = `${fieldId}-${name}`;
+    return (
+      <div>
+        <label htmlFor={inputId} className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{label}</label>
+        <select id={inputId} value={value} onChange={onChange} disabled={disabled || options.length === 0}
+          className={selectClass} style={chevronStyle}>
+          <option value="">{placeholder}</option>
+          {options.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      </div>
+    );
+  };
 
   const sourceSchemas = (schemaCache[form.source_catalog] || []).map(s => s.name);
   const sourceTables  = (tableCache[`${form.source_catalog}.${form.source_schema}`] || []).map(t => t.name);
@@ -140,25 +150,27 @@ const CreateRelationshipModal = ({ isDark, onClose, onCreate }) => {
         <div className="px-5 py-4 space-y-3">
           <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Source table (the FK side)</p>
           <div className="grid grid-cols-3 gap-2">
-            {selectField('Catalog', form.source_catalog, catalogNames,
+            {selectField('Catalog', 'source-catalog', form.source_catalog, catalogNames,
               e => setForm(f => ({ ...f, source_catalog: e.target.value, source_schema: '', source_table: '' })))}
-            {selectField('Schema', form.source_schema, sourceSchemas,
+            {selectField('Schema', 'source-schema', form.source_schema, sourceSchemas,
               e => setForm(f => ({ ...f, source_schema: e.target.value, source_table: '' })), !form.source_catalog)}
-            {selectField('Table', form.source_table, sourceTables,
+            {selectField('Table', 'source-table', form.source_table, sourceTables,
               e => setForm(f => ({ ...f, source_table: e.target.value })), !form.source_schema)}
           </div>
           <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Target table (the PK side)</p>
           <div className="grid grid-cols-3 gap-2">
-            {selectField('Catalog', form.target_catalog, catalogNames,
+            {selectField('Catalog', 'target-catalog', form.target_catalog, catalogNames,
               e => setForm(f => ({ ...f, target_catalog: e.target.value, target_schema: '', target_table: '' })))}
-            {selectField('Schema', form.target_schema, targetSchemas,
+            {selectField('Schema', 'target-schema', form.target_schema, targetSchemas,
               e => setForm(f => ({ ...f, target_schema: e.target.value, target_table: '' })), !form.target_catalog)}
-            {selectField('Table', form.target_table, targetTables,
+            {selectField('Table', 'target-table', form.target_table, targetTables,
               e => setForm(f => ({ ...f, target_table: e.target.value })), !form.target_schema)}
           </div>
           <div>
-            <label className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Join condition</label>
+            <label htmlFor={`${fieldId}-join-condition`}
+              className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Join condition</label>
             <input
+              id={`${fieldId}-join-condition`}
               value={form.join_condition}
               onChange={e => setForm(f => ({ ...f, join_condition: e.target.value }))}
               placeholder="orders.customer_id = customers.id"
@@ -167,8 +179,10 @@ const CreateRelationshipModal = ({ isDark, onClose, onCreate }) => {
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Type</label>
+              <label htmlFor={`${fieldId}-type`}
+                className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Type</label>
               <select
+                id={`${fieldId}-type`}
                 value={form.relationship_type}
                 onChange={e => setForm(f => ({ ...f, relationship_type: e.target.value }))}
                 className={selectClass} style={chevronStyle}

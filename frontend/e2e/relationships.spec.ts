@@ -160,8 +160,9 @@ test.describe('Data Intelligence — Relationships Tab', () => {
     await page.getByText('Relationships').click();
 
     await expect(page.getByText('No relationships yet')).toBeVisible({ timeout: 10000 });
-    // Helpful guidance text should reference the new action names
-    await expect(page.getByText(/Detect|\+ Add/i)).toBeVisible({ timeout: 5000 });
+    // Helpful guidance paragraph — match a phrase unique to the empty state so
+    // we don't collide with the "Detect" / "+ Add" toolbar buttons.
+    await expect(page.getByText(/find relationships from column names/i)).toBeVisible({ timeout: 5000 });
   });
 
   test('+ Add button opens create modal', async ({ page }) => {
@@ -304,7 +305,10 @@ test.describe('Data Intelligence — Schema & Metadata Tab', () => {
 
     // Go to Relationships
     await page.getByText('Relationships').click();
-    await expect(page.getByText(/relationship/).first()).toBeVisible({ timeout: 10000 });
+    // "Join Condition" is a column header unique to the Relationships tab.
+    // (The old summary line "3 relationships" was removed when counts moved
+    // into the filter pills, so we anchor on a stable element instead.)
+    await expect(page.getByText('Join Condition')).toBeVisible({ timeout: 10000 });
 
     // Go back to Schema & Metadata
     await page.getByText('Schema & Metadata').click();

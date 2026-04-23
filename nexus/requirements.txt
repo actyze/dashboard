@@ -12,7 +12,7 @@ litellm==1.81.12
 
 # LiteLLM Provider Dependencies (matched to LiteLLM v1.81.12 requirements)
 # AWS Bedrock
-boto3==1.40.53
+boto3==1.42.92
 aioboto3==15.5.0
 
 # Google Vertex AI / Gemini

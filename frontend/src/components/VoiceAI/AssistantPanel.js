@@ -15,7 +15,6 @@ const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice
 const initialState = {
   messages: [],        // { id, role, content, status, sql?, reasoning?, chartRecommendation?, errorMessage?, dashboardPlan? }
   generating: false,   // true => show typing indicator
-  pendingUserInput: null,
 };
 
 function reducer(state, action) {
@@ -26,7 +25,6 @@ function reducer(state, action) {
         ...state,
         messages: [...state.messages, userMsg],
         generating: true,
-        pendingUserInput: action.text,
       };
     }
     case 'SQL_READY': {
@@ -135,14 +133,17 @@ const AssistantPanel = ({ onClose }) => {
 
   // ── Chat actions ───────────────────────────────────────────
 
-  const runChat = useCallback(async (text) => {
-    const history = state.messages
-      .filter(m => m.status === 'complete' && (m.content || m.sql))
-      .map(m => m.role === 'user' ? m.content : (m.reasoning || m.content || ''));
+  // History passed explicitly so regenerate can compute the correct prior
+  // context (after dropping the stale assistant message) without racing
+  // with dispatch.
+  const buildHistory = (msgs) => msgs
+    .filter(m => m.status === 'complete' && (m.content || m.sql))
+    .map(m => m.role === 'user' ? m.content : (m.reasoning || m.content || ''));
 
+  const runChat = useCallback(async (text, history) => {
     await ChatService.sendMessage({
       text,
-      conversationHistory: [text, ...history],
+      conversationHistory: history,
       onEvent: (event) => {
         switch (event.type) {
           case 'sql_ready':
@@ -171,24 +172,34 @@ const AssistantPanel = ({ onClose }) => {
         }
       },
     });
-  }, [state.messages]);
+  }, []);
 
   const sendMessage = useCallback((text) => {
     if (!text.trim() || state.generating) return;
+    const history = buildHistory(state.messages); // prior messages only
     dispatch({ type: 'USER_SEND', text });
-    runChat(text);
-  }, [runChat, state.generating]);
+    runChat(text, history);
+  }, [runChat, state.generating, state.messages]);
 
   const handleStop = useCallback(() => {
     ChatService.cancel();
   }, []);
 
   const handleRegenerate = useCallback(() => {
-    const userInput = state.pendingUserInput;
-    if (!userInput) return;
+    // Drop the stale assistant from our local copy, then find the triggering
+    // user message — that's what we re-send, regardless of how many turns
+    // have happened. Avoids relying on pendingUserInput (which was frozen
+    // to the first send of the session).
+    const msgs = [...state.messages];
+    if (msgs.length && msgs[msgs.length - 1].role === 'assistant') msgs.pop();
+    const lastUserIdx = [...msgs].reverse().findIndex(m => m.role === 'user');
+    if (lastUserIdx === -1) return;
+    const userMsg = msgs[msgs.length - 1 - lastUserIdx];
+    const priorMsgs = msgs.slice(0, msgs.length - 1 - lastUserIdx);
+    const history = buildHistory(priorMsgs);
     dispatch({ type: 'REGEN_START' });
-    runChat(userInput);
-  }, [state.pendingUserInput, runChat]);
+    runChat(userMsg.content, history);
+  }, [state.messages, runChat]);
 
   const handleSubmit = (e) => {
     e?.preventDefault();
@@ -210,15 +221,25 @@ const AssistantPanel = ({ onClose }) => {
     dispatch({ type: 'CLEAR' });
   };
 
-  // ── Single-query post-actions (unchanged from prior flow) ──
+  // ── Single-query post-actions ──────────────────────────────
+
+  // Find the user message that preceded this assistant message in the transcript.
+  const precedingUserText = (assistantMsg) => {
+    const idx = state.messages.findIndex(m => m.id === assistantMsg.id);
+    for (let i = idx - 1; i >= 0; i--) {
+      if (state.messages[i].role === 'user') return state.messages[i].content;
+    }
+    return null;
+  };
 
   const handleOpenInQueryPage = (msg) => {
+    const nl = precedingUserText(msg);
     navigate('/query/new', {
       state: {
         query: {
           generated_sql: msg.sql,
-          nl_query: state.pendingUserInput,
-          query_name: state.pendingUserInput ? `AI: ${state.pendingUserInput.substring(0, 40)}` : 'AI Query',
+          nl_query: nl,
+          query_name: nl ? `AI: ${nl.substring(0, 40)}` : 'AI Query',
           chart_recommendation: msg.chartRecommendation,
         },
         fromAssistant: true,
@@ -229,16 +250,19 @@ const AssistantPanel = ({ onClose }) => {
   };
 
   const handleAddToDashboard = async (msg) => {
-    const nl = state.pendingUserInput;
+    const nl = precedingUserText(msg);
     const title = nl ? `AI: ${nl.substring(0, 50)}${nl.length > 50 ? '...' : ''}` : 'AI Dashboard';
     const tileTitle = nl
       ? nl.split(' ').slice(0, 6).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
       : 'AI Query';
 
     const dashResp = await DashboardService.createDashboard({ title, description: nl || 'Dashboard created from Actyze AI' });
-    if (!dashResp.success || !dashResp.dashboard?.id) return;
+    if (!dashResp.success || !dashResp.dashboard?.id) {
+      console.error('Failed to create dashboard:', dashResp.error);
+      return;
+    }
 
-    await DashboardService.createTile(dashResp.dashboard.id, {
+    const tileResp = await DashboardService.createTile(dashResp.dashboard.id, {
       title: tileTitle,
       description: nl || null,
       sql_query: msg.sql,
@@ -247,6 +271,10 @@ const AssistantPanel = ({ onClose }) => {
       chart_config: msg.chartRecommendation || {},
       position: { x: 0, y: 0, width: 6, height: 2 },
     });
+    if (!tileResp?.success) {
+      console.error('Failed to create tile:', tileResp?.error);
+      // Dashboard was created; still navigate so the user lands somewhere coherent.
+    }
     navigate(`/dashboard/${dashResp.dashboard.id}`);
     onClose?.();
   };

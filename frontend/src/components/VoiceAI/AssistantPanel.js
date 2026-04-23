@@ -133,10 +133,28 @@ const AssistantPanel = ({ onClose }) => {
       conversationHistory: [text, ...history],
       onEvent: (event) => {
         switch (event.type) {
-          case 'sql_ready':       dispatch({ type: 'SQL_READY', ...event }); break;
-          case 'dashboard_ready': dispatch({ type: 'DASHBOARD_READY', ...event }); break;
-          case 'error':           dispatch({ type: 'ERROR', message: event.message, reasoning: event.reasoning }); break;
-          case 'stopped':         dispatch({ type: 'STOPPED' }); break;
+          case 'sql_ready':
+            dispatch({
+              type: 'SQL_READY',
+              sql: event.sql,
+              reasoning: event.reasoning,
+              chartRecommendation: event.chartRecommendation,
+            });
+            break;
+          case 'dashboard_ready':
+            dispatch({
+              type: 'DASHBOARD_READY',
+              title: event.title,
+              tiles: event.tiles,
+              reasoning: event.reasoning,
+            });
+            break;
+          case 'error':
+            dispatch({ type: 'ERROR', message: event.message, reasoning: event.reasoning });
+            break;
+          case 'stopped':
+            dispatch({ type: 'STOPPED' });
+            break;
           default: /* 'done' implicit */ break;
         }
       },

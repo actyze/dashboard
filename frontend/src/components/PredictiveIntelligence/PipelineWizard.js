@@ -72,6 +72,7 @@ const PipelineWizard = ({ onClose, onCreated }) => {
   const [customHorizon, setCustomHorizon] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState(null);
 
   // Step 3 state
   const [name, setName] = useState('');
@@ -96,6 +97,7 @@ const PipelineWizard = ({ onClose, onCreated }) => {
     if (sourceType === 'sql' && !sourceSql.trim()) return;
 
     setAnalyzing(true);
+    setAnalysisError(null);
     const result = await PredictionService.analyzeData({
       prediction_type: predictionType,
       source_type: sourceType,
@@ -105,33 +107,38 @@ const PipelineWizard = ({ onClose, onCreated }) => {
       forecast_horizon: forecastHorizon,
     });
 
-    if (result.success) {
-      setAnalysis(result);
-      // Auto-set target if recommended
-      if (!targetColumn && result.recommended_target) {
-        setTargetColumn(result.recommended_target);
-      }
-      // Auto-set features
-      if (result.recommended_features) {
-        setFeatureColumns(
-          result.recommended_features.filter((f) => f.selected).map((f) => f.name)
-        );
-      }
-      // Auto-detect output columns (ID-like and label columns — not features, not target)
-      if (result.columns) {
-        const featureNames = (result.recommended_features || []).map((f) => f.name);
-        const autoOutput = result.columns
-          .filter((c) => {
-            const name = c.name.toLowerCase();
-            const isTarget = c.name === (targetColumn || result.recommended_target);
-            const isFeature = featureNames.includes(c.name);
-            const isTimestamp = ['collected_at', 'timestamp', 'created_at', 'updated_at'].includes(name);
-            const isIdOrLabel = name.includes('id') || name.includes('name') || name.includes('code') || name.includes('email');
-            return !isTarget && !isFeature && !isTimestamp && isIdOrLabel;
-          })
-          .map((c) => c.name);
-        setOutputColumns(autoOutput);
-      }
+    if (!result.success) {
+      setAnalysis(null);
+      setAnalysisError(result.error || 'Failed to analyze data');
+      setAnalyzing(false);
+      return;
+    }
+
+    setAnalysis(result);
+    // Auto-set target if recommended
+    if (!targetColumn && result.recommended_target) {
+      setTargetColumn(result.recommended_target);
+    }
+    // Auto-set features
+    if (result.recommended_features) {
+      setFeatureColumns(
+        result.recommended_features.filter((f) => f.selected).map((f) => f.name)
+      );
+    }
+    // Auto-detect output columns (ID-like and label columns — not features, not target)
+    if (result.columns) {
+      const featureNames = (result.recommended_features || []).map((f) => f.name);
+      const autoOutput = result.columns
+        .filter((c) => {
+          const name = c.name.toLowerCase();
+          const isTarget = c.name === (targetColumn || result.recommended_target);
+          const isFeature = featureNames.includes(c.name);
+          const isTimestamp = ['collected_at', 'timestamp', 'created_at', 'updated_at'].includes(name);
+          const isIdOrLabel = name.includes('id') || name.includes('name') || name.includes('code') || name.includes('email');
+          return !isTarget && !isFeature && !isTimestamp && isIdOrLabel;
+        })
+        .map((c) => c.name);
+      setOutputColumns(autoOutput);
     }
     setAnalyzing(false);
   }, [predictionType, sourceType, selectedKpiId, sourceSql, targetColumn, forecastHorizon]);
@@ -324,6 +331,21 @@ const PipelineWizard = ({ onClose, onCreated }) => {
               >
                 {analyzing ? 'Analyzing...' : 'Analyze Data'}
               </button>
+
+              {/* Analysis error */}
+              {analysisError && (
+                <div className={`mb-4 p-3 rounded-lg border overflow-hidden ${
+                  isDark ? 'bg-red-900/20 border-red-800/30' : 'bg-red-50 border-red-200'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center rounded-full text-xs font-bold bg-red-100 text-red-600">!</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm text-red-500">Analysis failed</p>
+                      <p className={`text-xs mt-1 break-words whitespace-pre-wrap ${isDark ? 'text-red-300' : 'text-red-600'}`}>{analysisError}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Analysis results */}
               {analysis && (

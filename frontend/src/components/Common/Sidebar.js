@@ -89,7 +89,7 @@ const Sidebar = ({ isCollapsed, onToggle }) => {
   ];
 
   const manageItems = [
-    { id: 'scheduled-kpis', label: 'Scheduled KPIs', icon: <ScheduledKpiIcon />, path: '/scheduled-kpis' },
+    { id: 'scheduled-kpis', label: 'Tracked KPIs', icon: <ScheduledKpiIcon />, path: '/scheduled-kpis' },
     { id: 'predictive-intelligence', label: 'Predictions', icon: <PredictiveIcon />, path: '/predictive-intelligence' },
     { id: 'data-intelligence', label: 'Data Intelligence', icon: <DataIntelligenceIcon />, path: '/data-intelligence' },
     { id: 'admin', label: 'Admin', icon: <AdminIcon />, path: '/admin' }

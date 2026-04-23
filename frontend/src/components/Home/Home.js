@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { QueryManagementService, DashboardService } from '../../services';
 import { getQueryDisplayTitle } from '../../utils/queryTitleGenerator';
+import OnboardingChecklist from '../Onboarding/OnboardingChecklist';
 
 const Home = () => {
   const { isDark } = useTheme();
@@ -96,6 +97,9 @@ const Home = () => {
             Here's what's happening with your data
           </p>
         </div>
+
+        {/* Onboarding — self-dismisses once all three steps are done */}
+        <OnboardingChecklist />
 
         {/* Quick Action Cards */}
         <div className="grid grid-cols-2 gap-4 mb-8 max-w-2xl">

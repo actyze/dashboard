@@ -39,10 +39,14 @@ async function setupDataIntelligence(page, relationships = MOCK_RELATIONSHIPS) {
   );
   await mockHomeData(page);
 
-  // Mock explorer APIs (needed for Schema & Metadata tab)
+  // Mock explorer APIs (needed for Schema & Metadata tab + create-relationship dropdowns)
   await mockAPI(page, '/explorer/databases', { databases: [
     { name: 'tpch', connector_type: 'tpch', schema_count: 2 },
   ]});
+  await mockAPI(page, '/explorer/databases/tpch/schemas', { schemas: [{ name: 'tiny' }] });
+  await mockAPI(page, '/explorer/databases/tpch/schemas/tiny/objects', {
+    objects: { tables: [{ name: 'nation' }, { name: 'region' }], views: [] },
+  });
   await mockAPI(page, '/metadata/descriptions*', []);
   await mockAPI(page, '/preferences/preferred-tables', []);
   await mockAPI(page, '/v1/exclusions*', []);
@@ -112,29 +116,31 @@ test.describe('Data Intelligence — Relationships Tab', () => {
     await page.goto('/data-intelligence');
     await page.getByText('Relationships').click();
 
-    // Table headers
+    // Table headers (Method column removed — method now renders as a pill next to the source table name)
     await expect(page.getByText('Source').first()).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Target').first()).toBeVisible();
     await expect(page.getByText('Join Condition').first()).toBeVisible();
-    await expect(page.getByText('Method').first()).toBeVisible();
+    await expect(page.getByText('Confidence').first()).toBeVisible();
 
     // Relationship data
     await expect(page.getByText('lineitem').first()).toBeVisible();
     await expect(page.getByText('orders').first()).toBeVisible();
     await expect(page.getByText('lineitem.orderkey = orders.orderkey')).toBeVisible();
 
-    // Summary count
-    await expect(page.getByText(/3 relationship/)).toBeVisible();
+    // Total count is carried in the All filter pill
+    await expect(page.getByRole('button', { name: /^All\s*3$/ })).toBeVisible();
   });
 
-  test('method badges render for admin, mined, inferred', async ({ page }) => {
+  test('method badges render with renamed labels (Manual, Observed, Suggested)', async ({ page }) => {
     await setupDataIntelligence(page);
     await page.goto('/data-intelligence');
     await page.getByText('Relationships').click();
 
-    await expect(page.getByText('admin').first()).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('mined').first()).toBeVisible();
-    await expect(page.getByText('inferred').first()).toBeVisible();
+    // Row badges — "Manual" admin badge is suppressed in the Confidence cell (shown as Verified),
+    // but the inline method pill next to the source table still reads "Manual".
+    await expect(page.getByText('Manual').first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Observed').first()).toBeVisible();
+    await expect(page.getByText('Suggested').first()).toBeVisible();
   });
 
   test('method filter buttons work', async ({ page }) => {
@@ -142,10 +148,10 @@ test.describe('Data Intelligence — Relationships Tab', () => {
     await page.goto('/data-intelligence');
     await page.getByText('Relationships').click();
 
-    // Click 'admin' filter
-    await page.getByRole('button', { name: 'admin', exact: true }).click();
-    // Should trigger a filtered reload (we mock all results regardless, but the button should be active)
-    await expect(page.getByRole('button', { name: 'admin', exact: true })).toBeVisible();
+    // Pill accessible name includes the inline count, e.g. "Manual 1"
+    const manualPill = page.getByRole('button', { name: /^Manual\s*1$/ });
+    await manualPill.click();
+    await expect(manualPill).toBeVisible();
   });
 
   test('empty state shows helpful message', async ({ page }) => {
@@ -153,9 +159,9 @@ test.describe('Data Intelligence — Relationships Tab', () => {
     await page.goto('/data-intelligence');
     await page.getByText('Relationships').click();
 
-    await expect(page.getByText('No relationships found')).toBeVisible({ timeout: 10000 });
-    // Helpful guidance text should appear
-    await expect(page.getByText(/detect relationships|extract JOIN/i)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('No relationships yet')).toBeVisible({ timeout: 10000 });
+    // Helpful guidance text should reference the new action names
+    await expect(page.getByText(/Detect|\+ Add/i)).toBeVisible({ timeout: 5000 });
   });
 
   test('+ Add button opens create modal', async ({ page }) => {
@@ -178,15 +184,20 @@ test.describe('Data Intelligence — Relationships Tab', () => {
     await page.getByRole('button', { name: '+ Add' }).click();
     await expect(page.getByText('Add Relationship')).toBeVisible({ timeout: 5000 });
 
-    // Fill form
-    const textboxes = page.getByRole('textbox');
-    await textboxes.nth(0).fill('tpch');    // source catalog
-    await textboxes.nth(1).fill('tiny');    // source schema
-    await textboxes.nth(2).fill('nation');  // source table
-    await textboxes.nth(3).fill('tpch');    // target catalog
-    await textboxes.nth(4).fill('tiny');    // target schema
-    await textboxes.nth(5).fill('region');  // target table
-    await textboxes.nth(6).fill('nation.regionkey = region.regionkey');
+    // Catalog/schema/table are dependent <select> dropdowns, not text inputs
+    const catalogSelects = page.getByLabel('Catalog');
+    const schemaSelects = page.getByLabel('Schema');
+    const tableSelects = page.getByLabel('Table');
+
+    await catalogSelects.nth(0).selectOption('tpch');
+    await schemaSelects.nth(0).selectOption('tiny');
+    await tableSelects.nth(0).selectOption('nation');
+
+    await catalogSelects.nth(1).selectOption('tpch');
+    await schemaSelects.nth(1).selectOption('tiny');
+    await tableSelects.nth(1).selectOption('region');
+
+    await page.getByLabel('Join condition').fill('nation.regionkey = region.regionkey');
 
     await page.getByRole('button', { name: 'Create' }).click();
 
@@ -206,7 +217,7 @@ test.describe('Data Intelligence — Relationships Tab', () => {
     await expect(page.getByText('Add Relationship')).not.toBeVisible({ timeout: 3000 });
   });
 
-  test('Auto-Infer button triggers background job', async ({ page }) => {
+  test('Detect menu — Suggest from column names triggers infer job', async ({ page }) => {
     let inferCalled = false;
     await setupDataIntelligence(page);
 
@@ -221,14 +232,14 @@ test.describe('Data Intelligence — Relationships Tab', () => {
 
     await page.goto('/data-intelligence');
     await page.getByText('Relationships').click();
-    await page.getByRole('button', { name: 'Auto-Infer' }).click();
+    await page.getByRole('button', { name: /Detect/ }).click();
+    await page.getByText('Suggest from column names').click();
 
-    // Give time for the request
     await page.waitForTimeout(1000);
     expect(inferCalled).toBe(true);
   });
 
-  test('Mine History button triggers background job', async ({ page }) => {
+  test('Detect menu — Learn from query history triggers mine job', async ({ page }) => {
     let mineCalled = false;
     await setupDataIntelligence(page);
 
@@ -243,33 +254,35 @@ test.describe('Data Intelligence — Relationships Tab', () => {
 
     await page.goto('/data-intelligence');
     await page.getByText('Relationships').click();
-    await page.getByRole('button', { name: 'Mine History' }).click();
+    await page.getByRole('button', { name: /Detect/ }).click();
+    await page.getByText('Learn from query history').click();
 
     await page.waitForTimeout(1000);
     expect(mineCalled).toBe(true);
   });
 
-  test('summary shows correct counts by method', async ({ page }) => {
+  test('filter pills show counts per method', async ({ page }) => {
     await setupDataIntelligence(page);
     await page.goto('/data-intelligence');
     await page.getByText('Relationships').click();
 
-    await expect(page.getByText(/1 verified/)).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText(/1 mined/)).toBeVisible();
-    await expect(page.getByText(/1 inferred/)).toBeVisible();
+    // MOCK_RELATIONSHIPS has 1 admin, 1 mined, 1 inferred
+    await expect(page.getByRole('button', { name: /^All\s*3$/ })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('button', { name: /^Suggested\s*1$/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Observed\s*1$/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Manual\s*1$/ })).toBeVisible();
   });
 
-  test('verified relationship shows green checkmark', async ({ page }) => {
+  test('verified / admin relationship renders as Verified', async ({ page }) => {
     await setupDataIntelligence(page);
     await page.goto('/data-intelligence');
     await page.getByText('Relationships').click();
 
-    // The lineitem->orders relationship is verified — check for a green check SVG
+    // The lineitem->orders relationship is admin+verified; its Confidence cell should
+    // read "Verified" (replacing the confidence bar).
     const verifiedRow = page.locator('tr').filter({ hasText: 'lineitem' });
     await expect(verifiedRow).toBeVisible({ timeout: 10000 });
-    // The verified checkmark column should have an SVG
-    const checkIcon = verifiedRow.locator('svg[fill="currentColor"]');
-    await expect(checkIcon).toBeVisible();
+    await expect(verifiedRow.getByText('Verified')).toBeVisible();
   });
 });
 

@@ -259,7 +259,12 @@ const AssistantPanel = ({ onClose }) => {
       {/* Header */}
       <div className={`flex items-center justify-between px-4 py-2.5 border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
         <div className="flex items-center gap-2.5">
-          <div className="w-1.5 h-1.5 rounded-full bg-[#5d6ad3]" />
+          <img
+            src="/Logo-A.png"
+            alt=""
+            aria-hidden="true"
+            className={`w-5 h-5 object-contain ${isDark ? 'invert' : ''}`}
+          />
           <div>
             <h3 className={`text-[13px] font-semibold leading-none ${isDark ? 'text-white' : 'text-gray-900'}`}>Actyze AI</h3>
             <p className={`text-[10px] mt-1 leading-none ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{statusText}</p>

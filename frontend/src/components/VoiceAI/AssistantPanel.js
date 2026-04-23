@@ -1,139 +1,209 @@
-import React, { useState, useRef, useEffect } from 'react';
+// SPDX-License-Identifier: AGPL-3.0-only
+import React, { useReducer, useRef, useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAIAgent, AGENT_STATES } from '../../contexts/AIAgentContext';
-import VoiceWaveform from './VoiceWaveform';
+import ChatService from '../../services/ChatService';
 import DashboardService from '../../services/DashboardService';
+import MessageBlock from './MessageBlock';
+import VoiceWaveform from './VoiceWaveform';
 
-/**
- * AssistantPanel - Chat interface for the AI assistant
- */
+// ── Reducer ────────────────────────────────────────────────────────────
+
+const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+const initialState = {
+  messages: [],   // { id, role, content, status, sql?, reasoning?, chartRecommendation?, queryResults?, isLimited?, errorMessage? }
+  pendingUserInput: null,  // for regenerate
+};
+
+function reducer(state, action) {
+  switch (action.type) {
+    case 'USER_SEND': {
+      const userMsg = { id: uid(), role: 'user', content: action.text, status: 'complete' };
+      const asstMsg = { id: uid(), role: 'assistant', content: '', status: 'generating' };
+      return {
+        ...state,
+        messages: [...state.messages, userMsg, asstMsg],
+        pendingUserInput: action.text,
+      };
+    }
+    case 'RESPAWN_ASSISTANT': {
+      // Drop trailing assistant (if any) and append a fresh one; user message is preserved
+      const msgs = [...state.messages];
+      if (msgs.length && msgs[msgs.length - 1].role === 'assistant') msgs.pop();
+      msgs.push({ id: uid(), role: 'assistant', content: '', status: 'generating' });
+      return { ...state, messages: msgs };
+    }
+    case 'STAGE': {
+      return {
+        ...state,
+        messages: state.messages.map((m, i) =>
+          i === state.messages.length - 1 && m.role === 'assistant'
+            ? { ...m, status: action.stage }
+            : m
+        ),
+      };
+    }
+    case 'SQL_READY': {
+      return {
+        ...state,
+        messages: state.messages.map((m, i) =>
+          i === state.messages.length - 1 && m.role === 'assistant'
+            ? { ...m,
+                sql: action.sql,
+                reasoning: action.reasoning,
+                chartRecommendation: action.chartRecommendation,
+                content: action.reasoning || m.content,
+              }
+            : m
+        ),
+      };
+    }
+    case 'RESULT_READY': {
+      return {
+        ...state,
+        messages: state.messages.map((m, i) =>
+          i === state.messages.length - 1 && m.role === 'assistant'
+            ? { ...m,
+                sql: action.sql,
+                reasoning: action.reasoning,
+                chartRecommendation: action.chartRecommendation,
+                content: action.reasoning || m.content,
+                queryResults: action.queryResults,
+                isLimited: action.isLimited,
+                status: 'complete',
+              }
+            : m
+        ),
+      };
+    }
+    case 'ERROR': {
+      return {
+        ...state,
+        messages: state.messages.map((m, i) =>
+          i === state.messages.length - 1 && m.role === 'assistant'
+            ? { ...m, status: 'error', errorMessage: action.message, content: action.reasoning || m.content }
+            : m
+        ),
+      };
+    }
+    case 'EXEC_ERROR': {
+      return {
+        ...state,
+        messages: state.messages.map((m, i) =>
+          i === state.messages.length - 1 && m.role === 'assistant'
+            ? { ...m,
+                sql: action.sql,
+                reasoning: action.reasoning,
+                chartRecommendation: action.chartRecommendation,
+                content: action.reasoning || m.content,
+                status: 'exec_error',
+                errorMessage: action.message,
+              }
+            : m
+        ),
+      };
+    }
+    case 'STOPPED': {
+      return {
+        ...state,
+        messages: state.messages.map((m, i) =>
+          i === state.messages.length - 1 && m.role === 'assistant'
+            ? { ...m, status: 'complete', errorMessage: m.errorMessage || 'Stopped.' }
+            : m
+        ),
+      };
+    }
+    case 'CLEAR':
+      return initialState;
+    default:
+      return state;
+  }
+}
+
+// ── Panel ──────────────────────────────────────────────────────────────
+
+const STARTER_PROMPTS = [
+  'Show me the top 10 rows from any table',
+  'What tables do we have?',
+  'How many rows are in each table?',
+];
+
 const AssistantPanel = ({ onClose }) => {
   const { isDark } = useTheme();
   const navigate = useNavigate();
+  const {
+    agentState, isListening, interimTranscript, toggleListening,
+  } = useAIAgent();
+  const [state, dispatch] = useReducer(reducer, initialState);
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  const {
-    agentState,
-    isListening,
-    interimTranscript,
-    finalTranscript,
-    messages,
-    preferences,
-    toggleListening,
-    processInput,
-    updatePreferences,
-    clearConversation,
-  } = useAIAgent();
+  // ── Effects ──────────────────────────────────────────────────
 
-  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [state.messages]);
 
-  // Focus input on open
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  useEffect(() => { inputRef.current?.focus(); }, []);
 
-  // Show interim transcript in input while listening
   useEffect(() => {
-    if (isListening && interimTranscript) {
-      setInputValue(interimTranscript);
-    }
+    if (isListening && interimTranscript) setInputValue(interimTranscript);
   }, [interimTranscript, isListening]);
 
-  // Clear input when voice is auto-processed (finalTranscript triggers auto-submit)
-  useEffect(() => {
-    if (!isListening && !interimTranscript) {
-      // If we're not listening anymore and no interim, clear the input
-      // (the finalTranscript was auto-processed by the context)
-      if (inputValue && agentState === AGENT_STATES.PROCESSING) {
-        setInputValue('');
-      }
-    }
-  }, [isListening, interimTranscript, agentState, inputValue]);
+  // ── Actions ──────────────────────────────────────────────────
 
-  const handleSubmit = async (e) => {
+  const lastMsg = state.messages[state.messages.length - 1];
+  const isGenerating = lastMsg?.role === 'assistant' && (lastMsg.status === 'generating' || lastMsg.status === 'executing');
+
+  const runChat = useCallback(async (text) => {
+    // Build compact history of prior completed turns (strings, as backend expects)
+    const history = state.messages
+      .filter(m => m.status === 'complete' && (m.content || m.sql))
+      .map(m => m.role === 'user' ? m.content : (m.reasoning || m.content || ''));
+
+    await ChatService.sendMessage({
+      text,
+      conversationHistory: [text, ...history],
+      onEvent: (event) => {
+        switch (event.type) {
+          case 'stage':       dispatch({ type: 'STAGE', stage: event.stage }); break;
+          case 'sql_ready':   dispatch({ type: 'SQL_READY', ...event }); break;
+          case 'result_ready':dispatch({ type: 'RESULT_READY', ...event }); break;
+          case 'error':       dispatch({ type: 'ERROR', message: event.message, reasoning: event.reasoning }); break;
+          case 'exec_error':  dispatch({ type: 'EXEC_ERROR', ...event }); break;
+          case 'stopped':     dispatch({ type: 'STOPPED' }); break;
+          default: /* 'done' is implicit */ break;
+        }
+      },
+    });
+  }, [state.messages]);
+
+  const sendMessage = useCallback(async (text) => {
+    if (!text.trim()) return;
+    dispatch({ type: 'USER_SEND', text });
+    runChat(text);
+  }, [runChat]);
+
+  const handleStop = useCallback(() => {
+    ChatService.cancel();
+  }, []);
+
+  const handleRegenerate = useCallback(() => {
+    const userInput = state.pendingUserInput;
+    if (!userInput) return;
+    dispatch({ type: 'RESPAWN_ASSISTANT' });
+    runChat(userInput);
+  }, [state.pendingUserInput, runChat]);
+
+  const handleSubmit = (e) => {
     e?.preventDefault();
     const text = inputValue.trim();
-    if (!text || agentState === AGENT_STATES.PROCESSING) return;
-
+    if (!text || isGenerating) return;
     setInputValue('');
-    await processInput(text);
-  };
-
-  // Handle opening query in Query page - pass SQL for execution
-  const handleOpenInQueryPage = (msg) => {
-    navigate('/query/new', {
-      state: {
-        query: {
-          generated_sql: msg.sql,
-          nl_query: msg.nlQuery,
-          query_name: msg.nlQuery ? `AI: ${msg.nlQuery.substring(0, 40)}` : 'AI Query',
-          chart_recommendation: msg.chartRecommendation,
-        },
-        fromAssistant: true,
-        autoExecute: true, // Signal Query page to auto-execute
-      }
-    });
-    onClose();
-  };
-
-  // Handle adding query result to a new dashboard
-  const handleAddToDashboard = async (msg) => {
-    try {
-      // Generate title from the natural language query
-      const dashboardTitle = msg.nlQuery 
-        ? `AI: ${msg.nlQuery.substring(0, 50)}${msg.nlQuery.length > 50 ? '...' : ''}`
-        : 'AI Dashboard';
-      
-      const tileTitle = msg.nlQuery
-        ? msg.nlQuery.split(' ').slice(0, 6).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-        : 'AI Query';
-
-      // Step 1: Create a new dashboard
-      const dashboardResponse = await DashboardService.createDashboard({
-        title: dashboardTitle,
-        description: msg.nlQuery || 'Dashboard created from Actyze AI',
-      });
-
-      if (!dashboardResponse.success) {
-        console.error('Failed to create dashboard:', dashboardResponse.error);
-        return;
-      }
-
-      const dashboardId = dashboardResponse.dashboard?.id;
-      if (!dashboardId) {
-        console.error('No dashboard ID returned');
-        return;
-      }
-
-      // Step 2: Create a tile in the new dashboard
-      const tileData = {
-        title: tileTitle,
-        description: msg.nlQuery || null,
-        sql_query: msg.sql,
-        nl_query: msg.nlQuery || null,
-        chart_type: msg.chartRecommendation?.chart_type || 'bar',
-        chart_config: msg.chartRecommendation || {},
-        position: { x: 0, y: 0, width: 6, height: 2 },
-      };
-
-      const tileResponse = await DashboardService.createTile(dashboardId, tileData);
-
-      if (!tileResponse.success) {
-        console.error('Failed to create tile:', tileResponse.error);
-      }
-
-      // Step 3: Navigate to the new dashboard
-      navigate(`/dashboard/${dashboardId}`);
-      onClose();
-    } catch (error) {
-      console.error('Error adding to dashboard:', error);
-    }
+    sendMessage(text);
   };
 
   const handleKeyDown = (e) => {
@@ -143,274 +213,184 @@ const AssistantPanel = ({ onClose }) => {
     }
   };
 
-  const isProcessing = agentState === AGENT_STATES.PROCESSING;
+  const handleClear = () => {
+    ChatService.cancel();
+    dispatch({ type: 'CLEAR' });
+  };
+
+  // ── Result-action handlers (same flow as the old panel) ─────
+
+  const handleOpenInQueryPage = (msg) => {
+    navigate('/query/new', {
+      state: {
+        query: {
+          generated_sql: msg.sql,
+          nl_query: state.pendingUserInput,
+          query_name: state.pendingUserInput ? `AI: ${state.pendingUserInput.substring(0, 40)}` : 'AI Query',
+          chart_recommendation: msg.chartRecommendation,
+        },
+        fromAssistant: true,
+        autoExecute: true,
+      },
+    });
+    onClose?.();
+  };
+
+  const handleAddToDashboard = async (msg) => {
+    const nl = state.pendingUserInput;
+    const title = nl ? `AI: ${nl.substring(0, 50)}${nl.length > 50 ? '...' : ''}` : 'AI Dashboard';
+    const tileTitle = nl
+      ? nl.split(' ').slice(0, 6).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+      : 'AI Query';
+
+    const dashResp = await DashboardService.createDashboard({ title, description: nl || 'Dashboard created from Actyze AI' });
+    if (!dashResp.success || !dashResp.dashboard?.id) return;
+
+    await DashboardService.createTile(dashResp.dashboard.id, {
+      title: tileTitle,
+      description: nl || null,
+      sql_query: msg.sql,
+      nl_query: nl || null,
+      chart_type: msg.chartRecommendation?.chart_type || 'bar',
+      chart_config: msg.chartRecommendation || {},
+      position: { x: 0, y: 0, width: 6, height: 2 },
+    });
+    navigate(`/dashboard/${dashResp.dashboard.id}`);
+    onClose?.();
+  };
+
+  // ── Render ───────────────────────────────────────────────────
+
+  const statusText = isListening ? 'Listening'
+                    : isGenerating ? 'Working'
+                    : agentState === AGENT_STATES.ERROR ? 'Error'
+                    : 'Ready';
 
   return (
-    <div className={`
-      flex flex-col h-full rounded-xl overflow-hidden
-      ${isDark ? 'bg-[#1a1b1e]' : 'bg-white'}
-      shadow-2xl border
-      ${isDark ? 'border-gray-700' : 'border-gray-200'}
-    `}>
+    <div className={`flex flex-col h-full rounded-xl overflow-hidden border ${
+      isDark ? 'bg-[#0a0a0b] border-white/10' : 'bg-white border-gray-200'
+    }`}>
+
       {/* Header */}
-      <div className={`
-        flex items-center justify-between px-4 py-3 border-b
-        ${isDark ? 'border-gray-700 bg-[#17181a]' : 'border-gray-200 bg-gray-50'}
-      `}>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          </div>
+      <div className={`flex items-center justify-between px-4 py-2.5 border-b ${isDark ? 'border-white/10' : 'border-gray-200'}`}>
+        <div className="flex items-center gap-2.5">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#5d6ad3]" />
           <div>
-            <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              Actyze AI
-            </h3>
-            <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-              {isListening ? 'Listening...' : isProcessing ? 'Thinking...' : 'Ready to help'}
-            </p>
+            <h3 className={`text-[13px] font-semibold leading-none ${isDark ? 'text-white' : 'text-gray-900'}`}>Actyze AI</h3>
+            <p className={`text-[10px] mt-1 leading-none ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{statusText}</p>
           </div>
         </div>
-        
-        <div className="flex items-center gap-1">
-          {/* TTS Toggle - Hidden by default since TTS is disabled */}
-          {/* 
-          <button
-            onClick={() => updatePreferences({ ttsEnabled: !preferences.ttsEnabled })}
-            className={`p-1.5 rounded-lg transition-colors ${
-              preferences.ttsEnabled 
-                ? 'bg-violet-500/20 text-violet-400' 
-                : isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
-            }`}
-            title={preferences.ttsEnabled ? 'Disable voice responses' : 'Enable voice responses'}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-            </svg>
-          </button>
-          */}
-          
-          {/* Clear chat */}
-          <button
-            onClick={clearConversation}
-            className={`p-1.5 rounded-lg transition-colors ${
-              isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-700' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-            }`}
+        <div className="flex items-center gap-0.5">
+          <button onClick={handleClear}
             title="Clear conversation"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            className={`p-1.5 rounded-md transition-colors ${isDark ? 'text-gray-500 hover:text-white hover:bg-white/5' : 'text-gray-400 hover:text-gray-900 hover:bg-gray-100'}`}>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </button>
-          
-          {/* Close */}
-          <button
-            onClick={onClose}
-            className={`p-1.5 rounded-lg transition-colors ${
-              isDark ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-700' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          <button onClick={onClose}
+            title="Close"
+            className={`p-1.5 rounded-md transition-colors ${isDark ? 'text-gray-500 hover:text-white hover:bg-white/5' : 'text-gray-400 hover:text-gray-900 hover:bg-gray-100'}`}>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500/20 to-purple-600/20 flex items-center justify-center mb-3">
-              <svg className="w-6 h-6 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+        {state.messages.length === 0 ? (
+          <div className="h-full flex flex-col justify-center">
+            <p className={`text-[13px] font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Ask anything about your data.</p>
+            <p className={`text-[11px] mt-1 mb-3 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>I can generate SQL, run it, and explain the result.</p>
+            <div className="flex flex-col gap-1.5">
+              {STARTER_PROMPTS.map(p => (
+                <button key={p} onClick={() => sendMessage(p)}
+                  className={`text-left text-[12px] px-2.5 py-1.5 rounded-md border transition-colors ${
+                    isDark
+                      ? 'border-white/10 text-gray-400 hover:text-white hover:border-white/20 hover:bg-white/5'
+                      : 'border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 hover:bg-gray-50'
+                  }`}>
+                  {p}
+                </button>
+              ))}
             </div>
-            <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-              Ask me anything about your data
-            </p>
-            <p className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-              Try: "Show me sales by region" or "What were top products last month?"
-            </p>
           </div>
         ) : (
-          messages.map((msg) => (
-            <div
+          state.messages.map(msg => (
+            <MessageBlock
               key={msg.id}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`
-                  max-w-[90%] rounded-xl px-3 py-2 text-sm
-                  ${msg.role === 'user'
-                    ? 'bg-gradient-to-r from-violet-500 to-purple-600 text-white'
-                    : isDark 
-                      ? 'bg-[#2a2b2e] text-gray-100' 
-                      : 'bg-gray-100 text-gray-800'
-                  }
-                `}
-              >
-                {msg.content}
-                
-                {/* Generated SQL Preview */}
-                {msg.sql && (
-                  <div className={`mt-2 rounded overflow-hidden ${isDark ? 'bg-black/30' : 'bg-white/50'}`}>
-                    <div className="p-2">
-                      <div className={`text-[10px] uppercase tracking-wide mb-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                        Generated SQL
-                      </div>
-                      <pre className={`text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                        {msg.sql}
-                      </pre>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Action Buttons */}
-                {msg.sql && msg.canOpenInQueryPage && (
-                  <div className="flex gap-1.5 mt-2">
-                    {/* Open in Query Page Button */}
-                    <button
-                      onClick={() => handleOpenInQueryPage(msg)}
-                      className={`
-                        flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-[11px] font-medium
-                        transition-colors
-                        ${isDark 
-                          ? 'bg-black/30 text-gray-300 hover:bg-black/50 border border-gray-600' 
-                          : 'bg-white/50 text-gray-700 hover:bg-white/70 border border-gray-300'
-                        }
-                      `}
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                      Query
-                    </button>
-                    
-                    {/* Add to Dashboard Button */}
-                    <button
-                      onClick={() => handleAddToDashboard(msg)}
-                      className={`
-                        flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded text-[11px] font-medium
-                        transition-colors
-                        ${isDark 
-                          ? 'bg-black/30 text-gray-300 hover:bg-black/50 border border-gray-600' 
-                          : 'bg-white/50 text-gray-700 hover:bg-white/70 border border-gray-300'
-                        }
-                      `}
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
-                      </svg>
-                      Dashboard
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
+              msg={msg}
+              onStop={handleStop}
+              onRegenerate={handleRegenerate}
+              onOpenInQueryPage={handleOpenInQueryPage}
+              onAddToDashboard={handleAddToDashboard}
+            />
           ))
         )}
-        
-        {/* Processing indicator */}
-        {isProcessing && (
-          <div className="flex justify-start">
-            <div className={`
-              rounded-xl px-3 py-2 text-sm
-              ${isDark ? 'bg-[#2a2b2e]' : 'bg-gray-100'}
-            `}>
-              <div className="flex items-center gap-2">
-                <div className="flex gap-1">
-                  <span className="w-2 h-2 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2 h-2 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-2 h-2 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
-                <span className={isDark ? 'text-gray-400' : 'text-gray-500'}>Thinking...</span>
-              </div>
-            </div>
-          </div>
-        )}
-        
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className={`
-        border-t p-3
-        ${isDark ? 'border-gray-700 bg-[#17181a]' : 'border-gray-200 bg-gray-50'}
-      `}>
-        {/* Voice waveform when listening */}
+      {/* Composer */}
+      <div className={`border-t px-3 py-2.5 ${isDark ? 'border-white/10 bg-[#0a0a0b]' : 'border-gray-200 bg-white'}`}>
         {isListening && (
           <div className="flex items-center justify-center gap-2 mb-2">
-            <VoiceWaveform isActive={true} color="#8B5CF6" barCount={7} width={60} height={24} />
-            <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-              Listening...
-            </span>
+            <VoiceWaveform isActive color="#5d6ad3" barCount={7} width={60} height={20} />
+            <span className={`text-[11px] ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Listening…</span>
           </div>
         )}
-        
-        <form onSubmit={handleSubmit} className="flex items-end gap-2">
-          <input
+
+        <form onSubmit={handleSubmit} className="flex items-end gap-1.5">
+          <textarea
             ref={inputRef}
-            type="text"
+            rows={1}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={isListening ? "Listening..." : "Type or speak..."}
-            disabled={isProcessing}
-            className={`
-              flex-1 px-3 py-2 rounded-lg text-sm outline-none
-              ${isDark 
-                ? 'bg-[#2a2b2e] text-white placeholder-gray-500 focus:ring-1 focus:ring-violet-500' 
-                : 'bg-white text-gray-900 placeholder-gray-400 border border-gray-200 focus:border-violet-500'
-              }
-              ${isListening ? 'border-red-500' : ''}
-            `}
+            placeholder={isListening ? 'Listening…' : 'Message Actyze AI'}
+            disabled={isGenerating}
+            className={`flex-1 resize-none px-2.5 py-1.5 text-[13px] rounded-md outline-none transition-colors max-h-28 ${
+              isDark
+                ? 'bg-white/5 text-white placeholder-gray-500 focus:bg-white/[0.07]'
+                : 'bg-gray-100 text-gray-900 placeholder-gray-400 focus:bg-gray-50'
+            } disabled:opacity-60`}
+            style={{ fontFamily: 'inherit' }}
           />
-          
-          {/* Voice button */}
-          <button
-            type="button"
-            onClick={toggleListening}
-            disabled={isProcessing}
-            className={`
-              p-2 rounded-lg transition-all
-              ${isListening
-                ? 'bg-red-500 text-white animate-pulse'
-                : isDark 
-                  ? 'bg-[#2a2b2e] text-gray-400 hover:text-white hover:bg-[#3a3b3e]' 
-                  : 'bg-gray-100 text-gray-500 hover:text-gray-700 hover:bg-gray-200'
-              }
-            `}
-            title={isListening ? "Stop listening" : "Start voice input"}
-          >
-            {isListening ? (
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <rect x="6" y="6" width="12" height="12" rx="2" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-              </svg>
-            )}
-          </button>
-          
-          {/* Send button */}
-          <button
-            type="submit"
-            disabled={!inputValue.trim() || isProcessing}
-            className={`
-              p-2 rounded-lg transition-all
-              ${!inputValue.trim() || isProcessing
-                ? isDark ? 'bg-[#2a2b2e] text-gray-600' : 'bg-gray-100 text-gray-400'
-                : 'bg-gradient-to-r from-violet-500 to-purple-600 text-white hover:from-violet-600 hover:to-purple-700'
-              }
-            `}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+
+          <button type="button" onClick={toggleListening} disabled={isGenerating}
+            title={isListening ? 'Stop listening' : 'Voice input'}
+            className={`p-1.5 rounded-md transition-colors ${
+              isListening ? 'bg-[#5d6ad3] text-white'
+              : isDark ? 'text-gray-500 hover:text-white hover:bg-white/5'
+                       : 'text-gray-400 hover:text-gray-900 hover:bg-gray-100'
+            } disabled:opacity-40`}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
             </svg>
           </button>
+
+          {isGenerating ? (
+            <button type="button" onClick={handleStop}
+              title="Stop generating"
+              className="p-1.5 rounded-md bg-[#5d6ad3] text-white hover:bg-[#4f5bc4] transition-colors">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <rect x="6" y="6" width="12" height="12" rx="1.5" />
+              </svg>
+            </button>
+          ) : (
+            <button type="submit" disabled={!inputValue.trim()}
+              title="Send"
+              className={`p-1.5 rounded-md transition-colors ${
+                inputValue.trim()
+                  ? 'bg-[#5d6ad3] text-white hover:bg-[#4f5bc4]'
+                  : isDark ? 'bg-white/5 text-gray-600' : 'bg-gray-100 text-gray-400'
+              }`}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5m0 0l-7 7m7-7l7 7" />
+              </svg>
+            </button>
+          )}
         </form>
       </div>
     </div>

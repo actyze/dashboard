@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 /**
  * useOnboarding — detects the three onboarding milestones by hitting the
- * corresponding list endpoints and reporting back whether each has any
- * items yet. Dismiss state is stored in localStorage so users who
- * completed onboarding on a prior visit don't see the card again.
+ * corresponding list endpoints. The checklist auto-hides once all three
+ * are complete; until then the user can collapse it (chevron) but not
+ * dismiss it. Collapsed state persists in localStorage across sessions.
  *
  * Steps:
  *   1. Optimize the schema    — ≥ 1 metadata description exists
@@ -16,17 +16,17 @@ import MetadataService from '../services/MetadataService';
 import RelationshipService from '../services/RelationshipService';
 import QueryManagementService from '../services/QueryManagementService';
 
-const DISMISS_KEY = 'actyze_onboarding_dismissed';
+const COLLAPSED_KEY = 'actyze_onboarding_collapsed';
 
-const readDismissed = () => {
-  try { return localStorage.getItem(DISMISS_KEY) === '1'; }
+const readCollapsed = () => {
+  try { return localStorage.getItem(COLLAPSED_KEY) === '1'; }
   catch { return false; }
 };
 
-const writeDismissed = (value) => {
+const writeCollapsed = (value) => {
   try {
-    if (value) localStorage.setItem(DISMISS_KEY, '1');
-    else localStorage.removeItem(DISMISS_KEY);
+    if (value) localStorage.setItem(COLLAPSED_KEY, '1');
+    else localStorage.removeItem(COLLAPSED_KEY);
   } catch { /* noop */ }
 };
 
@@ -54,7 +54,7 @@ export const ONBOARDING_STEPS = [
 export const useOnboarding = () => {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState({ schema: false, relationships: false, first_query: false });
-  const [dismissed, setDismissed] = useState(readDismissed());
+  const [collapsed, setCollapsed] = useState(readCollapsed());
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -75,8 +75,7 @@ export const useOnboarding = () => {
         first_query: queries.length > 0,
       });
     } catch {
-      // If detection fails entirely, leave the card in its current state rather
-      // than flash-dismissing. The user can still use the CTAs.
+      // If detection fails, leave state as-is rather than flipping the UI.
     } finally {
       setLoading(false);
     }
@@ -84,16 +83,28 @@ export const useOnboarding = () => {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const dismiss = useCallback(() => {
-    writeDismissed(true);
-    setDismissed(true);
+  const setCollapsedPersisted = useCallback((value) => {
+    writeCollapsed(value);
+    setCollapsed(value);
+  }, []);
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed(prev => {
+      const next = !prev;
+      writeCollapsed(next);
+      return next;
+    });
   }, []);
 
   const steps = ONBOARDING_STEPS.map(s => ({ ...s, done: !!status[s.id] }));
   const completeCount = steps.filter(s => s.done).length;
   const allDone = completeCount === steps.length;
 
-  return { loading, steps, completeCount, allDone, dismissed, dismiss, refresh };
+  return {
+    loading, steps, completeCount, allDone,
+    collapsed, toggleCollapsed, setCollapsed: setCollapsedPersisted,
+    refresh,
+  };
 };
 
 export default useOnboarding;

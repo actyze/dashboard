@@ -15,7 +15,8 @@
 
 import { RestService } from './RestService';
 
-const DASHBOARD_INTENT = /\b(create|build|make|design|show\s+me)\s+(?:a|an|me)?\s*(?:new\s+|full\s+|entire\s+|complete\s+)?(?:analytics?\s+|sales\s+|marketing\s+)?dashboard\b/i;
+// Matches "create/build/make/design/generate/show me (a|an|me) (new|full|entire|complete)? <any qualifier>? dashboard"
+const DASHBOARD_INTENT = /\b(?:create|build|make|design|generate|show\s+me)\s+(?:a|an|me)?\s*(?:new\s+|full\s+|entire\s+|complete\s+)?(?:[a-z][a-z-]*\s+)?dashboard\b/i;
 
 const DASHBOARD_VARIANTS = [
   (topic) => `Overall summary of ${topic}`,
@@ -88,7 +89,7 @@ class ChatService {
 
     // Fire variants in parallel. Individual failures are filtered out.
     const results = await Promise.allSettled(
-      prompts.map(p => RestService.generateSql(p, [p, ...conversationHistory]))
+      prompts.map(p => RestService.generateSql(p, conversationHistory))
     );
     if (signal.aborted) { emit({ type: 'stopped' }); return; }
 

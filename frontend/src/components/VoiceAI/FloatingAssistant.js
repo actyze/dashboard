@@ -35,7 +35,7 @@ const FloatingAssistant = () => {
         onClick={() => setIsOpen(!isOpen)}
         className={`
           fixed right-6 bottom-6 z-50
-          inline-flex items-center gap-2 pl-2 pr-3.5 py-1.5 rounded-full
+          inline-flex items-center gap-2 pl-2.5 pr-3.5 py-2 rounded-full
           text-[13px] font-medium transition-all duration-200
           ${isOpen ? 'opacity-0 pointer-events-none scale-95' : 'opacity-100 scale-100'}
           ${isDark
@@ -45,16 +45,11 @@ const FloatingAssistant = () => {
           ${isProcessing ? 'border-[#5d6ad3]' : ''}
         `}
       >
-        <span className="relative flex items-center justify-center w-6 h-6">
+        <span className="relative flex h-2 w-2">
           {showPulse && (
-            <span className={`animate-ping absolute inset-0 rounded-full opacity-60 ${isListening ? 'bg-red-500/40' : 'bg-[#5d6ad3]/40'}`} />
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isListening ? 'bg-red-500' : 'bg-[#5d6ad3]'}`} />
           )}
-          <img
-            src="/Logo-A.png"
-            alt=""
-            aria-hidden="true"
-            className={`relative w-5 h-5 object-contain ${isDark ? 'invert' : ''}`}
-          />
+          <span className={`relative inline-flex rounded-full h-2 w-2 ${isListening ? 'bg-red-500' : 'bg-[#5d6ad3]'}`} />
         </span>
         <span>Actyze AI</span>
       </button>

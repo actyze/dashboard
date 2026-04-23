@@ -13,107 +13,61 @@ import VoiceWaveform from './VoiceWaveform';
 const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 const initialState = {
-  messages: [],   // { id, role, content, status, sql?, reasoning?, chartRecommendation?, queryResults?, isLimited?, errorMessage? }
-  pendingUserInput: null,  // for regenerate
+  messages: [],        // { id, role, content, status, sql?, reasoning?, chartRecommendation?, errorMessage?, dashboardPlan? }
+  generating: false,   // true => show typing indicator
+  pendingUserInput: null,
 };
 
 function reducer(state, action) {
   switch (action.type) {
     case 'USER_SEND': {
       const userMsg = { id: uid(), role: 'user', content: action.text, status: 'complete' };
-      const asstMsg = { id: uid(), role: 'assistant', content: '', status: 'generating' };
       return {
         ...state,
-        messages: [...state.messages, userMsg, asstMsg],
+        messages: [...state.messages, userMsg],
+        generating: true,
         pendingUserInput: action.text,
       };
     }
-    case 'RESPAWN_ASSISTANT': {
-      // Drop trailing assistant (if any) and append a fresh one; user message is preserved
-      const msgs = [...state.messages];
-      if (msgs.length && msgs[msgs.length - 1].role === 'assistant') msgs.pop();
-      msgs.push({ id: uid(), role: 'assistant', content: '', status: 'generating' });
-      return { ...state, messages: msgs };
-    }
-    case 'STAGE': {
-      return {
-        ...state,
-        messages: state.messages.map((m, i) =>
-          i === state.messages.length - 1 && m.role === 'assistant'
-            ? { ...m, status: action.stage }
-            : m
-        ),
-      };
-    }
     case 'SQL_READY': {
-      return {
-        ...state,
-        messages: state.messages.map((m, i) =>
-          i === state.messages.length - 1 && m.role === 'assistant'
-            ? { ...m,
-                sql: action.sql,
-                reasoning: action.reasoning,
-                chartRecommendation: action.chartRecommendation,
-                content: action.reasoning || m.content,
-              }
-            : m
-        ),
+      const asstMsg = {
+        id: uid(),
+        role: 'assistant',
+        content: action.reasoning || '',
+        sql: action.sql,
+        reasoning: action.reasoning,
+        chartRecommendation: action.chartRecommendation,
+        status: 'complete',
       };
+      return { ...state, messages: [...state.messages, asstMsg], generating: false };
     }
-    case 'RESULT_READY': {
-      return {
-        ...state,
-        messages: state.messages.map((m, i) =>
-          i === state.messages.length - 1 && m.role === 'assistant'
-            ? { ...m,
-                sql: action.sql,
-                reasoning: action.reasoning,
-                chartRecommendation: action.chartRecommendation,
-                content: action.reasoning || m.content,
-                queryResults: action.queryResults,
-                isLimited: action.isLimited,
-                status: 'complete',
-              }
-            : m
-        ),
+    case 'DASHBOARD_READY': {
+      const asstMsg = {
+        id: uid(),
+        role: 'assistant',
+        content: action.reasoning || '',
+        dashboardPlan: { title: action.title, tiles: action.tiles },
+        status: 'complete',
       };
+      return { ...state, messages: [...state.messages, asstMsg], generating: false };
     }
     case 'ERROR': {
-      return {
-        ...state,
-        messages: state.messages.map((m, i) =>
-          i === state.messages.length - 1 && m.role === 'assistant'
-            ? { ...m, status: 'error', errorMessage: action.message, content: action.reasoning || m.content }
-            : m
-        ),
+      const asstMsg = {
+        id: uid(),
+        role: 'assistant',
+        content: action.reasoning || '',
+        status: 'error',
+        errorMessage: action.message,
       };
+      return { ...state, messages: [...state.messages, asstMsg], generating: false };
     }
-    case 'EXEC_ERROR': {
-      return {
-        ...state,
-        messages: state.messages.map((m, i) =>
-          i === state.messages.length - 1 && m.role === 'assistant'
-            ? { ...m,
-                sql: action.sql,
-                reasoning: action.reasoning,
-                chartRecommendation: action.chartRecommendation,
-                content: action.reasoning || m.content,
-                status: 'exec_error',
-                errorMessage: action.message,
-              }
-            : m
-        ),
-      };
-    }
-    case 'STOPPED': {
-      return {
-        ...state,
-        messages: state.messages.map((m, i) =>
-          i === state.messages.length - 1 && m.role === 'assistant'
-            ? { ...m, status: 'complete', errorMessage: m.errorMessage || 'Stopped.' }
-            : m
-        ),
-      };
+    case 'STOPPED':
+      return { ...state, generating: false };
+    case 'REGEN_START': {
+      // Drop trailing assistant message; keep user msg for re-run
+      const msgs = [...state.messages];
+      if (msgs.length && msgs[msgs.length - 1].role === 'assistant') msgs.pop();
+      return { ...state, messages: msgs, generating: true };
     }
     case 'CLEAR':
       return initialState;
@@ -122,12 +76,28 @@ function reducer(state, action) {
   }
 }
 
+// ── Typing indicator ───────────────────────────────────────────────────
+
+const TypingIndicator = () => {
+  const { isDark } = useTheme();
+  return (
+    <div className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md ${isDark ? 'bg-white/[0.03]' : 'bg-gray-100'}`}>
+      <div className="flex items-center gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#5d6ad3] animate-bounce" style={{ animationDelay: '0ms' }} />
+        <span className="w-1.5 h-1.5 rounded-full bg-[#5d6ad3] animate-bounce" style={{ animationDelay: '150ms' }} />
+        <span className="w-1.5 h-1.5 rounded-full bg-[#5d6ad3] animate-bounce" style={{ animationDelay: '300ms' }} />
+      </div>
+      <span className={`text-[11px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Thinking…</span>
+    </div>
+  );
+};
+
 // ── Panel ──────────────────────────────────────────────────────────────
 
 const STARTER_PROMPTS = [
   'Show me the top 10 rows from any table',
+  'Create a dashboard for sales',
   'What tables do we have?',
-  'How many rows are in each table?',
 ];
 
 const AssistantPanel = ({ onClose }) => {
@@ -141,11 +111,9 @@ const AssistantPanel = ({ onClose }) => {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // ── Effects ──────────────────────────────────────────────────
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [state.messages]);
+  }, [state.messages, state.generating]);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
@@ -153,13 +121,9 @@ const AssistantPanel = ({ onClose }) => {
     if (isListening && interimTranscript) setInputValue(interimTranscript);
   }, [interimTranscript, isListening]);
 
-  // ── Actions ──────────────────────────────────────────────────
-
-  const lastMsg = state.messages[state.messages.length - 1];
-  const isGenerating = lastMsg?.role === 'assistant' && (lastMsg.status === 'generating' || lastMsg.status === 'executing');
+  // ── Chat actions ───────────────────────────────────────────
 
   const runChat = useCallback(async (text) => {
-    // Build compact history of prior completed turns (strings, as backend expects)
     const history = state.messages
       .filter(m => m.status === 'complete' && (m.content || m.sql))
       .map(m => m.role === 'user' ? m.content : (m.reasoning || m.content || ''));
@@ -169,23 +133,21 @@ const AssistantPanel = ({ onClose }) => {
       conversationHistory: [text, ...history],
       onEvent: (event) => {
         switch (event.type) {
-          case 'stage':       dispatch({ type: 'STAGE', stage: event.stage }); break;
-          case 'sql_ready':   dispatch({ type: 'SQL_READY', ...event }); break;
-          case 'result_ready':dispatch({ type: 'RESULT_READY', ...event }); break;
-          case 'error':       dispatch({ type: 'ERROR', message: event.message, reasoning: event.reasoning }); break;
-          case 'exec_error':  dispatch({ type: 'EXEC_ERROR', ...event }); break;
-          case 'stopped':     dispatch({ type: 'STOPPED' }); break;
-          default: /* 'done' is implicit */ break;
+          case 'sql_ready':       dispatch({ type: 'SQL_READY', ...event }); break;
+          case 'dashboard_ready': dispatch({ type: 'DASHBOARD_READY', ...event }); break;
+          case 'error':           dispatch({ type: 'ERROR', message: event.message, reasoning: event.reasoning }); break;
+          case 'stopped':         dispatch({ type: 'STOPPED' }); break;
+          default: /* 'done' implicit */ break;
         }
       },
     });
   }, [state.messages]);
 
-  const sendMessage = useCallback(async (text) => {
-    if (!text.trim()) return;
+  const sendMessage = useCallback((text) => {
+    if (!text.trim() || state.generating) return;
     dispatch({ type: 'USER_SEND', text });
     runChat(text);
-  }, [runChat]);
+  }, [runChat, state.generating]);
 
   const handleStop = useCallback(() => {
     ChatService.cancel();
@@ -194,14 +156,14 @@ const AssistantPanel = ({ onClose }) => {
   const handleRegenerate = useCallback(() => {
     const userInput = state.pendingUserInput;
     if (!userInput) return;
-    dispatch({ type: 'RESPAWN_ASSISTANT' });
+    dispatch({ type: 'REGEN_START' });
     runChat(userInput);
   }, [state.pendingUserInput, runChat]);
 
   const handleSubmit = (e) => {
     e?.preventDefault();
     const text = inputValue.trim();
-    if (!text || isGenerating) return;
+    if (!text || state.generating) return;
     setInputValue('');
     sendMessage(text);
   };
@@ -218,7 +180,7 @@ const AssistantPanel = ({ onClose }) => {
     dispatch({ type: 'CLEAR' });
   };
 
-  // ── Result-action handlers (same flow as the old panel) ─────
+  // ── Single-query post-actions (unchanged from prior flow) ──
 
   const handleOpenInQueryPage = (msg) => {
     navigate('/query/new', {
@@ -259,10 +221,15 @@ const AssistantPanel = ({ onClose }) => {
     onClose?.();
   };
 
-  // ── Render ───────────────────────────────────────────────────
+  const handleDashboardCreated = (dashboardId) => {
+    navigate(`/dashboard/${dashboardId}`);
+    onClose?.();
+  };
+
+  // ── Render ─────────────────────────────────────────────────
 
   const statusText = isListening ? 'Listening'
-                    : isGenerating ? 'Working'
+                    : state.generating ? 'Thinking'
                     : agentState === AGENT_STATES.ERROR ? 'Error'
                     : 'Ready';
 
@@ -281,15 +248,13 @@ const AssistantPanel = ({ onClose }) => {
           </div>
         </div>
         <div className="flex items-center gap-0.5">
-          <button onClick={handleClear}
-            title="Clear conversation"
+          <button onClick={handleClear} title="Clear conversation"
             className={`p-1.5 rounded-md transition-colors ${isDark ? 'text-gray-500 hover:text-white hover:bg-white/5' : 'text-gray-400 hover:text-gray-900 hover:bg-gray-100'}`}>
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </button>
-          <button onClick={onClose}
-            title="Close"
+          <button onClick={onClose} title="Close"
             className={`p-1.5 rounded-md transition-colors ${isDark ? 'text-gray-500 hover:text-white hover:bg-white/5' : 'text-gray-400 hover:text-gray-900 hover:bg-gray-100'}`}>
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -300,10 +265,10 @@ const AssistantPanel = ({ onClose }) => {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
-        {state.messages.length === 0 ? (
+        {state.messages.length === 0 && !state.generating ? (
           <div className="h-full flex flex-col justify-center">
             <p className={`text-[13px] font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Ask anything about your data.</p>
-            <p className={`text-[11px] mt-1 mb-3 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>I can generate SQL, run it, and explain the result.</p>
+            <p className={`text-[11px] mt-1 mb-3 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>I can generate a SQL query — or build an entire dashboard.</p>
             <div className="flex flex-col gap-1.5">
               {STARTER_PROMPTS.map(p => (
                 <button key={p} onClick={() => sendMessage(p)}
@@ -318,16 +283,21 @@ const AssistantPanel = ({ onClose }) => {
             </div>
           </div>
         ) : (
-          state.messages.map(msg => (
-            <MessageBlock
-              key={msg.id}
-              msg={msg}
-              onStop={handleStop}
-              onRegenerate={handleRegenerate}
-              onOpenInQueryPage={handleOpenInQueryPage}
-              onAddToDashboard={handleAddToDashboard}
-            />
-          ))
+          <>
+            {state.messages.map(msg => (
+              <MessageBlock
+                key={msg.id}
+                msg={msg}
+                onRegenerate={handleRegenerate}
+                onOpenInQueryPage={handleOpenInQueryPage}
+                onAddToDashboard={handleAddToDashboard}
+                onDashboardCreated={handleDashboardCreated}
+              />
+            ))}
+            {state.generating && (
+              <div className="flex justify-start"><TypingIndicator /></div>
+            )}
+          </>
         )}
         <div ref={messagesEndRef} />
       </div>
@@ -349,7 +319,7 @@ const AssistantPanel = ({ onClose }) => {
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={isListening ? 'Listening…' : 'Message Actyze AI'}
-            disabled={isGenerating}
+            disabled={state.generating}
             className={`flex-1 resize-none px-2.5 py-1.5 text-[13px] rounded-md outline-none transition-colors max-h-28 ${
               isDark
                 ? 'bg-white/5 text-white placeholder-gray-500 focus:bg-white/[0.07]'
@@ -358,7 +328,7 @@ const AssistantPanel = ({ onClose }) => {
             style={{ fontFamily: 'inherit' }}
           />
 
-          <button type="button" onClick={toggleListening} disabled={isGenerating}
+          <button type="button" onClick={toggleListening} disabled={state.generating}
             title={isListening ? 'Stop listening' : 'Voice input'}
             className={`p-1.5 rounded-md transition-colors ${
               isListening ? 'bg-[#5d6ad3] text-white'
@@ -370,17 +340,15 @@ const AssistantPanel = ({ onClose }) => {
             </svg>
           </button>
 
-          {isGenerating ? (
-            <button type="button" onClick={handleStop}
-              title="Stop generating"
+          {state.generating ? (
+            <button type="button" onClick={handleStop} title="Stop generating"
               className="p-1.5 rounded-md bg-[#5d6ad3] text-white hover:bg-[#4f5bc4] transition-colors">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                 <rect x="6" y="6" width="12" height="12" rx="1.5" />
               </svg>
             </button>
           ) : (
-            <button type="submit" disabled={!inputValue.trim()}
-              title="Send"
+            <button type="submit" disabled={!inputValue.trim()} title="Send"
               className={`p-1.5 rounded-md transition-colors ${
                 inputValue.trim()
                   ? 'bg-[#5d6ad3] text-white hover:bg-[#4f5bc4]'

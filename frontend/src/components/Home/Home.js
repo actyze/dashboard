@@ -101,64 +101,63 @@ const Home = () => {
         {/* Onboarding — self-dismisses once all three steps are done */}
         <OnboardingChecklist />
 
-        {/* Quick Action Cards — flat, hairline, consistent with onboarding card */}
-        <div className="grid grid-cols-2 gap-2 mb-8 max-w-2xl">
+        {/* Quick Action Cards — primary (query) carries the indigo accent,
+            secondary (dashboard) is a hairline neighbor. Vertical layout so
+            the icon/title/description breathe and the primary card reads as
+            the hero action on the page. */}
+        <div className="grid grid-cols-2 gap-3 mb-8 max-w-2xl">
           <button
             onClick={() => navigate('/query/new')}
-            className={`group flex items-center gap-3 px-3.5 py-3 rounded-xl border text-left transition-colors ${
+            className={`group relative p-5 rounded-xl text-left overflow-hidden transition-all duration-200 ${
               isDark
-                ? 'bg-[#101012] border-white/10 hover:bg-white/[0.02]'
-                : 'bg-white border-gray-200 hover:bg-gray-50'
+                ? 'bg-gradient-to-br from-[#5d6ad3]/15 to-[#5d6ad3]/[0.04] border border-[#5d6ad3]/25 hover:border-[#5d6ad3]/50 hover:from-[#5d6ad3]/20'
+                : 'bg-gradient-to-br from-[#5d6ad3]/10 to-[#5d6ad3]/[0.03] border border-[#5d6ad3]/20 hover:border-[#5d6ad3]/40 hover:from-[#5d6ad3]/15'
             }`}
           >
-            <span className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
-              isDark
-                ? 'bg-white/[0.04] text-gray-400 group-hover:text-[#5d6ad3]'
-                : 'bg-gray-100 text-gray-500 group-hover:text-[#5d6ad3] group-hover:bg-[#5d6ad3]/10'
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${
+              isDark ? 'bg-[#5d6ad3]/20' : 'bg-[#5d6ad3]/10'
             }`}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-[#5d6ad3]" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-            </span>
-            <span className="flex-1 min-w-0">
-              <span className={`block text-[13px] font-medium ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>New Query</span>
-              <span className={`block text-[11px] mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                Write SQL or ask in natural language
-              </span>
-            </span>
-            <svg className={`flex-shrink-0 w-3 h-3 transition-all translate-x-0 group-hover:translate-x-0.5 ${
-              isDark ? 'text-gray-600 group-hover:text-[#5d6ad3]' : 'text-gray-400 group-hover:text-[#5d6ad3]'
-            }`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            </div>
+            <div className={`text-[14px] font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              New Query
+            </div>
+            <p className={`text-[12px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              Write SQL or ask in natural language
+            </p>
+            <svg className={`absolute top-4 right-4 w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}
+              fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
           </button>
 
           <button
             onClick={handleCreateNewDashboard}
-            className={`group flex items-center gap-3 px-3.5 py-3 rounded-xl border text-left transition-colors ${
+            className={`group relative p-5 rounded-xl text-left overflow-hidden transition-all duration-200 ${
               isDark
-                ? 'bg-[#101012] border-white/10 hover:bg-white/[0.02]'
-                : 'bg-white border-gray-200 hover:bg-gray-50'
+                ? 'bg-[#101012] border border-white/10 hover:border-white/20 hover:bg-white/[0.02]'
+                : 'bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50'
             }`}
           >
-            <span className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 transition-colors ${
               isDark
                 ? 'bg-white/[0.04] text-gray-400 group-hover:text-[#5d6ad3]'
-                : 'bg-gray-100 text-gray-500 group-hover:text-[#5d6ad3] group-hover:bg-[#5d6ad3]/10'
+                : 'bg-gray-100 text-gray-500 group-hover:bg-[#5d6ad3]/10 group-hover:text-[#5d6ad3]'
             }`}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 12a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1v-7z" />
               </svg>
-            </span>
-            <span className="flex-1 min-w-0">
-              <span className={`block text-[13px] font-medium ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>New Dashboard</span>
-              <span className={`block text-[11px] mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                Create visualizations and charts
-              </span>
-            </span>
-            <svg className={`flex-shrink-0 w-3 h-3 transition-all translate-x-0 group-hover:translate-x-0.5 ${
-              isDark ? 'text-gray-600 group-hover:text-[#5d6ad3]' : 'text-gray-400 group-hover:text-[#5d6ad3]'
-            }`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            </div>
+            <div className={`text-[14px] font-semibold mb-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+              New Dashboard
+            </div>
+            <p className={`text-[12px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              Create visualizations and charts
+            </p>
+            <svg className={`absolute top-4 right-4 w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}
+              fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
           </button>

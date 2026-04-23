@@ -90,36 +90,54 @@ const OnboardingChecklist = () => {
         </div>
       </button>
 
-      {/* Steps */}
+      {/* Steps — whole row is the affordance when the step is still open */}
       {!collapsed && (
         <ol>
-          {steps.map((step, i) => (
-            <li key={step.id}
-              className={`flex items-start gap-3 px-5 py-3 ${
-                i !== 0 ? (isDark ? 'border-t border-white/5' : 'border-t border-gray-100') : ''
-              }`}>
-              <StepMarker index={i + 1} done={step.done} isDark={isDark} />
-              <div className="flex-1 min-w-0">
-                <div className={`text-[13px] font-medium ${step.done
-                  ? (isDark ? 'text-gray-500 line-through' : 'text-gray-400 line-through')
-                  : (isDark ? 'text-gray-200' : 'text-gray-900')}`}>
-                  {step.title}
-                </div>
-                <p className={`text-[11px] mt-0.5 leading-snug ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-                  {step.description}
-                </p>
-              </div>
-              {!step.done && (
-                <button onClick={() => handleCta(step.id)}
-                  className="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-md text-[#5d6ad3] hover:bg-[#5d6ad3]/10 transition-colors">
-                  {step.cta}
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          {steps.map((step, i) => {
+            const divider = i !== 0 ? (isDark ? 'border-t border-white/5' : 'border-t border-gray-100') : '';
+            const titleClass = `text-[13px] font-medium ${step.done
+              ? (isDark ? 'text-gray-500 line-through' : 'text-gray-400 line-through')
+              : (isDark ? 'text-gray-200 group-hover:text-white' : 'text-gray-900')}`;
+            const descClass = `text-[11px] mt-0.5 leading-snug ${isDark ? 'text-gray-500' : 'text-gray-500'}`;
+
+            if (step.done) {
+              // Completed — static row, no hover
+              return (
+                <li key={step.id} className={`flex items-start gap-3 px-5 py-3 ${divider}`}>
+                  <StepMarker index={i + 1} done isDark={isDark} />
+                  <div className="flex-1 min-w-0">
+                    <div className={titleClass}>{step.title}</div>
+                    <p className={descClass}>{step.description}</p>
+                  </div>
+                </li>
+              );
+            }
+
+            // Open — entire row is clickable
+            return (
+              <li key={step.id} className={divider}>
+                <button
+                  type="button"
+                  onClick={() => handleCta(step.id)}
+                  className={`group w-full flex items-start gap-3 px-5 py-3 text-left transition-colors ${
+                    isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-gray-50'
+                  }`}
+                  title={step.cta}
+                >
+                  <StepMarker index={i + 1} done={false} isDark={isDark} />
+                  <div className="flex-1 min-w-0">
+                    <div className={titleClass}>{step.title}</div>
+                    <p className={descClass}>{step.description}</p>
+                  </div>
+                  <svg className={`flex-shrink-0 w-3.5 h-3.5 mt-1 transition-all translate-x-0 group-hover:translate-x-0.5 ${
+                    isDark ? 'text-gray-600 group-hover:text-[#5d6ad3]' : 'text-gray-400 group-hover:text-[#5d6ad3]'
+                  }`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
-              )}
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ol>
       )}
     </div>

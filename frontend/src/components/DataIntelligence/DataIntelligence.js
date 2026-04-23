@@ -6,15 +6,29 @@
  * - File Imports
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router';
 import { useTheme } from '../../contexts/ThemeContext';
 import SchemaOptimise from './SchemaOptimise';
 import RelationshipEditor from './RelationshipEditor';
 import FileImports from './FileImports';
 
+const VALID_TABS = new Set(['schema-metadata', 'relationships', 'file-imports']);
+
 function DataIntelligence() {
   const { isDark } = useTheme();
-  const [activeTab, setActiveTab] = useState('schema-metadata');
+  const location = useLocation();
+  const initialTab = VALID_TABS.has(location.state?.tab) ? location.state.tab : 'schema-metadata';
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  // Honor nav-state on re-entry so subsequent deep-links (e.g. from the
+  // onboarding checklist) land on the intended tab. useState only reads
+  // initialTab once on mount.
+  useEffect(() => {
+    if (location.state?.tab && VALID_TABS.has(location.state.tab)) {
+      setActiveTab(location.state.tab);
+    }
+  }, [location.state]);
 
   const tabs = [
     { id: 'schema-metadata', label: 'Schema & Metadata', badge: null, component: SchemaOptimise },

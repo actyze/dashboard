@@ -366,10 +366,7 @@ const SqlTileModal = ({ open, onClose, onSave, initialData = null, recentQueries
             {/* Refresh Interval */}
             <div>
               <label className={`block text-sm font-medium mb-2 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                Cache Refresh Interval
-                <span className={`ml-2 font-normal text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                  How often this tile's data is automatically refreshed
-                </span>
+                Auto-refresh time interval
               </label>
               <div className="flex flex-wrap gap-2">
                 {REFRESH_INTERVAL_OPTIONS.map(opt => (

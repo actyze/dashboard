@@ -1220,23 +1220,13 @@ const Dashboard = ({ isPublic = false }) => {
                       <span className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
                         {tile.title}
                       </span>
-                      {/* Cache freshness badge — only shown when cache state is known */}
-                      {tileCache[tile.id]?.refresh_status === 'success' && (
-                        tileCache[tile.id].is_fresh ? (
-                          <span
-                            title={`Cached ${tileCache[tile.id].cached_at ? new Date(tileCache[tile.id].cached_at).toLocaleString() : ''}`}
-                            className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${isDark ? 'bg-green-900/40 text-green-400' : 'bg-green-100 text-green-700'}`}
-                          >
-                            cached
-                          </span>
-                        ) : (
-                          <span
-                            title="Cache has expired — data was re-fetched live. Click Refresh All to update cache."
-                            className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${isDark ? 'bg-yellow-900/40 text-yellow-400' : 'bg-yellow-100 text-yellow-700'}`}
-                          >
-                            stale
-                          </span>
-                        )
+                      {tileCache[tile.id]?.refresh_status === 'success' && !tileCache[tile.id].is_fresh && (
+                        <span
+                          title="Cache has expired — data was re-fetched live. Click Refresh All to update cache."
+                          className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${isDark ? 'bg-yellow-900/40 text-yellow-400' : 'bg-yellow-100 text-yellow-700'}`}
+                        >
+                          stale
+                        </span>
                       )}
                     </div>
                     {!isPublic && (

@@ -4,33 +4,36 @@
  * semantic table relationships (graph edges used by the query generation pipeline).
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, useId } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
 import RelationshipService from '../../services/RelationshipService';
+import { RestService } from '../../services/RestService';
 
-// ─── Badge helpers ────────────────────────────────────────────────
+// ─── Labels & badges ──────────────────────────────────────────────
+
+const METHOD_LABELS = {
+  admin: 'Manual',
+  mined: 'Observed',
+  inferred: 'Suggested',
+};
 
 const MethodBadge = ({ method, isDark }) => {
-  const styles = {
-    admin:    isDark ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700',
-    mined:    isDark ? 'bg-blue-900/30 text-blue-400'     : 'bg-blue-100 text-blue-700',
-    inferred: isDark ? 'bg-gray-700 text-gray-300'        : 'bg-gray-200 text-gray-600',
-  };
+  const neutral = isDark ? 'bg-white/5 text-gray-300' : 'bg-gray-100 text-gray-600';
   return (
-    <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${styles[method] || styles.inferred}`}>
-      {method}
+    <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${neutral}`}>
+      {METHOD_LABELS[method] || method}
     </span>
   );
 };
 
 const ConfidenceBar = ({ value, isDark }) => (
   <div className="flex items-center gap-1.5">
-    <div className={`w-16 h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`}>
+    <div className={`w-16 h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-white/10' : 'bg-gray-200'}`}>
       <div
-        className={`h-full rounded-full ${value >= 0.8 ? 'bg-green-500' : value >= 0.5 ? 'bg-yellow-500' : 'bg-red-400'}`}
-        style={{ width: `${Math.round(value * 100)}%` }}
+        className="h-full rounded-full bg-[#5d6ad3]"
+        style={{ width: `${Math.round(value * 100)}%`, opacity: 0.3 + 0.7 * value }}
       />
     </div>
     <span className={`text-[10px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{(value * 100).toFixed(0)}%</span>
@@ -40,34 +43,99 @@ const ConfidenceBar = ({ value, isDark }) => (
 // ─── Create modal ─────────────────────────────────────────────────
 
 const CreateRelationshipModal = ({ isDark, onClose, onCreate }) => {
+  const fieldId = useId(); // stable prefix for htmlFor/id pairs
   const [form, setForm] = useState({
     source_catalog: '', source_schema: '', source_table: '',
     target_catalog: '', target_schema: '', target_table: '',
     join_condition: '', relationship_type: '1:N',
   });
   const [saving, setSaving] = useState(false);
+  const [databases, setDatabases] = useState([]);
+  const [schemaCache, setSchemaCache] = useState({});  // { catalog: [{name}, ...] }
+  const [tableCache, setTableCache] = useState({});    // { "catalog.schema": [{name}, ...] }
+
+  // In-flight guards — kept in a ref so the effects below don't have to
+  // depend on the caches (which would re-fire the effect on every update).
+  const inflight = useRef({ schemas: new Set(), tables: new Set() });
+
+  // Load databases on mount
+  useEffect(() => {
+    RestService.getDatabases()
+      .then(res => setDatabases(res?.databases || []))
+      .catch(() => setDatabases([]));
+  }, []);
+
+  // Load schemas when either catalog changes. No dep on schemaCache — the
+  // inflight ref prevents duplicate fetches without tying the effect to
+  // state updates it triggers.
+  useEffect(() => {
+    [form.source_catalog, form.target_catalog].filter(Boolean).forEach(cat => {
+      if (inflight.current.schemas.has(cat)) return;
+      inflight.current.schemas.add(cat);
+      RestService.getDatabaseSchemas(cat)
+        .then(res => setSchemaCache(prev => ({ ...prev, [cat]: res?.schemas || [] })))
+        .catch(() => setSchemaCache(prev => ({ ...prev, [cat]: [] })));
+    });
+  }, [form.source_catalog, form.target_catalog]);
+
+  // Load tables when either catalog.schema pair changes
+  useEffect(() => {
+    [
+      [form.source_catalog, form.source_schema],
+      [form.target_catalog, form.target_schema],
+    ].filter(([c, s]) => c && s).forEach(([cat, sch]) => {
+      const key = `${cat}.${sch}`;
+      if (inflight.current.tables.has(key)) return;
+      inflight.current.tables.add(key);
+      RestService.getSchemaObjects(cat, sch)
+        .then(res => {
+          const tables = res?.objects?.tables || [];
+          const views = res?.objects?.views || [];
+          setTableCache(prev => ({ ...prev, [key]: [...tables, ...views] }));
+        })
+        .catch(() => setTableCache(prev => ({ ...prev, [key]: [] })));
+    });
+  }, [form.source_catalog, form.source_schema, form.target_catalog, form.target_schema]);
 
   const handleSubmit = async () => {
     if (!form.source_table || !form.target_table || !form.join_condition) return;
     setSaving(true);
-    try { await onCreate(form); onClose(); }
+    // Admin-authored rows are trusted by default — create them as verified.
+    try { await onCreate({ ...form, is_verified: true }); onClose(); }
     catch { /* handled by parent */ }
     finally { setSaving(false); }
   };
 
-  const field = (label, key, placeholder) => (
-    <div>
-      <label className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{label}</label>
-      <input
-        value={form[key]}
-        onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-        placeholder={placeholder}
-        className={`w-full mt-1 px-2.5 py-1.5 text-sm rounded-lg border ${
-          isDark ? 'bg-[#0a0a0b] border-[#2a2b2e] text-white' : 'bg-white border-gray-300 text-gray-900'
-        } focus:outline-none focus:border-[#5d6ad3]`}
-      />
-    </div>
-  );
+  const inputClass = `w-full mt-1 px-2.5 py-1.5 text-sm rounded-lg border ${
+    isDark ? 'bg-[#0a0a0b] border-[#2a2b2e] text-white' : 'bg-white border-gray-300 text-gray-900'
+  } focus:outline-none focus:border-[#5d6ad3]`;
+  const selectClass = `${inputClass} disabled:opacity-40 disabled:cursor-not-allowed appearance-none bg-no-repeat pr-8`;
+  // Inline chevron via background-image so it sits cleanly on the right regardless of width
+  const chevronStyle = {
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='${isDark ? '%239ca3af' : '%236b7280'}'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`,
+    backgroundPosition: 'right 0.5rem center',
+    backgroundSize: '1rem 1rem',
+  };
+
+  const selectField = (label, name, value, options, onChange, disabled = false, placeholder = 'Select...') => {
+    const inputId = `${fieldId}-${name}`;
+    return (
+      <div>
+        <label htmlFor={inputId} className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{label}</label>
+        <select id={inputId} value={value} onChange={onChange} disabled={disabled || options.length === 0}
+          className={selectClass} style={chevronStyle}>
+          <option value="">{placeholder}</option>
+          {options.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      </div>
+    );
+  };
+
+  const sourceSchemas = (schemaCache[form.source_catalog] || []).map(s => s.name);
+  const sourceTables  = (tableCache[`${form.source_catalog}.${form.source_schema}`] || []).map(t => t.name);
+  const targetSchemas = (schemaCache[form.target_catalog] || []).map(s => s.name);
+  const targetTables  = (tableCache[`${form.target_catalog}.${form.target_schema}`] || []).map(t => t.name);
+  const catalogNames  = databases.map(d => d.name);
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -82,31 +150,49 @@ const CreateRelationshipModal = ({ isDark, onClose, onCreate }) => {
         <div className="px-5 py-4 space-y-3">
           <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Source table (the FK side)</p>
           <div className="grid grid-cols-3 gap-2">
-            {field('Catalog', 'source_catalog', 'postgres')}
-            {field('Schema', 'source_schema', 'public')}
-            {field('Table', 'source_table', 'orders')}
+            {selectField('Catalog', 'source-catalog', form.source_catalog, catalogNames,
+              e => setForm(f => ({ ...f, source_catalog: e.target.value, source_schema: '', source_table: '' })))}
+            {selectField('Schema', 'source-schema', form.source_schema, sourceSchemas,
+              e => setForm(f => ({ ...f, source_schema: e.target.value, source_table: '' })), !form.source_catalog)}
+            {selectField('Table', 'source-table', form.source_table, sourceTables,
+              e => setForm(f => ({ ...f, source_table: e.target.value })), !form.source_schema)}
           </div>
           <p className={`text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Target table (the PK side)</p>
           <div className="grid grid-cols-3 gap-2">
-            {field('Catalog', 'target_catalog', 'postgres')}
-            {field('Schema', 'target_schema', 'public')}
-            {field('Table', 'target_table', 'customers')}
+            {selectField('Catalog', 'target-catalog', form.target_catalog, catalogNames,
+              e => setForm(f => ({ ...f, target_catalog: e.target.value, target_schema: '', target_table: '' })))}
+            {selectField('Schema', 'target-schema', form.target_schema, targetSchemas,
+              e => setForm(f => ({ ...f, target_schema: e.target.value, target_table: '' })), !form.target_catalog)}
+            {selectField('Table', 'target-table', form.target_table, targetTables,
+              e => setForm(f => ({ ...f, target_table: e.target.value })), !form.target_schema)}
           </div>
-          {field('Join condition', 'join_condition', 'orders.customer_id = customers.id')}
           <div>
-            <label className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Type</label>
-            <select
-              value={form.relationship_type}
-              onChange={e => setForm(f => ({ ...f, relationship_type: e.target.value }))}
-              className={`w-full mt-1 px-2.5 py-1.5 text-sm rounded-lg border ${
-                isDark ? 'bg-[#0a0a0b] border-[#2a2b2e] text-white' : 'bg-white border-gray-300 text-gray-900'
-              }`}
-            >
-              <option value="1:1">1:1 — One to One</option>
-              <option value="1:N">1:N — One to Many</option>
-              <option value="N:1">N:1 — Many to One</option>
-              <option value="M:N">M:N — Many to Many</option>
-            </select>
+            <label htmlFor={`${fieldId}-join-condition`}
+              className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Join condition</label>
+            <input
+              id={`${fieldId}-join-condition`}
+              value={form.join_condition}
+              onChange={e => setForm(f => ({ ...f, join_condition: e.target.value }))}
+              placeholder="orders.customer_id = customers.id"
+              className={inputClass}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label htmlFor={`${fieldId}-type`}
+                className={`text-xs font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Type</label>
+              <select
+                id={`${fieldId}-type`}
+                value={form.relationship_type}
+                onChange={e => setForm(f => ({ ...f, relationship_type: e.target.value }))}
+                className={selectClass} style={chevronStyle}
+              >
+                <option value="1:1">1:1 — One to One</option>
+                <option value="1:N">1:N — One to Many</option>
+                <option value="N:1">N:1 — Many to One</option>
+                <option value="M:N">M:N — Many to Many</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -136,6 +222,18 @@ function RelationshipEditor() {
   const [showDisabled, setShowDisabled] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(null); // id being acted on
+  const [detectOpen, setDetectOpen] = useState(false);
+
+  const visibleRelationships = useMemo(
+    () => (filter.method ? relationships.filter(r => r.source_method === filter.method) : relationships),
+    [relationships, filter.method],
+  );
+  const methodCounts = useMemo(() => ({
+    '':       relationships.length,
+    inferred: relationships.filter(r => r.source_method === 'inferred').length,
+    mined:    relationships.filter(r => r.source_method === 'mined').length,
+    admin:    relationships.filter(r => r.source_method === 'admin').length,
+  }), [relationships]);
 
   // ─── Data loading ─────────────────────────────────────────────
 
@@ -144,7 +242,6 @@ function RelationshipEditor() {
     try {
       const result = await RelationshipService.getRelationships({
         catalog: filter.catalog || undefined,
-        method: filter.method || undefined,
         includeDisabled: showDisabled,
       });
       setRelationships(result.relationships || []);
@@ -153,7 +250,7 @@ function RelationshipEditor() {
     } finally {
       setLoading(false);
     }
-  }, [filter, showDisabled, showError]);
+  }, [filter.catalog, showDisabled, showError]);
 
   useEffect(() => { loadRelationships(); }, [loadRelationships]);
 
@@ -225,18 +322,23 @@ function RelationshipEditor() {
     <div className="h-full flex flex-col overflow-hidden">
       {/* Toolbar */}
       <div className={`flex flex-wrap items-center gap-2 px-6 py-3 border-b ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`}>
-        {/* Method filter */}
+        {/* Method filter with counts */}
         <div className="flex items-center gap-1">
-          {['', 'inferred', 'mined', 'admin'].map(m => (
-            <button key={m} onClick={() => setFilter(f => ({ ...f, method: m }))}
-              className={`px-2 py-1 text-xs rounded-md transition-colors ${
-                filter.method === m
-                  ? 'bg-[#5d6ad3] text-white'
-                  : isDark ? 'text-gray-400 hover:bg-[#2a2b2e]' : 'text-gray-500 hover:bg-gray-100'
-              }`}>
-              {m || 'All'}
-            </button>
-          ))}
+          {['', 'inferred', 'mined', 'admin'].map(m => {
+            const selected = filter.method === m;
+            const count = methodCounts[m];
+            return (
+              <button key={m} onClick={() => setFilter(f => ({ ...f, method: m }))}
+                className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+                  selected
+                    ? 'bg-[#5d6ad3] text-white'
+                    : isDark ? 'text-gray-400 hover:bg-[#2a2b2e]' : 'text-gray-500 hover:bg-gray-100'
+                }`}>
+                {m ? METHOD_LABELS[m] : 'All'}
+                <span className={`ml-1.5 ${selected ? 'text-white/70' : isDark ? 'text-gray-600' : 'text-gray-400'}`}>{count}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Catalog filter */}
@@ -250,40 +352,46 @@ function RelationshipEditor() {
           </select>
         )}
 
-        {/* Show disabled toggle */}
-        <label className={`flex items-center gap-1.5 text-xs cursor-pointer ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-          <input type="checkbox" checked={showDisabled} onChange={e => setShowDisabled(e.target.checked)} className="rounded" />
-          Show disabled
-        </label>
-
         <div className="flex-1" />
 
         {/* Admin actions */}
         {isAdmin && (
           <div className="flex items-center gap-2">
-            <button onClick={handleInfer} className={`px-2.5 py-1 text-xs rounded-md ${isDark ? 'text-gray-300 hover:bg-[#2a2b2e]' : 'text-gray-600 hover:bg-gray-100'}`}>
-              Auto-Infer
-            </button>
-            <button onClick={handleMine} className={`px-2.5 py-1 text-xs rounded-md ${isDark ? 'text-gray-300 hover:bg-[#2a2b2e]' : 'text-gray-600 hover:bg-gray-100'}`}>
-              Mine History
-            </button>
+            {/* Detect dropdown */}
+            <div className="relative">
+              <button onClick={() => setDetectOpen(v => !v)}
+                className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-md ${isDark ? 'text-gray-300 hover:bg-[#2a2b2e]' : 'text-gray-600 hover:bg-gray-100'}`}>
+                Detect
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+              {detectOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setDetectOpen(false)} />
+                  <div className={`absolute right-0 mt-1 w-64 rounded-lg border shadow-lg z-20 ${isDark ? 'bg-[#17181a] border-[#2a2b2e]' : 'bg-white border-gray-200'}`}>
+                    <button onClick={() => { handleInfer(); setDetectOpen(false); }}
+                      className={`w-full text-left px-3 py-2 text-xs ${isDark ? 'hover:bg-[#2a2b2e]' : 'hover:bg-gray-50'}`}>
+                      <div className={`font-medium ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>Suggest from column names</div>
+                      <div className={`text-[10px] mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Detect relationships by naming conventions</div>
+                    </button>
+                    <button onClick={() => { handleMine(); setDetectOpen(false); }}
+                      className={`w-full text-left px-3 py-2 text-xs ${isDark ? 'hover:bg-[#2a2b2e]' : 'hover:bg-gray-50'}`}>
+                      <div className={`font-medium ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>Learn from query history</div>
+                      <div className={`text-[10px] mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Extract JOIN patterns from past queries</div>
+                    </button>
+                    <div className={`border-t ${isDark ? 'border-[#2a2b2e]' : 'border-gray-200'}`} />
+                    <label className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer ${isDark ? 'text-gray-300 hover:bg-[#2a2b2e]' : 'text-gray-600 hover:bg-gray-50'}`}>
+                      <input type="checkbox" checked={showDisabled} onChange={e => setShowDisabled(e.target.checked)} className="rounded" />
+                      Show disabled rows
+                    </label>
+                  </div>
+                </>
+              )}
+            </div>
             <button onClick={() => setShowCreateModal(true)}
               className="px-3 py-1 text-xs font-medium rounded-md bg-[#5d6ad3] text-white hover:bg-[#4f5bc4]">
               + Add
             </button>
           </div>
-        )}
-      </div>
-
-      {/* Summary bar */}
-      <div className={`px-6 py-2 text-xs ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-        {loading ? 'Loading...' : `${relationships.length} relationship${relationships.length !== 1 ? 's' : ''}`}
-        {!loading && relationships.length > 0 && (
-          <span className="ml-2">
-            ({relationships.filter(r => r.is_verified).length} verified,{' '}
-            {relationships.filter(r => r.source_method === 'mined').length} mined,{' '}
-            {relationships.filter(r => r.source_method === 'inferred').length} inferred)
-          </span>
         )}
       </div>
 
@@ -293,78 +401,90 @@ function RelationshipEditor() {
           <div className={`text-center py-12 text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Loading relationships...</div>
         ) : relationships.length === 0 ? (
           <div className="text-center py-12">
-            <div className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>No relationships found</div>
+            <div className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>No relationships yet</div>
             <p className={`text-xs mt-1 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
-              Click "Auto-Infer" to detect relationships from column naming conventions,
-              or "Mine History" to extract JOIN patterns from past queries.
+              Use <span className="font-medium">Detect</span> to find relationships from column names or query history,
+              or click <span className="font-medium">+ Add</span> to create one manually.
             </p>
+          </div>
+        ) : visibleRelationships.length === 0 ? (
+          <div className="text-center py-12">
+            <div className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>No relationships match this filter</div>
           </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className={isDark ? 'text-gray-500' : 'text-gray-400'}>
-                <th className="text-left py-2 font-medium text-xs">Source</th>
-                <th className="text-left py-2 font-medium text-xs">Target</th>
-                <th className="text-left py-2 font-medium text-xs">Join Condition</th>
-                <th className="text-center py-2 font-medium text-xs w-12">Type</th>
-                <th className="text-center py-2 font-medium text-xs w-16">Method</th>
-                <th className="text-center py-2 font-medium text-xs w-20">Confidence</th>
-                <th className="text-center py-2 font-medium text-xs w-10">
-                  <svg className="w-3.5 h-3.5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                </th>
-                {isAdmin && <th className="text-right py-2 font-medium text-xs w-24">Actions</th>}
+                <th className="text-left py-2 pr-4 font-medium text-xs">Source</th>
+                <th className="text-left py-2 pr-4 font-medium text-xs">Target</th>
+                <th className="text-left py-2 pr-4 font-medium text-xs">Join Condition</th>
+                <th className="text-left py-2 pr-4 font-medium text-xs whitespace-nowrap">Type</th>
+                <th className="text-left py-2 pr-4 font-medium text-xs whitespace-nowrap">Confidence</th>
+                {isAdmin && <th className="text-right py-2 font-medium text-xs whitespace-nowrap">Actions</th>}
               </tr>
             </thead>
             <tbody>
-              {relationships.map(rel => (
+              {visibleRelationships.map(rel => (
                 <tr key={rel.id}
                   className={`border-t ${
                     rel.is_disabled
                       ? isDark ? 'border-[#2a2b2e] opacity-40' : 'border-gray-100 opacity-40'
                       : isDark ? 'border-[#2a2b2e] hover:bg-[#1a1b1d]' : 'border-gray-100 hover:bg-gray-50'
                   }`}>
-                  <td className={`py-2.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                    <span className={`text-[10px] ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>{rel.source_catalog}.{rel.source_schema}.</span>
-                    <span className="font-medium">{rel.source_table}</span>
+                  <td className={`py-2.5 pr-4 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{rel.source_table}</span>
+                      <MethodBadge method={rel.source_method} isDark={isDark} />
+                    </div>
+                    <div className={`text-[10px] mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                      {rel.source_catalog} · {rel.source_schema}
+                    </div>
                   </td>
-                  <td className={`py-2.5 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
-                    <span className={`text-[10px] ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>{rel.target_catalog}.{rel.target_schema}.</span>
-                    <span className="font-medium">{rel.target_table}</span>
+                  <td className={`py-2.5 pr-4 ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <div className="font-medium">{rel.target_table}</div>
+                    <div className={`text-[10px] mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                      {rel.target_catalog} · {rel.target_schema}
+                    </div>
                   </td>
-                  <td className={`py-2.5 font-mono text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <td className={`py-2.5 pr-4 font-mono text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                     {rel.join_condition}
                   </td>
-                  <td className={`py-2.5 text-center text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <td className={`py-2.5 pr-4 text-xs whitespace-nowrap ${isDark ? 'text-gray-400' : 'text-gray-500'}`}
+                    title={{
+                      '1:1': 'One to one — each row on the left maps to exactly one row on the right',
+                      '1:N': 'One to many — one row on the left maps to many on the right',
+                      'N:1': 'Many to one — many rows on the left map to one on the right',
+                      'M:N': 'Many to many — rows match in both directions',
+                    }[rel.relationship_type] || rel.relationship_type}>
                     {rel.relationship_type}
                   </td>
-                  <td className="py-2.5 text-center">
-                    <MethodBadge method={rel.source_method} isDark={isDark} />
-                  </td>
-                  <td className="py-2.5">
-                    <ConfidenceBar value={rel.confidence} isDark={isDark} />
-                  </td>
-                  <td className="py-2.5 text-center">
-                    {rel.is_verified && (
-                      <svg className="w-4 h-4 mx-auto text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
+                  <td className="py-2.5 pr-4">
+                    {(rel.is_verified || rel.source_method === 'admin') ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-[#5d6ad3]" title="Trusted — will be used by the query AI without hedging">
+                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                        Verified
+                      </span>
+                    ) : (
+                      <ConfidenceBar value={rel.confidence} isDark={isDark} />
                     )}
                   </td>
                   {isAdmin && (
                     <td className="py-2.5 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        {!rel.is_verified && !rel.is_disabled && (
+                        {!rel.is_verified && rel.source_method !== 'admin' && !rel.is_disabled && (
                           <button onClick={() => handleVerify(rel.id)} disabled={actionLoading === rel.id}
                             title="Verify"
-                            className={`p-1 rounded ${isDark ? 'hover:bg-[#2a2b2e] text-green-400' : 'hover:bg-gray-100 text-green-600'}`}>
+                            className={`p-1 rounded text-[#5d6ad3] ${isDark ? 'hover:bg-[#2a2b2e]' : 'hover:bg-gray-100'}`}>
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                           </button>
                         )}
                         {!rel.is_disabled && (
                           <button onClick={() => handleDisable(rel.id)} disabled={actionLoading === rel.id}
-                            title="Disable"
-                            className={`p-1 rounded ${isDark ? 'hover:bg-[#2a2b2e] text-yellow-400' : 'hover:bg-gray-100 text-yellow-600'}`}>
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                            title="Hide from query graph"
+                            className={`p-1 rounded ${isDark ? 'hover:bg-[#2a2b2e] text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
                           </button>
                         )}
                         <button onClick={() => handleDelete(rel.id)} disabled={actionLoading === rel.id}

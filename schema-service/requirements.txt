@@ -5,7 +5,7 @@ faiss-cpu>=1.7.0
 trino>=0.328.0
 pydantic>=2.0.0
 numpy>=1.21.0
-python-dotenv>=1.0.0
+python-dotenv>=1.2.2
 apscheduler>=3.10.0
 httpx>=0.24.0
 python-jose[cryptography]

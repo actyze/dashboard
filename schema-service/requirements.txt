@@ -7,7 +7,7 @@ pydantic>=2.0.0
 numpy>=1.21.0
 python-dotenv>=1.0.0
 apscheduler>=3.10.0
-httpx>=0.24.0
+httpx>=0.28.1
 python-jose[cryptography]
 psycopg2-binary>=2.9.0
 asyncpg>=0.29.0

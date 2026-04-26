@@ -1,6 +1,6 @@
 fastapi>=0.100.0
 uvicorn>=0.20.0
-sentence-transformers>=2.3.0
+sentence-transformers>=5.4.1
 faiss-cpu>=1.7.0
 trino>=0.328.0
 pydantic>=2.0.0

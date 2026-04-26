@@ -6,7 +6,7 @@ trino>=0.328.0
 pydantic>=2.0.0
 numpy>=1.21.0
 python-dotenv>=1.0.0
-apscheduler>=3.10.0
+apscheduler>=3.11.2
 httpx>=0.24.0
 python-jose[cryptography]
 psycopg2-binary>=2.9.0

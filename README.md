@@ -4,7 +4,7 @@
 
 ![Actyze UI](docs/images/actyze-ui.png)
 
-[Documentation](https://docs.actyze.io) · [Quick Start](#quick-start) · [Discord](#) · [Report an issue](https://github.com/actyze/dashboard/issues)
+[Website](https://actyze.ai) · [Documentation](https://docs.actyze.io) · [Quick Start](#quick-start) · [Helm charts](https://github.com/actyze/helm-charts) · [Docker Compose](https://github.com/actyze/dashboard-docker) · [Discord](#)
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
@@ -89,6 +89,13 @@ Frontend (React) --> Nexus API (FastAPI) --> Trino --> Your Databases
 - [Predictive intelligence test plan](PREDICTIVE_INTELLIGENCE_TEST_PLAN.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
+
+## Related Repositories
+
+- **[actyze/helm-charts](https://github.com/actyze/helm-charts)** — production Helm charts for Kubernetes deployments
+- **[actyze/dashboard-docker](https://github.com/actyze/dashboard-docker)** — Docker Compose deployment for local / single-host installs
+- **[docs.actyze.io](https://docs.actyze.io)** — product documentation
+- **[actyze.ai](https://actyze.ai)** — main website
 
 ## Contributing
 

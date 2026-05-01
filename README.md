@@ -1,32 +1,55 @@
 # Actyze
 
-**Open-source AI-native analytics platform.**
+**Open-source, self-hosted AI analytics platform.** Natural language to SQL across 50+ languages, federated queries via Trino, no-code ML predictions, voice queries, and 100+ LLM providers via LiteLLM.
 
-Ask questions in plain English, get SQL queries and interactive charts. Connect any database. Self-host in 2 minutes.
+![Actyze UI](docs/images/actyze-ui.png)
+
+[Website](https://actyze.ai) · [Documentation](https://docs.actyze.io) · [Quick Start](#quick-start) · [Helm charts](https://github.com/actyze/helm-charts) · [Docker Compose](https://github.com/actyze/dashboard-docker) · [Discord](#)
+
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
+[![GitHub stars](https://img.shields.io/github/stars/actyze/dashboard?style=social)](https://github.com/actyze/dashboard/stargazers)
+[![GitHub release](https://img.shields.io/github/v/release/actyze/dashboard?display_name=tag&include_prereleases)](https://github.com/actyze/dashboard/releases)
+[![GitHub issues](https://img.shields.io/github/issues/actyze/dashboard)](https://github.com/actyze/dashboard/issues)
+[![Contributors](https://img.shields.io/github/contributors/actyze/dashboard)](https://github.com/actyze/dashboard/graphs/contributors)
+
+---
+
+## Why Actyze
+
+Actyze is built for three teams:
+
+- **For teams already running Trino.** Actyze is the AI/BI layer Trino has been missing. Plug it in front of an existing Trino cluster, point it at your catalogs, and get natural-language queries, dashboards, and ML predictions on top of the federation you already have. No data movement, no rewrites.
+
+- **For Metabase or Superset users.** Add natural-language querying and no-code ML predictions without ripping out your stack. Actyze can run alongside your existing BI tool and federate the same sources, so you get LLM-driven exploration and forecasting without migrating dashboards or retraining users.
+
+- **For teams leaving Snowflake Cortex or Databricks Genie.** The same AI capabilities — text-to-SQL, semantic understanding, predictions — on your own infrastructure, with no per-credit pricing and no vendor lock-in. AGPL v3, self-hosted, and your data never leaves your network.
 
 ## Key Features
 
-- **Natural language to SQL** -- ask questions in plain English, get SQL and visualizations
-- **Semantic intelligence layer** -- persistent relationship graph with convention inference, query history mining, and admin curation for intelligent JOIN resolution
-- **Voice AI assistant** -- interact with your data using voice
-- **Federated querying via Trino** -- connect PostgreSQL, MySQL, Snowflake, BigQuery, and more
-- **Scheduled KPIs (gold layer)** -- pre-aggregate metrics on a schedule (1-24h), materialized as real queryable tables
-- **Interactive dashboards** -- Plotly-powered charts with drill-down and filtering
-- **100+ LLM providers** -- use Claude, GPT, Llama, Mistral, or any provider via LiteLLM
-- **Self-hosted** -- your data never leaves your infrastructure
+- **Natural language to SQL** — ask questions in plain English (50+ languages), get SQL and visualizations
+- **Federated querying via Trino** — connect PostgreSQL, MySQL, MongoDB, Snowflake, BigQuery, and more from a single query
+- **Semantic intelligence layer** — persistent relationship graph with convention inference, query history mining, and admin curation for accurate JOINs
+- **No-code ML predictions** — forecast, classify, and estimate using XGBoost, LightGBM, and AutoGluon workers
+- **Scheduled KPIs (gold layer)** — pre-aggregate metrics on a 1–24h schedule, materialized as real queryable tables
+- **100+ LLM providers via LiteLLM** — Anthropic, OpenAI, Gemini, Groq, Together, Perplexity, or any OpenAI-compatible endpoint
 
 ## Quick Start
 
 ```bash
 git clone https://github.com/actyze/dashboard.git
 cd dashboard/docker
-cp .env.example .env
+cp env.example .env
 # Edit .env — add your LLM API key (Anthropic, OpenAI, etc.)
-docker-compose --profile local up -d
+./start.sh
 ```
 
 - Frontend: http://localhost:3000
 - API: http://localhost:8000
+
+Default login: `nexus_admin` / `admin` (change before exposing the instance).
+
+See [docker/README.md](docker/README.md) for profiles (local, external Trino, postgres-only) and [docker/LLM_PROVIDERS.md](docker/LLM_PROVIDERS.md) for provider setup.
 
 ## Architecture
 
@@ -35,27 +58,48 @@ Frontend (React) --> Nexus API (FastAPI) --> Trino --> Your Databases
                          |
                    Schema Service (FAISS) + Relationship Graph (PostgreSQL)
                          |
-                   LLM Provider (Claude, GPT, etc.)
+                   LLM Provider (Claude, GPT, etc., via LiteLLM)
+                         |
+                   Prediction Workers (XGBoost / LightGBM / AutoGluon)
 ```
 
 | Component | Technology |
 |---|---|
-| Frontend | React 18, Material-UI |
-| Backend (Nexus) | FastAPI, Python 3.11 |
+| Frontend | React 18, Material-UI, Plotly |
+| Backend (Nexus) | FastAPI, Python 3.11, SQLAlchemy async |
 | Schema Service | FAISS vector search, spaCy NER |
 | Query Engine | Trino (federated SQL) |
-| Database | PostgreSQL |
+| Database | PostgreSQL 15 |
 | LLM Gateway | LiteLLM (100+ providers) |
+| Prediction Workers | XGBoost, LightGBM, AutoGluon |
+
+## See it in action
+
+- Live docs and walkthroughs: [docs.actyze.io](https://docs.actyze.io)
+- Demo videos: **TODO** — host `Actyze_ Data Clarity.mp4` and `Actyze_ Federated Querying.mp4` (e.g., upload to a GitHub issue/release asset or YouTube) and link them here.
 
 ## Documentation
 
-- [Docker Deployment Guide](docker/README.md)
-- [Contributing Guide](CONTRIBUTING.md)
-- [Security Policy](SECURITY.md)
+- [Docker deployment](docker/README.md)
+- [LLM providers](docker/LLM_PROVIDERS.md)
+- [Database migrations](DATABASE_MIGRATIONS.md)
+- [External Trino setup](EXTERNAL_TRINO_SETUP.md)
+- [External LLM setup](EXTERNAL_LLM_SETUP.md)
+- [Schema exclusion feature](SCHEMA_EXCLUSION_FEATURE.md)
+- [Predictive intelligence test plan](PREDICTIVE_INTELLIGENCE_TEST_PLAN.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+
+## Related Repositories
+
+- **[actyze/helm-charts](https://github.com/actyze/helm-charts)** — production Helm charts for Kubernetes deployments
+- **[actyze/dashboard-docker](https://github.com/actyze/dashboard-docker)** — Docker Compose deployment for local / single-host installs
+- **[docs.actyze.io](https://docs.actyze.io)** — product documentation
+- **[actyze.ai](https://actyze.ai)** — main website
 
 ## Contributing
 
-We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to get started.
+We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, branch conventions, the CLA, and where help matters most (synonym packs, relationship heuristics, verified query templates, KPI definitions).
 
 ## License
 

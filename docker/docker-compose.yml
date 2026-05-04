@@ -310,7 +310,7 @@ services:
         reservations:
           memory: 128M
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8400/health || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\\\"http://localhost:8400/health\\\", timeout=3).status==200 else 1)\""]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -349,7 +349,7 @@ services:
         reservations:
           memory: 128M
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8400/health || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\\\"http://localhost:8400/health\\\", timeout=3).status==200 else 1)\""]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -390,7 +390,7 @@ services:
         reservations:
           memory: 512M
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8400/health || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\\\"http://localhost:8400/health\\\", timeout=3).status==200 else 1)\""]
       interval: 30s
       timeout: 10s
       retries: 5

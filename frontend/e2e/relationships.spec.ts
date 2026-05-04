@@ -172,8 +172,9 @@ test.describe('Data Intelligence — Relationships Tab', () => {
 
     await page.getByRole('button', { name: '+ Add' }).click();
     await expect(page.getByText('Add Relationship')).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText('Add Relationship')).toBeVisible({ timeout: 5000 });
-    await expect(page.getByRole('button', { name: 'Create' })).toBeVisible();
+    // `exact: true` avoids matching the "Create a dashboard for sales" starter
+    // prompt button rendered by the floating Actyze AI widget.
+    await expect(page.getByRole('button', { name: 'Create', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
   });
 
@@ -200,7 +201,7 @@ test.describe('Data Intelligence — Relationships Tab', () => {
 
     await page.getByLabel('Join condition').fill('nation.regionkey = region.regionkey');
 
-    await page.getByRole('button', { name: 'Create' }).click();
+    await page.getByRole('button', { name: 'Create', exact: true }).click();
 
     // Modal should close
     await expect(page.getByText('Add Relationship')).not.toBeVisible({ timeout: 5000 });

@@ -1,0 +1,47 @@
+{{- if and .Values.predictionWorker.enabled .Values.predictionWorker.models.autogluon.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dashboard.fullname" . }}-prediction-worker-autogluon
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prediction-worker-autogluon
+spec:
+  replicas: {{ .Values.predictionWorker.models.autogluon.replicas | default 0 }}
+  selector:
+    matchLabels:
+      {{- include "dashboard.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: prediction-worker-autogluon
+  template:
+    metadata:
+      labels:
+        {{- include "dashboard.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: prediction-worker-autogluon
+    spec:
+      containers:
+      - name: prediction-worker-autogluon
+        image: "{{ .Values.predictionWorker.models.autogluon.image | default "actyze/prediction-worker-autogluon:latest" }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" }}
+        env:
+        - name: AUTOGLUON_PRESET
+          value: {{ .Values.predictionWorker.models.autogluon.preset | default "fast_training" | quote }}
+        ports:
+        - name: http
+          containerPort: 8400
+          protocol: TCP
+        resources:
+          {{- toYaml .Values.predictionWorker.models.autogluon.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+{{- end }}

@@ -438,6 +438,50 @@ monitoring:
     enabled: true
 
 # ============================================================================
+# PREDICTIVE INTELLIGENCE - ML Prediction Workers
+# ============================================================================
+# XGBoost + LightGBM enabled by default (tabular predictions, anomaly detection).
+# AutoGluon disabled by default — opt in via values-digitalocean-fixes.yaml or:
+#   helm upgrade dashboard ./dashboard --set predictionWorker.models.autogluon.enabled=true
+predictionWorker:
+  enabled: true
+  models:
+    xgboost:
+      enabled: true
+      image: actyze/prediction-worker-xgboost:latest
+      replicas: 1
+      resources:
+        limits:
+          cpu: "2"
+          memory: "1Gi"
+        requests:
+          cpu: "500m"
+          memory: "256Mi"
+    lightgbm:
+      enabled: true
+      image: actyze/prediction-worker-lightgbm:latest
+      replicas: 1
+      resources:
+        limits:
+          cpu: "2"
+          memory: "1Gi"
+        requests:
+          cpu: "500m"
+          memory: "256Mi"
+    autogluon:
+      enabled: false
+      image: actyze/prediction-worker-autogluon:latest
+      replicas: 1
+      preset: "fast_training"   # fast_training (CPU) | medium_quality | best_quality (GPU)
+      resources:
+        limits:
+          cpu: "4"
+          memory: "6Gi"
+        requests:
+          cpu: "1"
+          memory: "2Gi"
+
+# ============================================================================
 # PRODUCTION RECOMMENDATIONS
 # ============================================================================
 # 1. Set ingress.tls and configure cert-manager for HTTPS

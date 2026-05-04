@@ -16,3 +16,10 @@ schemaService:
 nexus:
   image:
     tag: "latest"  # Use latest instead of main-llm-flex
+
+# Enable AutoGluon time-series forecasting on demo
+# (heavier ~3.9GB image, 2-6GB RAM — disabled in base values.yaml)
+predictionWorker:
+  models:
+    autogluon:
+      enabled: true

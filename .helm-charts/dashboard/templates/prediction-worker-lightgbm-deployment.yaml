@@ -1,0 +1,44 @@
+{{- if and .Values.predictionWorker.enabled .Values.predictionWorker.models.lightgbm.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dashboard.fullname" . }}-prediction-worker-lightgbm
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prediction-worker-lightgbm
+spec:
+  replicas: {{ .Values.predictionWorker.models.lightgbm.replicas | default 0 }}
+  selector:
+    matchLabels:
+      {{- include "dashboard.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: prediction-worker-lightgbm
+  template:
+    metadata:
+      labels:
+        {{- include "dashboard.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: prediction-worker-lightgbm
+    spec:
+      containers:
+      - name: prediction-worker-lightgbm
+        image: "{{ .Values.predictionWorker.models.lightgbm.image | default "actyze/prediction-worker-lightgbm:latest" }}"
+        imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" }}
+        ports:
+        - name: http
+          containerPort: 8400
+          protocol: TCP
+        resources:
+          {{- toYaml .Values.predictionWorker.models.lightgbm.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+{{- end }}

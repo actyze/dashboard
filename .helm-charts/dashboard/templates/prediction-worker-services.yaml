@@ -1,0 +1,67 @@
+{{- if .Values.predictionWorker.enabled }}
+{{- if .Values.predictionWorker.models.xgboost.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prediction-worker-xgboost
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prediction-worker-xgboost
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8400
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "dashboard.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: prediction-worker-xgboost
+{{- end }}
+
+{{- if .Values.predictionWorker.models.lightgbm.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prediction-worker-lightgbm
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prediction-worker-lightgbm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8400
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "dashboard.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: prediction-worker-lightgbm
+{{- end }}
+
+{{- if .Values.predictionWorker.models.autogluon.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prediction-worker-autogluon
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: prediction-worker-autogluon
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8400
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "dashboard.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: prediction-worker-autogluon
+{{- end }}
+{{- end }}

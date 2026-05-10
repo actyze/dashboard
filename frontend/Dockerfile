@@ -1,5 +1,5 @@
 # Build stage
-FROM node:18-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 
 # Copy package files first for better caching

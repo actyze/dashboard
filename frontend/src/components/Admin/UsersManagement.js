@@ -123,27 +123,42 @@ const UsersManagement = forwardRef((props, ref) => {
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
-    
+
     try {
       const response = await AdminService.createUser(formData);
-      if (response.success) {
-        showSuccess(`User ${formData.username} created successfully`);
-        handleCloseCreateDialog();
-        await loadUsers();
-        
-        // Automatically open data access dialog for non-admin users (USER and READONLY)
-        if (formData.role !== 'ADMIN' && response.user) {
+
+      // Accept both shapes: {success: true, user: {...}} OR the user object directly
+      const createdUser = response?.user ?? response;
+      const succeeded = response?.success === true || (createdUser && (createdUser.id || createdUser.username));
+
+      if (!succeeded) {
+        showError(response?.detail || response?.message || 'Failed to create user');
+        return;
+      }
+
+      showSuccess(`User ${formData.username} created successfully`);
+      handleCloseCreateDialog();
+      await loadUsers();
+
+      // Automatically open data access dialog for non-admin users (USER and READONLY).
+      // Only do this if we have a usable id — otherwise the dialog crashes mid-render
+      // and the whole page goes blank with console errors.
+      if (formData.role !== 'ADMIN' && createdUser && createdUser.id) {
+        try {
           setEditingUser({
-            id: response.user.id,
-            username: response.user.username || formData.username,
-            email: response.user.email || formData.email,
-            full_name: response.user.full_name || formData.full_name,
-            role: response.user.role || formData.role
+            id: createdUser.id,
+            username: createdUser.username || formData.username,
+            email: createdUser.email || formData.email,
+            full_name: createdUser.full_name || formData.full_name,
+            role: createdUser.role || formData.role,
           });
+        } catch (autoOpenErr) {
+          // Never let the auto-open path crash the admin panel.
+          console.error('Failed to auto-open access dialog for new user:', autoOpenErr);
         }
       }
     } catch (err) {
-      showError(err.response?.data?.detail || 'Failed to create user');
+      showError(err.response?.data?.detail || err.message || 'Failed to create user');
     }
   };
 

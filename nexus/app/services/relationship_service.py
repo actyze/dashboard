@@ -442,6 +442,95 @@ class RelationshipService:
     # Convention Inference
     # =========================================================================
 
+    # Schemas excluded from convention inference — system + Actyze-internal
+    _EXCLUDED_INFERENCE_SCHEMAS: Set[str] = {
+        "information_schema",
+        "pg_catalog",
+        "pg_internal",
+        "sys",
+        "nexus",
+        "kpi_data",
+        "prediction_data",
+    }
+
+    @staticmethod
+    def _is_safe_identifier(name: str) -> bool:
+        """Trino identifier sanity check — letters, digits, underscore only."""
+        return bool(name) and all(c.isalnum() or c == "_" for c in name)
+
+    async def _fetch_tables_metadata_via_trino(
+        self, catalog: str, schema: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Fetch table+column metadata from Trino's information_schema.
+
+        Returns the shape expected by run_convention_inference:
+          [{full_name: "catalog.schema.table", table_name: "table", columns: [...]}, ...]
+
+        Called when the UI triggers inference with only a catalog — the
+        endpoint can resolve the metadata itself instead of forcing the
+        client to send it.
+        """
+        if not self._is_safe_identifier(catalog):
+            logger.warning("fetch_tables_metadata_unsafe_catalog", catalog=catalog)
+            return []
+        if schema is not None and not self._is_safe_identifier(schema):
+            logger.warning("fetch_tables_metadata_unsafe_schema", schema=schema)
+            return []
+
+        from app.services.trino_service import TrinoService
+        _trino = TrinoService()
+
+        where_schema = f"AND table_schema = '{schema}'" if schema else ""
+        sql = f"""
+            SELECT table_schema, table_name,
+                   ARRAY_AGG(column_name ORDER BY ordinal_position) AS columns
+            FROM "{catalog}".information_schema.columns
+            WHERE table_schema NOT IN ({", ".join(f"'{s}'" for s in self._EXCLUDED_INFERENCE_SCHEMAS)})
+              {where_schema}
+            GROUP BY table_schema, table_name
+            ORDER BY table_schema, table_name
+        """
+
+        try:
+            result = await _trino.execute_query(sql, max_results=5000)
+        except Exception as exc:
+            logger.error(
+                "fetch_tables_metadata_trino_error",
+                catalog=catalog,
+                schema=schema,
+                error=str(exc),
+            )
+            return []
+
+        if not result.get("success"):
+            logger.warning(
+                "fetch_tables_metadata_query_failed",
+                catalog=catalog,
+                schema=schema,
+                error=result.get("error"),
+            )
+            return []
+
+        rows = result.get("query_results", {}).get("rows", []) or []
+        metadata: List[Dict[str, Any]] = []
+        for row in rows:
+            if len(row) < 3:
+                continue
+            row_schema, row_table, row_columns = row[0], row[1], row[2] or []
+            metadata.append({
+                "full_name": f"{catalog}.{row_schema}.{row_table}",
+                "table_name": row_table,
+                "columns": row_columns,
+            })
+
+        logger.info(
+            "fetch_tables_metadata_ok",
+            catalog=catalog,
+            schema=schema,
+            table_count=len(metadata),
+        )
+        return metadata
+
     async def run_convention_inference(
         self,
         catalog: str,
@@ -456,13 +545,23 @@ class RelationshipService:
         Args:
             catalog: Catalog to infer relationships for
             schema: Optional schema filter
-            tables_metadata: List of dicts with keys: full_name, table_name, columns (list of column names)
+            tables_metadata: Optional pre-fetched list of dicts with keys:
+                full_name, table_name, columns. When None (the UI's default),
+                metadata is fetched from Trino's information_schema.
 
         Returns:
-            Summary of what was created/skipped
+            Summary of what was created/skipped + table count processed
         """
+        if tables_metadata is None:
+            tables_metadata = await self._fetch_tables_metadata_via_trino(catalog, schema)
+
         if not tables_metadata:
-            return {"created": 0, "skipped": 0, "errors": []}
+            logger.warning(
+                "convention_inference_no_tables",
+                catalog=catalog,
+                schema=schema,
+            )
+            return {"created": 0, "skipped": 0, "errors": [], "tables_processed": 0}
 
         created = 0
         skipped = 0
@@ -649,12 +748,18 @@ class RelationshipService:
             "Convention inference completed",
             catalog=catalog,
             schema=schema,
+            tables_processed=len(tables_metadata),
             created=created,
             skipped=skipped,
             errors=len(errors),
         )
 
-        return {"created": created, "skipped": skipped, "errors": errors}
+        return {
+            "created": created,
+            "skipped": skipped,
+            "errors": errors,
+            "tables_processed": len(tables_metadata),
+        }
 
     # =========================================================================
     # Audit Logging

@@ -126,3 +126,4 @@ helm/dashboard/values-*-secrets.yaml
 # Claude Code
 .mcp.json
 .claude/
+.claude-drafts/

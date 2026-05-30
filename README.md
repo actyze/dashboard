@@ -4,7 +4,7 @@
 
 ![Actyze UI](docs/images/actyze-ui.png)
 
-[Website](https://actyze.ai) · [Documentation](https://docs.actyze.io) · [Quick Start](#quick-start) · [Helm charts](https://github.com/actyze/helm-charts) · [Docker Compose](https://github.com/actyze/dashboard-docker) · [Discord](#)
+[Website](https://actyze.ai) · [Documentation](https://docs.actyze.io) · [Quick Start](#quick-start) · [Helm charts](https://github.com/actyze/helm-charts) · [Docker Compose](https://github.com/actyze/dashboard-docker) · [Discussions](https://github.com/actyze/dashboard/discussions)
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)

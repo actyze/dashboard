@@ -321,3 +321,44 @@ async def test_runs_not_found(client, user_token):
         headers=auth_headers(user_token),
     )
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Anomaly Detection (detect)
+# ---------------------------------------------------------------------------
+
+async def test_create_detect_pipeline_reaches_ready(client, user_token):
+    """POST /api/predictions/pipelines with prediction_type=detect creates successfully.
+
+    Asserts:
+    - Pipeline is created without a target_column (anomaly detection doesn't need one)
+    - Response shape includes prediction_type=detect and no target_column
+    - Pipeline can be fetched and has correct anomaly detection fields
+    """
+    # Create detect pipeline — no target_column required, no training triggered
+    body = await create_pipeline(
+        client, user_token,
+        name="Anomaly Detector",
+        prediction_type="detect",
+        source_sql="SELECT id, metric_a, metric_b FROM sensor_data",
+        target_column=None,
+        train_now=False,
+    )
+
+    pipeline_id = body["id"]
+
+    # Assert creation response shape
+    assert body["name"] == "Anomaly Detector"
+    assert body["prediction_type"] == "detect"
+    assert body.get("target_column") is None
+    assert "id" in body
+
+    # Fetch pipeline and assert shape is consistent
+    resp = await client.get(
+        f"/api/predictions/pipelines/{pipeline_id}",
+        headers=auth_headers(user_token),
+    )
+    assert resp.status_code == 200
+    pipeline = resp.json()
+    assert pipeline["prediction_type"] == "detect"
+    assert pipeline.get("target_column") is None

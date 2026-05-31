@@ -12,7 +12,7 @@ Endpoints:
   GET    /api/kpi/{kpi_id}/values          — get metric values (time-series)
   GET    /api/kpi/{kpi_id}/summary         — get aggregation summary
 """
-
+import re
 from typing import Optional
 
 import structlog
@@ -25,6 +25,30 @@ from app.services.kpi_service import kpi_service
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/kpi", tags=["Scheduled KPIs"])
+
+
+# fix/validate-kpi-sql-select #167
+
+
+
+def _validate_select_sql(sql: str) -> None:
+    """
+    Raise HTTPException 400 if the SQL is not a SELECT or WITH statement.
+    Strips leading whitespace and single-line comments before checking.
+    """
+    # Remove leading blank lines and -- comments line by line
+    lines = sql.splitlines()
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("--"):
+            continue  # skip blank lines and comments
+        first_keyword = stripped.split()[0].upper()
+        if first_keyword not in ("SELECT", "WITH"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"KPI SQL must start with SELECT or WITH, got '{first_keyword}'.",
+            )
+        return  # first real keyword is valid, stop checking
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +93,7 @@ async def create_kpi(
     current_user: dict = Depends(require_editor),
 ):
     """Create a new scheduled KPI definition."""
+    _validate_select_sql(body.sql_query)
     user_id = str(current_user.get("id"))
     result = await kpi_service.create_kpi(
         name=body.name,
@@ -106,6 +131,8 @@ async def update_kpi(
     user_id = str(current_user.get("id"))
     is_admin = "ADMIN" in current_user.get("roles", [])
     updates = body.model_dump(exclude_none=True)
+    if "sql_query" in updates:
+        _validate_select_sql(updates["sql_query"])
     result = await kpi_service.update_kpi(kpi_id, user_id, updates, is_admin=is_admin)
     if not result:
         raise HTTPException(status_code=404, detail="KPI not found or not owned by you")
@@ -144,8 +171,13 @@ async def collect_kpi(
 
     user_id = str(current_user.get("id"))
     is_admin = "ADMIN" in current_user.get("roles", [])
-    if not is_admin and (not kpi.get("owner_user_id") or kpi["owner_user_id"] != user_id):
-        raise HTTPException(status_code=403, detail="Only the KPI owner or an admin can trigger collection")
+    if not is_admin and (
+        not kpi.get("owner_user_id") or kpi["owner_user_id"] != user_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Only the KPI owner or an admin can trigger collection",
+        )
 
     background_tasks.add_task(_collect_kpi_bg, kpi_id)
     return {"success": True, "kpi_id": kpi_id, "message": "Collection started"}
@@ -200,6 +232,8 @@ async def _collect_kpi_bg(kpi_id: str) -> None:
         if result.get("success"):
             logger.info(f"Background KPI collection succeeded: {kpi_id}")
         else:
-            logger.warning(f"Background KPI collection failed: {kpi_id} - {result.get('error')}")
+            logger.warning(
+                f"Background KPI collection failed: {kpi_id} - {result.get('error')}"
+            )
     except Exception as exc:
         logger.error(f"Background KPI collection error: {kpi_id} - {exc}")

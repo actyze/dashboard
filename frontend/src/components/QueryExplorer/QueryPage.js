@@ -13,13 +13,14 @@ import { QueryManagementService } from '../../services';
 import PreferencesService from '../../services/PreferencesService';
 import SaveQueryDialog from './SaveQueryDialog';
 import UnsavedChangesDialog from './UnsavedChangesDialog';
+import { useToast } from '../../contexts/ToastContext';
 
 const QueryPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { isDark } = useTheme();
-  
+  const { showSuccess, showError } = useToast();
   const queryFromState = location.state?.query;
   
   const [queryName, setQueryName] = useState(queryFromState?.query_name || queryFromState?.created_at || 'Untitled Query');
@@ -531,6 +532,21 @@ const QueryPage = () => {
     sessionIdRef.current = `session-${id || 'new'}-${Date.now()}`;
     console.log(`Conversation history cleared for query ${id || 'new'} - starting fresh session`);
   };
+  const handleCopySql = async () => {
+  try {
+    if (!navigator.clipboard) {
+      showError('Clipboard not supported in this browser');
+      return;
+    }
+
+    await navigator.clipboard.writeText(sqlQuery);
+
+    showSuccess('Copied to clipboard');
+  } catch (error) {
+    console.error('Copy failed:', error);
+    showError('Failed to copy to clipboard');
+  }
+};
 
   const handleExecuteQuery = () => {
     setQueryError(null);
@@ -727,6 +743,34 @@ const QueryPage = () => {
                 
                 {/* Control Buttons */}
                 <div className="flex items-center space-x-2">
+              
+                  {/* Copy SQL Button */}
+                  <button
+                    onClick={handleCopySql}
+                    className={`
+                      p-2 rounded-md transition-all duration-300
+                      ${isDark
+                        ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                        : 'bg-white hover:bg-gray-50 text-gray-600 border border-gray-200'
+                      }
+                    `}
+                    title="Copy SQL"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                      />
+                    </svg>
+                  </button>
+
                   {/* Execute Query Button */}
                   <div className="relative group">
                       <button

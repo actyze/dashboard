@@ -52,7 +52,7 @@ prometheus-client==0.24.1
 # Utilities
 python-multipart==0.0.20
 python-dotenv==1.0.1
-typing-extensions>=4.11,<5  # Compatible with both litellm and openai
+typing-extensions>=4.15.0,<5  # Compatible with both litellm and openai
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 

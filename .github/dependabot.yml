@@ -1,34 +1,80 @@
+# Dependabot configuration
+#
+# Strategy (tuned to keep PR volume low and reviewable):
+#   - interval: monthly        -> one batch per month, not a weekly trickle
+#   - groups: minor + patch     -> bundled into ONE PR per ecosystem/dir
+#   - major versions            -> left UNgrouped so each risky bump (e.g. react
+#                                  18->19, pandas 2->3) gets its own reviewable PR
+#   - open-pull-requests-limit  -> hard cap on concurrent open PRs per entry
+#
+# A companion workflow (.github/workflows/dependabot-monthly-issue.yml) opens a
+# monthly tracking issue that digests the open Dependabot PRs.
 version: 2
 updates:
+  # ---- GitHub Actions (was previously untracked) ----
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      actions-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # ---- Frontend (npm) ----
   - package-ecosystem: npm
     directory: /frontend
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
 
+  # ---- Nexus API (pip) ----
   - package-ecosystem: pip
     directory: /nexus
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      pip-minor-patch:
+        update-types: ["minor", "patch"]
 
+  # ---- Schema Service (pip) ----
   - package-ecosystem: pip
     directory: /schema-service
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      pip-minor-patch:
+        update-types: ["minor", "patch"]
 
+  # ---- Docker base images ----
   - package-ecosystem: docker
     directory: /frontend
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      docker-minor-patch:
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: docker
     directory: /nexus
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      docker-minor-patch:
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: docker
     directory: /schema-service
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      docker-minor-patch:
+        update-types: ["minor", "patch"]

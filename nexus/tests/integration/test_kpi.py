@@ -370,3 +370,48 @@ async def test_update_kpi_rejects_insert_sql(client, user_token):
         headers=auth_headers(user_token),
     )
     assert resp.status_code == 400
+
+
+async def test_create_kpi_accepts_block_comment_before_select(client, user_token):
+    """POST /api/kpi accepts SQL with a leading /* */ block comment before SELECT."""
+    resp = await client.post(
+        "/api/kpi",
+        json={
+            "name": "Block Comment KPI",
+            "sql_query": "/* leading note */ SELECT 1 AS value",
+            "interval_hours": 1,
+            "is_active": False,
+        },
+        headers=auth_headers(user_token),
+    )
+    assert resp.status_code == 200
+
+
+async def test_create_kpi_accepts_lowercase_select(client, user_token):
+    """POST /api/kpi accepts lowercase select (keyword check is case-insensitive)."""
+    resp = await client.post(
+        "/api/kpi",
+        json={
+            "name": "Lowercase KPI",
+            "sql_query": "select 1 as value",
+            "interval_hours": 1,
+            "is_active": False,
+        },
+        headers=auth_headers(user_token),
+    )
+    assert resp.status_code == 200
+
+
+async def test_create_kpi_rejects_whitespace_only_sql(client, user_token):
+    """POST /api/kpi rejects whitespace-only SQL (not a SELECT/WITH statement)."""
+    resp = await client.post(
+        "/api/kpi",
+        json={
+            "name": "Blank KPI",
+            "sql_query": "   \n   ",
+            "interval_hours": 1,
+            "is_active": False,
+        },
+        headers=auth_headers(user_token),
+    )
+    assert resp.status_code == 400

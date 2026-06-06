@@ -12,7 +12,6 @@ Endpoints:
   GET    /api/kpi/{kpi_id}/values          — get metric values (time-series)
   GET    /api/kpi/{kpi_id}/summary         — get aggregation summary
 """
-import re
 from typing import Optional
 
 import structlog
@@ -21,34 +20,24 @@ from pydantic import BaseModel, Field
 
 from app.auth.dependencies import require_viewer, require_editor
 from app.services.kpi_service import kpi_service
+from app.utils.sql_parser import is_select_query
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/kpi", tags=["Scheduled KPIs"])
 
 
-# fix/validate-kpi-sql-select #167
-
-
-
 def _validate_select_sql(sql: str) -> None:
+    """Raise HTTPException 400 unless the SQL is a read-only SELECT/WITH statement.
+
+    Reuses the shared ``is_select_query`` parser (also used by the /execute-sql
+    endpoint), which strips ``--`` and ``/* */`` comments and rejects empty input.
     """
-    Raise HTTPException 400 if the SQL is not a SELECT or WITH statement.
-    Strips leading whitespace and single-line comments before checking.
-    """
-    # Remove leading blank lines and -- comments line by line
-    lines = sql.splitlines()
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("--"):
-            continue  # skip blank lines and comments
-        first_keyword = stripped.split()[0].upper()
-        if first_keyword not in ("SELECT", "WITH"):
-            raise HTTPException(
-                status_code=400,
-                detail=f"KPI SQL must start with SELECT or WITH, got '{first_keyword}'.",
-            )
-        return  # first real keyword is valid, stop checking
+    if not is_select_query(sql):
+        raise HTTPException(
+            status_code=400,
+            detail="KPI SQL must be a read-only SELECT or WITH statement.",
+        )
 
 
 # ---------------------------------------------------------------------------

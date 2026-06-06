@@ -8,27 +8,34 @@ from .conftest import create_user, login, auth_headers
 @pytest.fixture
 async def user_token(client, db_session):
     """Create a standard USER and return their auth token."""
-    user = await create_user(db_session, username="kpi_user", password="pass", roles=["USER"])
+    user = await create_user(
+        db_session, username="kpi_user", password="pass", roles=["USER"]
+    )
     return await login(client, user["username"], "pass")
 
 
 @pytest.fixture
 async def admin_token(client, db_session):
     """Create an ADMIN user and return their auth token."""
-    user = await create_user(db_session, username="kpi_admin", password="pass", roles=["ADMIN"])
+    user = await create_user(
+        db_session, username="kpi_admin", password="pass", roles=["ADMIN"]
+    )
     return await login(client, user["username"], "pass")
 
 
 @pytest.fixture
 async def readonly_token(client, db_session):
     """Create a READONLY user and return their auth token."""
-    user = await create_user(db_session, username="kpi_readonly", password="pass", roles=["READONLY"])
+    user = await create_user(
+        db_session, username="kpi_readonly", password="pass", roles=["READONLY"]
+    )
     return await login(client, user["username"], "pass")
 
 
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
+
 
 async def create_kpi(client, token, **overrides):
     """Create a KPI and return the response body."""
@@ -46,6 +53,7 @@ async def create_kpi(client, token, **overrides):
 # ---------------------------------------------------------------------------
 # CRUD
 # ---------------------------------------------------------------------------
+
 
 async def test_create_kpi(client, user_token):
     """POST /api/kpi creates a KPI definition."""
@@ -125,7 +133,9 @@ async def test_delete_kpi_not_owned(client, db_session, user_token):
     created = await create_kpi(client, user_token, name="Not Yours")
     kpi_id = created["id"]
 
-    other = await create_user(db_session, username="other_user", password="pass", roles=["USER"])
+    other = await create_user(
+        db_session, username="other_user", password="pass", roles=["USER"]
+    )
     other_token = await login(client, other["username"], "pass")
 
     resp = await client.delete(f"/api/kpi/{kpi_id}", headers=auth_headers(other_token))
@@ -135,6 +145,7 @@ async def test_delete_kpi_not_owned(client, db_session, user_token):
 # ---------------------------------------------------------------------------
 # Interval validation
 # ---------------------------------------------------------------------------
+
 
 async def test_interval_validation_min(client, user_token):
     """interval_hours < 1 is rejected."""
@@ -159,6 +170,7 @@ async def test_interval_validation_max(client, user_token):
 # ---------------------------------------------------------------------------
 # RBAC
 # ---------------------------------------------------------------------------
+
 
 async def test_readonly_can_list_kpis(client, readonly_token, user_token):
     """READONLY users can view KPIs."""
@@ -202,6 +214,7 @@ async def test_unauthenticated_access(client):
 # Values & Summary (no Trino in integration tests, so collection is skipped)
 # ---------------------------------------------------------------------------
 
+
 async def test_values_empty_when_inactive(client, user_token):
     """GET /api/kpi/{id}/values returns empty when KPI created inactive (no background collection)."""
     created = await create_kpi(client, user_token, name="No Data", is_active=False)
@@ -219,7 +232,9 @@ async def test_values_empty_when_inactive(client, user_token):
 
 async def test_summary_empty_when_inactive(client, user_token):
     """GET /api/kpi/{id}/summary returns zero when KPI created inactive."""
-    created = await create_kpi(client, user_token, name="No Data Summary", is_active=False)
+    created = await create_kpi(
+        client, user_token, name="No Data Summary", is_active=False
+    )
     kpi_id = created["id"]
 
     resp = await client.get(
@@ -259,6 +274,7 @@ async def test_values_not_found(client, user_token):
 # Toggle active
 # ---------------------------------------------------------------------------
 
+
 async def test_toggle_active(client, user_token):
     """PUT with is_active=false pauses the KPI."""
     created = await create_kpi(client, user_token, name="Pausable")
@@ -281,3 +297,121 @@ async def test_toggle_active(client, user_token):
     )
     assert resp.status_code == 200
     assert resp.json()["is_active"] is True
+
+
+# ---------------------------------------------------------------------------
+# SQL validation (issue #167)
+# ---------------------------------------------------------------------------
+
+
+async def test_create_kpi_rejects_insert(client, user_token):
+    """POST /api/kpi rejects INSERT statements with 400."""
+    resp = await client.post(
+        "/api/kpi",
+        json={
+            "name": "Bad KPI",
+            "sql_query": "INSERT INTO foo VALUES (1)",
+            "interval_hours": 1,
+        },
+        headers=auth_headers(user_token),
+    )
+    assert resp.status_code == 400
+    assert "SELECT" in resp.json()["detail"]
+
+
+async def test_create_kpi_rejects_delete(client, user_token):
+    """POST /api/kpi rejects DELETE statements with 400."""
+    resp = await client.post(
+        "/api/kpi",
+        json={"name": "Bad KPI", "sql_query": "DELETE FROM foo", "interval_hours": 1},
+        headers=auth_headers(user_token),
+    )
+    assert resp.status_code == 400
+
+
+async def test_create_kpi_accepts_with_cte(client, user_token):
+    """POST /api/kpi accepts WITH ... SELECT (CTE) statements."""
+    resp = await client.post(
+        "/api/kpi",
+        json={
+            "name": "CTE KPI",
+            "sql_query": "WITH foo AS (SELECT 1) SELECT * FROM foo",
+            "interval_hours": 1,
+            "is_active": False,
+        },
+        headers=auth_headers(user_token),
+    )
+    assert resp.status_code == 200
+
+
+async def test_create_kpi_accepts_comment_before_select(client, user_token):
+    """POST /api/kpi accepts SQL with leading -- comment before SELECT."""
+    resp = await client.post(
+        "/api/kpi",
+        json={
+            "name": "Commented KPI",
+            "sql_query": "-- my comment\nSELECT 1 AS value",
+            "interval_hours": 1,
+            "is_active": False,
+        },
+        headers=auth_headers(user_token),
+    )
+    assert resp.status_code == 200
+
+
+async def test_update_kpi_rejects_insert_sql(client, user_token):
+    """PUT /api/kpi/{id} rejects updating sql_query to an INSERT statement."""
+    created = await create_kpi(client, user_token, name="Update SQL Test")
+    kpi_id = created["id"]
+
+    resp = await client.put(
+        f"/api/kpi/{kpi_id}",
+        json={"sql_query": "INSERT INTO foo VALUES (1)"},
+        headers=auth_headers(user_token),
+    )
+    assert resp.status_code == 400
+
+
+async def test_create_kpi_accepts_block_comment_before_select(client, user_token):
+    """POST /api/kpi accepts SQL with a leading /* */ block comment before SELECT."""
+    resp = await client.post(
+        "/api/kpi",
+        json={
+            "name": "Block Comment KPI",
+            "sql_query": "/* leading note */ SELECT 1 AS value",
+            "interval_hours": 1,
+            "is_active": False,
+        },
+        headers=auth_headers(user_token),
+    )
+    assert resp.status_code == 200
+
+
+async def test_create_kpi_accepts_lowercase_select(client, user_token):
+    """POST /api/kpi accepts lowercase select (keyword check is case-insensitive)."""
+    resp = await client.post(
+        "/api/kpi",
+        json={
+            "name": "Lowercase KPI",
+            "sql_query": "select 1 as value",
+            "interval_hours": 1,
+            "is_active": False,
+        },
+        headers=auth_headers(user_token),
+    )
+    assert resp.status_code == 200
+
+
+async def test_create_kpi_rejects_whitespace_only_sql(client, user_token):
+    """POST /api/kpi rejects whitespace-only SQL (not a SELECT/WITH statement)."""
+    resp = await client.post(
+        "/api/kpi",
+        json={
+            "name": "Blank KPI",
+            "sql_query": "   \n   ",
+            "interval_hours": 1,
+            "is_active": False,
+        },
+        headers=auth_headers(user_token),
+    )
+    assert resp.status_code == 400

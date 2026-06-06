@@ -58,6 +58,8 @@ const OnboardingChecklist = () => {
       <button
         type="button"
         onClick={toggleCollapsed}
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? 'Expand setup checklist' : 'Collapse setup checklist'}
         className={`w-full text-left px-5 pt-4 pb-3 ${!collapsed ? (isDark ? 'border-b border-white/5' : 'border-b border-gray-100') : ''}`}
       >
         <div className="flex items-start justify-between gap-3">

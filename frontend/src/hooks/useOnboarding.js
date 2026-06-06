@@ -83,11 +83,6 @@ export const useOnboarding = () => {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const setCollapsedPersisted = useCallback((value) => {
-    writeCollapsed(value);
-    setCollapsed(value);
-  }, []);
-
   const toggleCollapsed = useCallback(() => {
     setCollapsed(prev => {
       const next = !prev;
@@ -102,7 +97,7 @@ export const useOnboarding = () => {
 
   return {
     loading, steps, completeCount, allDone,
-    collapsed, toggleCollapsed, setCollapsed: setCollapsedPersisted,
+    collapsed, toggleCollapsed,
     refresh,
   };
 };

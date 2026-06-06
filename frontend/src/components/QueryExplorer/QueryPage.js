@@ -533,20 +533,28 @@ const QueryPage = () => {
     console.log(`Conversation history cleared for query ${id || 'new'} - starting fresh session`);
   };
   const handleCopySql = async () => {
-  try {
-    if (!navigator.clipboard) {
-      showError('Clipboard not supported in this browser');
-      return;
+    if (!sqlQuery.trim()) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(sqlQuery);
+      } else {
+        // Fallback for insecure (non-HTTPS) contexts where the Clipboard API is unavailable
+        const textarea = document.createElement('textarea');
+        textarea.value = sqlQuery;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      showSuccess('Copied to clipboard');
+    } catch (error) {
+      console.error('Copy failed:', error);
+      showError('Failed to copy to clipboard');
     }
-
-    await navigator.clipboard.writeText(sqlQuery);
-
-    showSuccess('Copied to clipboard');
-  } catch (error) {
-    console.error('Copy failed:', error);
-    showError('Failed to copy to clipboard');
-  }
-};
+  };
 
   const handleExecuteQuery = () => {
     setQueryError(null);
@@ -743,18 +751,21 @@ const QueryPage = () => {
                 
                 {/* Control Buttons */}
                 <div className="flex items-center space-x-2">
-              
+
                   {/* Copy SQL Button */}
                   <button
                     onClick={handleCopySql}
+                    disabled={!sqlQuery.trim()}
+                    aria-label="Copy SQL"
+                    title="Copy SQL"
                     className={`
                       p-2 rounded-md transition-all duration-300
+                      disabled:opacity-40 disabled:cursor-not-allowed
                       ${isDark
                         ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
                         : 'bg-white hover:bg-gray-50 text-gray-600 border border-gray-200'
                       }
                     `}
-                    title="Copy SQL"
                   >
                     <svg
                       className="w-4 h-4"

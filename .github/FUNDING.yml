@@ -1,0 +1,11 @@
+# GitHub Sponsors / funding sources for Actyze
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+#
+# Uncomment + populate any line below as those funding profiles get set up.
+# Even an empty file with a single platform listed shows the "Sponsor" button on the repo.
+
+github: [actyze]
+# open_collective: actyze
+# patreon: actyze
+# tidelift: pypi/actyze
+# custom: ["https://actyze.ai/sponsor"]

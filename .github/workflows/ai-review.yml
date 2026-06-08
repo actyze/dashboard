@@ -8,6 +8,7 @@ jobs:
   claude-review:
     name: Claude PR Review
     runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.event.pull_request.head.ref, 'security/') && !startsWith(github.event.pull_request.head.ref, 'sec/') }}
 
     permissions:
       contents: read
@@ -42,7 +43,7 @@ jobs:
             '{
               model: "claude-sonnet-4-6",
               max_tokens: 4096,
-              system: ("You are a senior code reviewer for the Actyze project.\n\nProject Overview:\n" + $readme + "\n\nReview Standards:\n" + $standards),
+              system: ("You are a senior code reviewer for the Actyze project.\n\nProject Overview:\n" + $readme + "\n\nReview Standards:\n" + $standards + "\n\nHARD RULE: Never echo literal secret values (API keys, passwords, tokens, connection strings, customer names tied to credentials, hostnames containing customer identifiers) in your review, even when the PR is REMOVING them. If you find a secret in the diff, describe it as `<a Perplexity API key>` or `<a database password>` and reference only the file path and line number — never the value itself. Public PR comments are world-readable."),
               messages: [{
                 role: "user",
                 content: ("Review this pull request against the project standards above.\n\nTitle: " + $title + "\n\nDescription:\n" + $body + "\n\nDiff:\n```\n" + $diff + "\n```\n\nProvide a concise review covering:\n1. **Security** — hardcoded secrets, injection vulnerabilities, auth/authz issues\n2. **Correctness** — logic errors, edge cases, missing error handling\n3. **Code Quality** — follows project patterns, no debug statements, migration safety\n4. **Testing** — are new features tested? Are existing tests broken?\n5. **AGPL Compliance** — license headers, compatible dependencies\n\nOnly flag real issues. If the code looks good, say so briefly.")
@@ -81,5 +82,12 @@ jobs:
           echo "" >> /tmp/comment.md
           echo "---" >> /tmp/comment.md
           echo "*Automated review by Claude Sonnet 4.6 | Context: CLAUDE.md + README.md*" >> /tmp/comment.md
+
+          # Safety net: refuse to post if the review contains anything that looks like
+          # a literal credential pattern. Public PR comments are world-readable.
+          if grep -qiE 'pplx-[a-z0-9]{20,}|sk-[a-z0-9-]{20,}|gh[ps]_[a-z0-9]{20,}|AIza[0-9A-Za-z_-]{20,}|AKIA[0-9A-Z]{16}' /tmp/comment.md; then
+            echo "Review contained literal credential patterns; refusing to post."
+            exit 0
+          fi
 
           gh pr comment "$PR_NUMBER" --body-file /tmp/comment.md

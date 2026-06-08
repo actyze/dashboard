@@ -109,11 +109,11 @@ POSTGRES_PASSWORD=dashboard_password
 POSTGRES_USER=dashboard_user
 POSTGRES_DB=dashboard
 
-# Trino Configuration (External PepsiCo Trino)
-TRINO_HOST=***REMOVED***
+# Trino Configuration (set to your federated query engine)
+TRINO_HOST=<your-trino-host>
 TRINO_PORT=443
-TRINO_USER=***REMOVED***
-TRINO_PASSWORD=***REMOVED***
+TRINO_USER=<your-trino-user>
+TRINO_PASSWORD=<your-trino-password>
 
 # Service Configuration
 LOG_LEVEL=INFO

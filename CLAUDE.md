@@ -9,6 +9,17 @@ When reviewing pull requests, check for the following:
 - Verify no credentials are logged or exposed in error messages
 - Review dependency versions for known CVEs
 
+### Secrets handling (hard rules)
+- **Never inline a credential** (API key, password, token, OAuth secret, JWT signing key, DB connection string with embedded password, customer credentials) into any file that gets committed — including workflows, docker-compose files, helm values, READMEs, scripts, source code, comments, and example configs.
+- In **GitHub Actions workflows**, always read secrets via `${{ secrets.NAME }}` — never write a literal value, and never use `${VAR:-fallback}` patterns where the fallback is the real credential.
+- In **docker-compose, helm values, and scripts**, use environment variable references (`${VAR}` or `${VAR:-placeholder}`) and source the real values from a gitignored `.env` file or runtime injection.
+- In **documentation and example configs**, use placeholders like `<your-api-key>`, `<your-trino-password>`, `${VAR}`, or `***REDACTED***`. Never use a real-looking value, even as an "example".
+- **If you see a hardcoded credential while editing a file** — stop, flag it to the user, and propose redaction + rotation. Do not silently rewrite it.
+- This repo enforces these rules with:
+  - **`.pre-commit-config.yaml`** — gitleaks blocks local commits containing detected secrets
+  - **`.github/workflows/secret-scan.yml`** — gitleaks runs on every PR and push to main
+  - **GitHub Push Protection** — enabled in repo settings, blocks pushes at GitHub's receive step
+
 ## AGPL Compliance
 - New source files should include AGPL-3.0 license header
 - Third-party libraries must be compatible with AGPL-3.0

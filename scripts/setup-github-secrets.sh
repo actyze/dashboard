@@ -176,7 +176,6 @@ show_next_steps() {
     echo ""
     echo "3. **Manual workflow triggers:**"
     echo "   gh workflow run build-and-push-images.yml"
-    echo "   gh workflow run update-configs-for-dockerhub.yml -f update_type=latest"
     echo ""
     echo "4. **Monitor workflows:**"
     echo "   gh run list"

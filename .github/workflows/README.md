@@ -40,16 +40,6 @@ This directory contains CI/CD workflows for building, securing, and deploying th
 - Advanced identifier mangling
 - String encryption
 
-### 3. **`update-configs-for-dockerhub.yml`** - Configuration Management
-**Triggers:**
-- Manual dispatch
-
-**Features:**
-- Updates Docker Compose files to use Docker Hub images
-- Updates Helm values for Docker Hub repositories
-- Creates pull requests with configuration changes
-- Supports `latest`, `stable`, and specific version tags
-
 ## 🔧 Required Secrets
 
 Configure these secrets in your GitHub repository:
@@ -108,18 +98,6 @@ gh release create v1.0.0 --title "Release v1.0.0" --notes "Production release"
 
 # Manual trigger
 gh workflow run release-build.yml -f version=v1.0.0
-```
-
-### Update Deployment Configs
-```bash
-# Update to latest images
-gh workflow run update-configs-for-dockerhub.yml -f update_type=latest
-
-# Update to stable images
-gh workflow run update-configs-for-dockerhub.yml -f update_type=stable
-
-# Update to specific version
-gh workflow run update-configs-for-dockerhub.yml -f update_type=specific_version -f version=v1.0.0
 ```
 
 ## 🏗️ Build Process
@@ -237,11 +215,8 @@ docker history actyze/dashboard-frontend:latest
 graph TD
     A[Code Push] --> B[build-and-push-images.yml]
     B --> C[Security Scan]
-    B --> D[Update Configs]
     E[GitHub Release] --> F[release-build.yml]
     F --> G[Production Images]
-    H[Manual Trigger] --> I[update-configs-for-dockerhub.yml]
-    I --> J[Config PR]
 ```
 
 ## 🎯 Best Practices

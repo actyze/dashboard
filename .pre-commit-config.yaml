@@ -1,0 +1,15 @@
+# Pre-commit hooks for Actyze.
+#
+# One-time setup (per clone):
+#   pip install pre-commit   # or: brew install pre-commit
+#   pre-commit install
+#
+# After install, gitleaks runs automatically on every `git commit` and blocks
+# the commit if it detects an API key, password, token, or other secret.
+# Run manually against the whole repo with: pre-commit run --all-files
+
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks

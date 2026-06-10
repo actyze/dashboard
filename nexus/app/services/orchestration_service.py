@@ -12,7 +12,7 @@ from app.services.user_service import UserService
 from app.services.sql_error_analysis_service import SqlErrorAnalysisService
 from app.services.preference_service import preference_service
 from app.services.relationship_service import relationship_service
-import os
+from app.logging import get_sql_log_kwargs
 logger = structlog.get_logger()
 
 
@@ -439,12 +439,7 @@ class OrchestrationService:
                         generated_sql, cache_params, sql_result
                     )
                 
-            log_queries = os.environ.get("LOG_QUERIES", "true").lower() != "false"
-        
-            # 2. Build kwargs dict dynamically to enforce the escape hatch cleanly
-            log_kwargs = {}
-            if log_queries:
-                log_kwargs["sql"] = (generated_sql[:500] + "...") if len(generated_sql) > 500 else generated_sql
+            log_kwargs = get_sql_log_kwargs(generated_sql)
 
             # 3. Conditional Logging depending on Trino execution outcome
             if sql_result.get("success"):
@@ -752,11 +747,7 @@ class OrchestrationService:
             
             # Use simple execution (no retry logic needed for auxiliary chart query usually)
             # Set a tighter limit for charts
-            log_queries = os.environ.get("LOG_QUERIES", "true").lower() != "false"
-            
-            log_context = {}
-            if log_queries:
-                log_context["sql"] = (chart_sql[:500] + "...") if len(chart_sql) > 500 else chart_sql
+            log_context = get_sql_log_kwargs(chart_sql)
 
             result = await self.trino_service.execute_query(chart_sql, max_results=1000, timeout_seconds=20)
             
@@ -858,10 +849,7 @@ class OrchestrationService:
             await self.cache_service.cache_query_result(sql, cache_params, result)
         
         # Log execution outcome — respects LOG_QUERIES=false privacy escape hatch
-        log_queries = os.environ.get("LOG_QUERIES", "true").lower() != "false"
-        log_kwargs = {}
-        if log_queries:
-            log_kwargs["sql"] = (sql[:500] + "...") if len(sql) > 500 else sql
+        log_kwargs = get_sql_log_kwargs(sql)
 
         if result.get("success"):
             self.logger.info(

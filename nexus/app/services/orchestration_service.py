@@ -444,21 +444,17 @@ class OrchestrationService:
             # 3. Conditional Logging depending on Trino execution outcome
             if sql_result.get("success"):
                 self.logger.info(
-                    "NL workflow SQL execution succeeded", 
+                    "NL workflow SQL execution succeeded",
                     execution_time=sql_result.get("execution_time"),
                     retry_attempts=sql_result.get("retry_attempts", 0),
                     **log_kwargs
                 )
             else:
-                # Add the error context to the logs for troubleshooting
-                log_kwargs.update({
-                    "error": sql_result.get("error"),
-                    "error_type": sql_result.get("error_type"),
-                    "retry_attempts": sql_result.get("retry_attempts", 0)
-                })
-                
                 self.logger.error(
-                    "NL workflow SQL execution failed", 
+                    "NL workflow SQL execution failed",
+                    error=sql_result.get("error"),
+                    error_type=sql_result.get("error_type"),
+                    retry_attempts=sql_result.get("retry_attempts", 0),
                     **log_kwargs
                 )
 
@@ -488,10 +484,8 @@ class OrchestrationService:
                 )
             
             if not sql_result.get("success"):
-                response.update({
-                    "error": sql_result.get("error"),
-                    "error_type": sql_result.get("error_type")
-                })
+                response["error"] = sql_result.get("error")
+                response["error_type"] = sql_result.get("error_type")
             
             # Step 5: Save to user history if user_id and session_id provided
             if user_id and session_id:
@@ -754,8 +748,11 @@ class OrchestrationService:
             processing_time = (asyncio.get_event_loop().time() - start_time) * 1000
             
             if not result.get("success"):
-                log_context["error"] = result.get("error")
-                self.logger.error("Chart SQL execution failed", **log_context)
+                self.logger.error(
+                    "Chart SQL execution failed",
+                    error=result.get("error"),
+                    **log_context
+                )
                 return {
                     "success": False,
                     "error": result.get("error"),
@@ -859,13 +856,11 @@ class OrchestrationService:
                 **log_kwargs
             )
         else:
-            log_kwargs.update({
-                "error": result.get("error"),
-                "error_type": result.get("error_type"),
-                "retry_attempts": result.get("retry_attempts", 0)
-            })
             self.logger.error(
                 "Direct SQL execution failed",
+                error=result.get("error"),
+                error_type=result.get("error_type"),
+                retry_attempts=result.get("retry_attempts", 0),
                 **log_kwargs
             )
 

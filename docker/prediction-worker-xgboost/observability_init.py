@@ -15,6 +15,7 @@ from observability.metrics import configure_metrics, metrics_registry
 from observability.health import HealthChecker, HealthStatus
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
+sys.path.insert(0, '/app/shared_obs')
 __all__ = [
     'configure_logging',
     'get_logger',

@@ -4,6 +4,7 @@ from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
 import os
 import logging
+import structlog
 from app.config import settings
 from app.services.orchestration_service import orchestration_service
 from app.services.user_service import UserService
@@ -97,15 +98,51 @@ async def generate_sql(
     current_user: dict = Depends(require_viewer)
 ):
     """Generate SQL from natural language without executing it (with ML-based intent detection)."""
+    import time
+    from app.metrics import record_nl_query
+    from app.audit_logger import audit_logger
+    from app.logging import get_request_id
+
     user_id = current_user.get("id")
+    start_time = time.time()
+
     result = await orchestration_service.generate_sql_from_nl(
-        request.nl_query, 
+        request.nl_query,
         request.conversation_history,
         session_id=request.session_id,
         last_sql=request.last_sql,
         last_schema_recommendations=request.last_schema_recommendations,
         user_id=user_id
     )
+
+    # Record metrics and audit
+    try:
+        duration_ms = int((time.time() - start_time) * 1000)
+        request_id = get_request_id()
+
+        # Record NL query metric
+        record_nl_query(status="success", model="unknown")
+
+        # Record audit log (will be paired with execute-sql for full tracing)
+        sql_query = result.get("sql", "") if isinstance(result, dict) else ""
+        catalog = result.get("catalog", "unknown") if isinstance(result, dict) else "unknown"
+
+        audit_logger.log_nl_query(
+            user_id=user_id,
+            query_text=request.nl_query,
+            generated_sql=sql_query,
+            catalog=catalog,
+            row_count=0,  # Will be updated when executed
+            llm_model=result.get("model", "unknown") if isinstance(result, dict) else "unknown",
+            input_tokens=result.get("input_tokens", 0) if isinstance(result, dict) else 0,
+            output_tokens=result.get("output_tokens", 0) if isinstance(result, dict) else 0,
+            request_id=request_id,
+            execution_time_ms=duration_ms
+        )
+    except Exception as e:
+        logger = structlog.get_logger()
+        logger.warning("Failed to record NL query metrics/audit", error=str(e))
+
     return result
 
 @router.post("/execute-sql")
@@ -230,10 +267,40 @@ async def execute_sql(
     execution_end = asyncio.get_event_loop().time()
     executed_at = datetime.utcnow()
     execution_time_ms = int((execution_end - execution_start) * 1000)
-    
+
+    # Record metrics and audit log
+    try:
+        from app.metrics import record_sql_execution
+        from app.audit_logger import audit_logger
+        from app.logging import get_request_id
+
+        request_id = get_request_id()
+        row_count = len(result.get("rows", [])) if isinstance(result, dict) else 0
+        catalog = result.get("catalog", "unknown") if isinstance(result, dict) else "unknown"
+
+        # Record SQL execution metrics
+        record_sql_execution(
+            duration=execution_time_ms / 1000,
+            catalog=catalog,
+            row_count=row_count
+        )
+
+        # Record audit log
+        audit_logger.log_sql_execution(
+            user_id=user_id,
+            sql_query=request.sql,
+            catalog=catalog,
+            row_count=row_count,
+            execution_time_ms=execution_time_ms,
+            request_id=request_id
+        )
+    except Exception as e:
+        logger = structlog.get_logger()
+        logger.warning("Failed to record metrics/audit", error=str(e))
+
     # NO AUTOMATIC SAVE - User must click "Save" or "Save As New" button
     # This removes the confusing hash-based auto-deduplication
-    
+
     return result
 
 # =============================================================================

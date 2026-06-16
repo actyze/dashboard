@@ -2,10 +2,12 @@
 FAISS-based Schema Service for Intelligent Table Recommendation (Trino JDBC edition)
 
 - Fetches schema via Trino's system.jdbc.columns (catalog-agnostic, JDBC-friendly)
+- Instrumented with shared observability (logging, metrics, health checks)
 """
 
 import os
 import logging
+import time
 from typing import List, Dict, Any, Optional
 
 # Import Depends
@@ -13,6 +15,15 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Depends
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
+
+# Import observability
+from app.observability_init import setup_observability, setup_health_endpoints
+from shared.observability import (
+    get_logger,
+    MetricsContext,
+    record_sql_execution,
+    set_service_health,
+)
 
 # Import modular components
 from app.models import (
@@ -40,8 +51,10 @@ from fastapi import Header
 
 # -------- Setup --------
 load_dotenv()
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger("faiss-schema-service")
+
+# Initialize observability
+observability = setup_observability(service_name="schema-service")
+logger = observability['logger']
 
 
 class SchemaService:
@@ -519,20 +532,13 @@ def verify_service_auth(x_service_key: str = Header(None, alias="X-Service-Key")
 schema_service = SchemaService()
 app = FastAPI(title="FAISS Schema Service", description="Schema recommender via Trino JDBC metadata", version="1.3.0")
 
+# Setup health check endpoints
+setup_health_endpoints(app, service_name="schema-service")
+
 
 @app.on_event("startup")
 async def on_startup():
     await schema_service.initialize()
-
-
-@app.get("/health")
-async def health():
-    return {
-        "status": "healthy",
-        "last_updated": schema_service.embedder.last_updated.isoformat() if schema_service.embedder.last_updated else None,
-        "total_schemas": len(schema_service.embedder.schema_metadata),
-        "index_size": schema_service.embedder.index.ntotal if schema_service.embedder.index else 0
-    }
 
 
 @app.post("/recommend", response_model=SchemaRecommendationResponse)
@@ -542,15 +548,21 @@ async def recommend(req: SchemaRecommendationRequest, auth: dict = Depends(verif
     
     Security: Simple service key authentication (X-Service-Key header)
     """
+    start_time = time.time()
     try:
-        return schema_service.recommend(
-            req.natural_language_query, 
-            req.prior_context, 
-            req.top_k, 
-            req.confidence_threshold
-        )
+        with MetricsContext("POST", "/recommend") as ctx:
+            result = schema_service.recommend(
+                req.natural_language_query, 
+                req.prior_context, 
+                req.top_k, 
+                req.confidence_threshold
+            )
+            ctx.set_status(200)
+            return result
     except Exception as e:
         logger.exception("Recommendation failed")
+        duration = time.time() - start_time
+        record_sql_execution(duration, catalog="schema-service", error=type(e).__name__)
         raise HTTPException(status_code=500, detail=str(e))
 
 

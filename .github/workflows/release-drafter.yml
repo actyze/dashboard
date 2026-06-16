@@ -1,0 +1,31 @@
+name: Release Drafter
+
+# Maintains an always-current DRAFT GitHub Release whose notes are assembled from
+# merged PRs (categorized by label). On PRs it also auto-applies labels from the
+# Conventional Commit title (see .github/release-drafter.yml autolabeler), which
+# feeds the next version resolution. A maintainer publishes the draft to cut the tag.
+# Docs: https://github.com/release-drafter/release-drafter
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  contents: read
+
+jobs:
+  update_release_draft:
+    permissions:
+      contents: write        # create/update the draft release
+      pull-requests: write    # apply autolabels to PRs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -73,6 +73,31 @@ Frontend (React) --> Nexus API (FastAPI) --> Trino --> Your Databases
 | LLM Gateway | LiteLLM (100+ providers) |
 | Prediction Workers | XGBoost, LightGBM, AutoGluon |
 
+## Observability & Monitoring
+
+All services emit structured JSON logs to stdout and expose Prometheus metrics for production monitoring.
+
+**Built-in health checks:**
+- `/healthz` — Kubernetes liveness probe
+- `/readyz` — Kubernetes readiness probe (includes dependency checks)
+
+**Metrics & Logs:**
+- Prometheus format at `/metrics` endpoint on each service
+- JSON structured logs with context variables (request_id, user_id, trace_id)
+- Works with any observability backend: Prometheus, Datadog, Splunk, ELK, Grafana Loki
+
+**Quick start:**
+```bash
+# View logs across all services
+docker logs nexus | jq '.'
+docker logs schema-service | jq '.event'
+
+# Access metrics
+curl http://localhost:8002/metrics | head -30
+```
+
+See [shared/observability/docs/ARCHITECTURE.md](shared/observability/docs/ARCHITECTURE.md) for architecture overview and integration guides.
+
 ## See it in action
 
 - Live docs and walkthroughs: [docs.actyze.io](https://docs.actyze.io)

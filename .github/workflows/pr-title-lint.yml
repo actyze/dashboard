@@ -1,0 +1,51 @@
+name: Lint PR title
+
+# Enforces Conventional Commits on the PR TITLE. With squash-merge enabled and
+# "Default to PR title for squash merge commits" turned on, the PR title becomes
+# the commit that lands on main — which is what release-drafter/release tooling reads.
+#
+# Security: runs under pull_request_target (needs write context to set the status),
+# but deliberately does NOT check out PR code, so untrusted fork code never executes.
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - edited
+      - synchronize
+
+permissions:
+  pull-requests: read
+
+jobs:
+  validate:
+    name: Validate PR title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Allowed Conventional Commit types (matches CONTRIBUTING.md)
+          types: |
+            feat
+            fix
+            docs
+            chore
+            refactor
+            perf
+            test
+            build
+            ci
+            revert
+            style
+          # Require a subject after the type, and reject all-uppercase shouting.
+          requireScope: false
+          subjectPattern: ^(?![A-Z]).+$
+          subjectPatternError: |
+            The subject "{subject}" should start with a lowercase letter.
+            Example: "feat(nexus): add per-query timing to execute-sql"
+          # Avoid the footgun where a single-commit PR makes GitHub suggest the
+          # commit message instead of the PR title for the squash commit.
+          validateSingleCommit: true

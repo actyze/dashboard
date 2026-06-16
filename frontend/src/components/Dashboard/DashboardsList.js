@@ -292,18 +292,41 @@ const DashboardsList = () => {
             </div>
           </div>
         ) : dashboards.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16">
-            <svg className={`w-8 h-8 mb-2 ${isDark ? 'text-gray-600' : 'text-gray-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z" />
-            </svg>
-            <p className={`text-xs mb-1 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
-              No dashboards yet
-            </p>
+          <div className="flex flex-col items-center justify-center h-64 gap-4">
+
+            {/* ICON (same pattern as Predictions) */}
+            <div className={`text-4xl ${isDark ? 'text-gray-600' : 'text-gray-300'}`}>
+              <svg
+                className="w-12 h-12 mx-auto"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z"
+                />
+              </svg>
+            </div>
+
+            {/* TITLE (important: same hierarchy as Predictions) */}
+              <p className={`text-lg font-medium ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                No dashboards yet
+              </p>
+
+            {/* SUBTEXT (1 line max like Predictions) */}
+              <p className={`text-sm text-center max-w-md ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                Create your first dashboard to visualize and track your key metrics.
+              </p>
+
+            {/* CTA (PRIMARY BUTTON like Predictions) */}
             <button
               onClick={() => navigate('/dashboard/new')}
-              className="text-[#5d6ad3] hover:text-[#4f5bc4] text-xs mt-1"
+              className="px-4 py-2 bg-[#5d6ad3] text-white rounded-lg hover:bg-[#4c59c2] transition-colors text-sm"
             >
-              Create your first dashboard
+              + New Dashboard
             </button>
           </div>
         ) : sortedDashboards.length === 0 ? (

@@ -51,9 +51,5 @@ def get_logger(name: str = None) -> structlog.BoundLogger:
 
 def get_sql_log_kwargs(sql: str) -> dict:
     if os.environ.get("LOG_QUERIES", "true").lower() != "false":
-        return 
-        {
-             "sql": sql[:500] + "..." if len(sql) > 500 else sql
-        }
-    
+        return {"sql": sql[:500] + "..." if len(sql) > 500 else sql}
     return {}

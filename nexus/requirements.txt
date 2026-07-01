@@ -61,7 +61,7 @@ apscheduler==3.11.0
 psycopg2-binary==2.9.11  # Required by APScheduler SQLAlchemyJobStore (sync driver)
 
 # SQL Parsing (relationship mining)
-sqlglot>=25.0.0
+sqlglot>=30.12.0
 
 # File Processing
 pandas==2.2.3

@@ -1,6 +1,7 @@
 """Structured logging configuration."""
 
 import logging
+import os
 import sys
 from typing import Any, Dict
 import structlog
@@ -46,3 +47,9 @@ def configure_logging():
 def get_logger(name: str = None) -> structlog.BoundLogger:
     """Get a structured logger instance."""
     return structlog.get_logger(name)
+
+
+def get_sql_log_kwargs(sql: str) -> dict:
+    if os.environ.get("LOG_QUERIES", "true").lower() != "false":
+        return {"sql": sql[:500] + "..." if len(sql) > 500 else sql}
+    return {}

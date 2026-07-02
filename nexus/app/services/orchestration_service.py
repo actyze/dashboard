@@ -12,7 +12,7 @@ from app.services.user_service import UserService
 from app.services.sql_error_analysis_service import SqlErrorAnalysisService
 from app.services.preference_service import preference_service
 from app.services.relationship_service import relationship_service
-
+from app.logging import get_sql_log_kwargs
 logger = structlog.get_logger()
 
 
@@ -434,12 +434,30 @@ class OrchestrationService:
                     settings.max_retries,
                     self._create_correction_callback(schema_recs_dict, conversation_history, preferred_tables)
                 )
-                
-                # Cache successful results
                 if sql_result.get("success"):
                     await self.cache_service.cache_query_result(
                         generated_sql, cache_params, sql_result
                     )
+                
+            log_kwargs = get_sql_log_kwargs(generated_sql)
+
+            # 3. Conditional Logging depending on Trino execution outcome
+            if sql_result.get("success"):
+                self.logger.info(
+                    "NL workflow SQL execution succeeded",
+                    execution_time=sql_result.get("execution_time"),
+                    retry_attempts=sql_result.get("retry_attempts", 0),
+                    **log_kwargs
+                )
+            else:
+                self.logger.error(
+                    "NL workflow SQL execution failed",
+                    error=sql_result.get("error"),
+                    error_type=sql_result.get("error_type"),
+                    retry_attempts=sql_result.get("retry_attempts", 0),
+                    **log_kwargs
+                )
+
             
             # Step 4: Build final response
             processing_time = (asyncio.get_event_loop().time() - start_time) * 1000
@@ -466,10 +484,8 @@ class OrchestrationService:
                 )
             
             if not sql_result.get("success"):
-                response.update({
-                    "error": sql_result.get("error"),
-                    "error_type": sql_result.get("error_type")
-                })
+                response["error"] = sql_result.get("error")
+                response["error_type"] = sql_result.get("error_type")
             
             # Step 5: Save to user history if user_id and session_id provided
             if user_id and session_id:
@@ -725,19 +741,25 @@ class OrchestrationService:
             
             # Use simple execution (no retry logic needed for auxiliary chart query usually)
             # Set a tighter limit for charts
+            log_context = get_sql_log_kwargs(chart_sql)
+
             result = await self.trino_service.execute_query(chart_sql, max_results=1000, timeout_seconds=20)
             
             processing_time = (asyncio.get_event_loop().time() - start_time) * 1000
             
             if not result.get("success"):
-                self.logger.error("Chart SQL execution failed", error=result.get("error"), sql=chart_sql)
+                self.logger.error(
+                    "Chart SQL execution failed",
+                    error=result.get("error"),
+                    **log_context
+                )
                 return {
                     "success": False,
                     "error": result.get("error"),
                     "chart_config": config,
                     "chart_sql": chart_sql
                 }
-            
+            self.logger.info("Chart SQL execution succeeded", **log_context)
             # Trino service returns query_results with columns and rows
             query_results = result.get("query_results", {})
             
@@ -823,6 +845,25 @@ class OrchestrationService:
         if result.get("success"):
             await self.cache_service.cache_query_result(sql, cache_params, result)
         
+        # Log execution outcome — respects LOG_QUERIES=false privacy escape hatch
+        log_kwargs = get_sql_log_kwargs(sql)
+
+        if result.get("success"):
+            self.logger.info(
+                "Direct SQL execution succeeded",
+                execution_time=result.get("execution_time"),
+                retry_attempts=result.get("retry_attempts", 0),
+                **log_kwargs
+            )
+        else:
+            self.logger.error(
+                "Direct SQL execution failed",
+                error=result.get("error"),
+                error_type=result.get("error_type"),
+                retry_attempts=result.get("retry_attempts", 0),
+                **log_kwargs
+            )
+
         # Use final_sql (corrected) if a retry/correction happened, otherwise original
         final_sql = result.get("final_sql", sql)
         return {

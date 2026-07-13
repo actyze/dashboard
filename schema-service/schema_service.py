@@ -17,8 +17,9 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 
 # Import observability
-from app.observability_init import setup_observability, setup_health_endpoints
-from shared.observability import (
+from app.observability_init import (
+    setup_observability,
+    setup_health_endpoints,
     get_logger,
     MetricsContext,
     record_sql_execution,
@@ -1177,3 +1178,25 @@ async def search_database_objects(
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8001")))
+
+    async def health_check(self) -> dict:
+        """Check schema service health."""
+        try:
+            if not self.embedder or not self.embedder.model:
+                return {
+                    "name": "schema_service",
+                    "healthy": False,
+                    "error": "Schema embedder not initialized"
+                }
+            
+            return {
+                "name": "schema_service",
+                "healthy": True,
+                "schema_cache_size": len(self.embedder.raw_schema_cache) if hasattr(self.embedder, 'raw_schema_cache') else 0
+            }
+        except Exception as e:
+            return {
+                "name": "schema_service",
+                "healthy": False,
+                "error": str(e)
+            }

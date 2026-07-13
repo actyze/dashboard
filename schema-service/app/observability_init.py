@@ -1,94 +1,58 @@
-"""Observability initialization for Schema Service.
-
-This module initializes shared observability infrastructure (logging, metrics, health checks)
-from the shared observability module.
-
-It's imported once at service startup to configure:
-- Structured logging with context variables
-- Prometheus metrics collection
-- Health check endpoints
-- Request tracing and timing
-"""
+"""Observability initialization for Schema Service."""
 
 import sys
 import time
 from pathlib import Path
 from typing import Optional
+import importlib.util
 
-# Add parent directory to path to import from shared observability
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
+# Import shared observability modules using importlib to avoid path issues
+shared_obs_path = Path(__file__).parent.parent.parent / "shared" / "observability" / "python"
+sys.path.insert(0, str(shared_obs_path))
 
-from shared.observability import (
-    configure_logging,
-    get_logger,
-    configure_metrics,
-    HealthChecker,
-    HealthStatus,
+# Import structured_logging
+structured_logging_spec = importlib.util.spec_from_file_location(
+    "obs_structured_logging", 
+    shared_obs_path / "structured_logging.py"
 )
+obs_structured_logging = importlib.util.module_from_spec(structured_logging_spec)
+structured_logging_spec.loader.exec_module(obs_structured_logging)
 
+# Import metrics
+metrics_spec = importlib.util.spec_from_file_location(
+    "obs_metrics",
+    shared_obs_path / "metrics.py"
+)
+obs_metrics = importlib.util.module_from_spec(metrics_spec)
+metrics_spec.loader.exec_module(obs_metrics)
+
+# Import health
+health_spec = importlib.util.spec_from_file_location(
+    "obs_health",
+    shared_obs_path / "health.py"
+)
+obs_health = importlib.util.module_from_spec(health_spec)
+health_spec.loader.exec_module(obs_health)
+
+configure_logging = obs_structured_logging.configure_logging
+get_logger = obs_structured_logging.get_logger
+configure_metrics = obs_metrics.configure_metrics
+HealthChecker = obs_health.HealthChecker
+HealthStatus = obs_health.HealthStatus
+
+# Re-export metrics helpers used directly by schema_service.py
+MetricsContext = obs_metrics.MetricsContext
+record_sql_execution = obs_metrics.record_sql_execution
+set_service_health = obs_metrics.set_service_health
 
 logger = get_logger(__name__)
 
 
 def setup_observability(service_name: str = "schema-service") -> dict:
-    """Initialize observability for the Schema Service.
-
-    Configures:
-    - Structured logging with service name
-    - Prometheus metrics registry
-    - Health checker with Trino dependency
-
-    Args:
-        service_name: Name of the service for logging context.
-
-    Returns:
-        Dictionary with initialized observability components:
-        - 'logger': Configured logger instance
-        - 'metrics_registry': Prometheus registry
-        - 'health': HealthChecker instance
-    """
-    # Configure structured logging
+    """Initialize observability for Schema Service."""
     configure_logging(service_name=service_name, log_level="INFO", log_format="json")
-
-    # Configure Prometheus metrics
     metrics_registry = configure_metrics()
-
-    # Set up health checker
     health = HealthChecker()
-
-    # Register Trino health check
-    async def check_trino(trino_service=None):
-        """Check if Trino is accessible."""
-        if trino_service is None:
-            return HealthStatus(
-                name="trino",
-                healthy=False,
-                error="Trino service not provided"
-            )
-
-        try:
-            import time
-            start = time.time()
-            # Test Trino connectivity
-            is_healthy = await trino_service.check_connection()
-            latency_ms = (time.time() - start) * 1000
-
-            return HealthStatus(
-                name="trino",
-                healthy=is_healthy,
-                latency_ms=latency_ms,
-                error=None if is_healthy else "Trino connection check failed"
-            )
-        except Exception as e:
-            return HealthStatus(
-                name="trino",
-                healthy=False,
-                error=f"Trino health check failed: {str(e)}"
-            )
-
-    # Note: Trino health check will be registered after schema_service is initialized
-    # See schema_service.py initialization
 
     logger.info(
         "observability_initialized",
@@ -106,23 +70,12 @@ def setup_observability(service_name: str = "schema-service") -> dict:
 
 
 def setup_health_endpoints(app, service_name: str = "schema-service") -> None:
-    """Add health check endpoints to FastAPI app.
-
-    Adds:
-    - GET /health - Basic health status
-    - GET /ready - Readiness probe
-    - GET /metrics - Prometheus metrics
-
-    Args:
-        app: FastAPI application instance.
-        service_name: Name of the service.
-    """
-    from shared.observability import metrics_registry
+    """Add health check endpoints to FastAPI app."""
     from prometheus_client.exposition import generate_latest
 
     @app.get("/health", tags=["observability"])
     async def health_check():
-        """Liveness probe - service is running."""
+        """Liveness probe."""
         return {
             "status": "healthy",
             "service": service_name,
@@ -131,8 +84,7 @@ def setup_health_endpoints(app, service_name: str = "schema-service") -> None:
 
     @app.get("/ready", tags=["observability"])
     async def readiness_check():
-        """Readiness probe - service is ready to handle requests."""
-        # Add custom readiness logic here
+        """Readiness probe."""
         return {
             "ready": True,
             "service": service_name,
@@ -142,6 +94,7 @@ def setup_health_endpoints(app, service_name: str = "schema-service") -> None:
     @app.get("/metrics", tags=["observability"])
     async def metrics():
         """Prometheus metrics endpoint."""
+        metrics_registry = obs_metrics.get_metrics_registry()
         metrics_data = generate_latest(metrics_registry)
         return metrics_data
 

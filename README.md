@@ -75,28 +75,33 @@ Frontend (React) --> Nexus API (FastAPI) --> Trino --> Your Databases
 
 ## Observability & Monitoring
 
-All services emit structured JSON logs to stdout and expose Prometheus metrics for production monitoring.
+Actyze follows an **emit-only** model: every service emits structured JSON logs to stdout and exposes Prometheus metrics, and you bring your own backend (Prometheus, Grafana, Datadog, Splunk, ELK, Loki — anything that scrapes `/metrics` or ingests stdout). No observability backend is bundled or required.
 
-**Built-in health checks:**
-- `/healthz` — Kubernetes liveness probe
-- `/readyz` — Kubernetes readiness probe (includes dependency checks)
+A shared observability library ([`shared/observability/`](shared/observability/)) provides logging, metrics, and health checks to all Python services (Nexus, Schema Service, Prediction Workers) and a JavaScript counterpart for the frontend, so every service is instrumented the same way.
 
-**Metrics & Logs:**
-- Prometheus format at `/metrics` endpoint on each service
-- JSON structured logs with context variables (request_id, user_id, trace_id)
-- Works with any observability backend: Prometheus, Datadog, Splunk, ELK, Grafana Loki
+**Built-in health checks (every service):**
+- `/healthz` — Kubernetes liveness probe (process is up)
+- `/readyz` — Kubernetes readiness probe (dependencies reachable)
+- `/health` — detailed aggregated status (Nexus rolls up Schema Service, LLM, Trino, and cache)
+
+**Metrics & logs:**
+- Prometheus format at `/metrics` on each service — HTTP request rate/latency, NL-query and SQL-execution counters, prediction pipeline timings, plus standard process/runtime metrics
+- JSON structured logs with propagated context variables (`request_id`, `user_id`, `query_id`, `session_id`)
 
 **Quick start:**
 ```bash
-# View logs across all services
-docker logs nexus | jq '.'
-docker logs schema-service | jq '.event'
+# Structured logs (JSON) across services
+docker logs dashboard-nexus | jq '.'
+docker logs dashboard-schema-service | jq 'select(.event)'
 
-# Access metrics
-curl http://localhost:8002/metrics | head -30
+# Aggregated health + Prometheus metrics (Nexus on :8000, Schema Service on :8001)
+curl -s http://localhost:8000/health | jq '.status, .details.services[].name'
+curl -s http://localhost:8000/metrics | head -30
 ```
 
-See [shared/observability/docs/ARCHITECTURE.md](shared/observability/docs/ARCHITECTURE.md) for architecture overview and integration guides.
+> **Scope:** today's instrumentation is operational/SRE-facing (health, metrics, logs for whoever runs the deployment). End-user-facing observability — per-query execution timelines, query history with timings, cache/freshness indicators surfaced in the UI — is tracked for a future release.
+
+See [shared/observability/docs/ARCHITECTURE.md](shared/observability/docs/ARCHITECTURE.md) for the architecture overview and integration guides.
 
 ## See it in action
 

@@ -90,8 +90,8 @@ services:
   # Note: Database schema is now managed by Nexus migrations (nexus/db/migrations/)
   schema-service:
     build:
-      context: ../schema-service
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: schema-service/Dockerfile
     container_name: dashboard-schema-service
     ports:
       - "8001:8000"
@@ -144,8 +144,8 @@ services:
   # Nexus Service (Main FastAPI Backend)
   nexus:
     build:
-      context: ../nexus
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: nexus/Dockerfile
     container_name: dashboard-nexus
     ports:
       - "8000:8000"

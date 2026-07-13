@@ -1,11 +1,11 @@
-"""Initialize observability for prediction-worker-xgboost."""
+"""Initialize observability for schema-service."""
 
 import sys
 from pathlib import Path
 import importlib.util
 
-# Import shared modules
-shared_obs_path = Path(__file__).parent.parent.parent / "shared" / "observability" / "python"
+# Import shared structured_logging module
+shared_obs_path = Path(__file__).parent.parent / "shared" / "observability" / "python"
 sys.path.insert(0, str(shared_obs_path))
 
 structured_logging_spec = importlib.util.spec_from_file_location("obs_structured_logging", shared_obs_path / "structured_logging.py")
@@ -21,8 +21,8 @@ obs_health = importlib.util.module_from_spec(health_spec)
 health_spec.loader.exec_module(obs_health)
 
 
-def configure_observability(service_name: str = "prediction-worker-xgboost", log_level: str = "INFO"):
-    """Configure all observability components for prediction worker."""
+def configure_observability(service_name: str = "schema-service", log_level: str = "INFO"):
+    """Configure all observability components for schema-service."""
     
     # Configure structured logging
     obs_structured_logging.configure_logging(

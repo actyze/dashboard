@@ -4,55 +4,44 @@ This module provides observability infrastructure for all Python services in Act
 including structured logging, Prometheus metrics, and health checks.
 
 Submodules:
-    logging: Structured logging with context variables (request_id, user_id, etc.)
+    structured_logging: Structured logging with context variables (request_id, user_id, etc.)
     metrics: Prometheus metrics collection (HTTP, queries, LLM, cache, database)
     health: Health checks and readiness probes for service dependencies
 
 Quick Start:
 
     # In your service startup code:
-    from observability.logging import configure_logging, get_logger
+    from observability.structured_logging import configure_logging, get_logger
     from observability.metrics import configure_metrics
     from observability.health import HealthChecker
 
     # Configure structured logging
     configure_logging(service_name="my-service", log_level="INFO", log_format="json")
     logger = get_logger(__name__)
+    logger.info("service_started", service="my-service")
 
     # Configure metrics
-    metrics_registry = configure_metrics()
+    from prometheus_client import start_http_server
+    start_http_server(8000)
 
     # Set up health checks
-    health = HealthChecker()
-    health.register("database", check_database_connection)
+    checker = HealthChecker(service_name="my-service")
+    await checker.add_check("postgres", check_postgres)
+    await checker.startup()
 
-    # Use in your request handlers:
-    from observability.logging import set_request_id, set_user_id
-    from observability.metrics import MetricsContext, record_sql_execution
-
-    # Track HTTP request
-    with MetricsContext("GET", "/api/endpoint") as ctx:
-        try:
-            set_request_id("req-123")
-            set_user_id("user-456")
-
-            # Track SQL execution
-            import time
-            start = time.time()
-            result = await execute_query(sql)
-            record_sql_execution(time.time() - start, catalog="trino", row_count=len(result))
-
-            ctx.set_status(200)
-        except Exception as e:
-            logger.error("request_failed", error=str(e))
-            ctx.set_status(500)
-            raise
+Examples:
+    See EXAMPLES.md for 6 real-world integration examples.
 """
 
-# Logging exports
-from observability.logging import (
+# Mark version
+__version__ = "1.0.0"
+
+# Import and re-export structured logging
+from structured_logging import (
     configure_logging,
     get_logger,
+    set_context,
+    clear_context,
     get_request_id,
     set_request_id,
     get_user_id,
@@ -61,72 +50,111 @@ from observability.logging import (
     set_query_id,
     get_session_id,
     set_session_id,
+    get_trace_id,
+    set_trace_id,
+    get_all_context,
 )
 
-# Metrics exports
-from observability.metrics import (
+# Import and re-export metrics
+from metrics import (
     configure_metrics,
-    metrics_registry,
-    MetricsContext,
-    record_nl_query,
-    record_sql_execution,
-    record_llm_call,
-    record_cache_hit,
-    record_cache_miss,
-    set_cache_size,
-    set_db_connections,
-    set_service_health,
-    record_prediction,
-    record_prediction_duration,
-    record_audit_event,
+    get_metrics_registry,
+    # HTTP metrics
+    http_requests_total,
+    http_request_duration_seconds,
+    http_requests_in_progress,
+    # Query metrics
+    nl_queries_total,
+    nl_queries_cached,
+    sql_execution_duration_seconds,
+    sql_rows_affected,
+    sql_errors_total,
+    # LLM metrics
+    llm_calls_total,
+    llm_tokens_used_total,
+    llm_call_duration_seconds,
+    llm_errors_total,
+    # Cache metrics
+    cache_hits_total,
+    cache_misses_total,
+    cache_size_bytes,
+    # Database metrics
+    db_connections_active,
+    db_connections_idle,
+    db_connection_pool_size,
+    # Health metrics
+    service_health_status,
+    external_service_health_status,
+    # Prediction metrics
+    predictions_total,
+    prediction_duration_seconds,
+    predictions_failed_total,
+    # Audit metrics
+    audit_events_total,
 )
 
-# Health exports
-from observability.health import (
+# Import and re-export health checks
+from health import (
     HealthChecker,
     HealthStatus,
     HealthCheckResult,
-    ReadinessChecker,
     check_http_endpoint,
-    check_database_connection,
-    check_redis_connection,
+    check_postgres,
+    check_redis,
+    check_trino,
 )
 
+# Define public API
 __all__ = [
     # Logging
-    'configure_logging',
-    'get_logger',
-    'get_request_id',
-    'set_request_id',
-    'get_user_id',
-    'set_user_id',
-    'get_query_id',
-    'set_query_id',
-    'get_session_id',
-    'set_session_id',
+    "configure_logging",
+    "get_logger",
+    "set_context",
+    "clear_context",
+    "get_request_id",
+    "set_request_id",
+    "get_user_id",
+    "set_user_id",
+    "get_query_id",
+    "set_query_id",
+    "get_session_id",
+    "set_session_id",
+    "get_trace_id",
+    "set_trace_id",
+    "get_all_context",
     # Metrics
-    'configure_metrics',
-    'metrics_registry',
-    'MetricsContext',
-    'record_nl_query',
-    'record_sql_execution',
-    'record_llm_call',
-    'record_cache_hit',
-    'record_cache_miss',
-    'set_cache_size',
-    'set_db_connections',
-    'set_service_health',
-    'record_prediction',
-    'record_prediction_duration',
-    'record_audit_event',
+    "configure_metrics",
+    "get_metrics_registry",
+    "http_requests_total",
+    "http_request_duration_seconds",
+    "http_requests_in_progress",
+    "nl_queries_total",
+    "nl_queries_cached",
+    "sql_execution_duration_seconds",
+    "sql_rows_affected",
+    "sql_errors_total",
+    "llm_calls_total",
+    "llm_tokens_used_total",
+    "llm_call_duration_seconds",
+    "llm_errors_total",
+    "cache_hits_total",
+    "cache_misses_total",
+    "cache_size_bytes",
+    "db_connections_active",
+    "db_connections_idle",
+    "db_connection_pool_size",
+    "service_health_status",
+    "external_service_health_status",
+    "predictions_total",
+    "prediction_duration_seconds",
+    "predictions_failed_total",
+    "audit_events_total",
     # Health
-    'HealthChecker',
-    'HealthStatus',
-    'HealthCheckResult',
-    'ReadinessChecker',
-    'check_http_endpoint',
-    'check_database_connection',
-    'check_redis_connection',
+    "HealthChecker",
+    "HealthStatus",
+    "HealthCheckResult",
+    "check_http_endpoint",
+    "check_postgres",
+    "check_redis",
+    "check_trino",
 ]
-
-__version__ = '0.1.0'

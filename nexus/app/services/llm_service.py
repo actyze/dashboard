@@ -1269,3 +1269,26 @@ Generated SQL (Main Data):
             return text
         
         return ""
+
+    async def health_check(self) -> dict:
+        """Check LLM service health."""
+        try:
+            # Check if client is initialized
+            if not self.client:
+                return {
+                    "name": "llm_service",
+                    "healthy": False,
+                    "error": "LLM client not initialized"
+                }
+            
+            return {
+                "name": "llm_service",
+                "healthy": True,
+                "message": "LLM service ready"
+            }
+        except Exception as e:
+            return {
+                "name": "llm_service",
+                "healthy": False,
+                "error": str(e)
+            }

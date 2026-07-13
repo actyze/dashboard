@@ -1,17 +1,45 @@
-# Observability Implementation — Complete
+# Observability Implementation — Operational Layer Complete
 
-**Status:** ✅ COMPLETE | All services instrumented end-to-end
+**Status:** ✅ Operational/SRE observability shipped and verified running | End-user observability tracked separately
+
+---
+
+## Latest verification (2026-06-16)
+
+Brought the full stack up via Docker Compose and verified the observability layer end-to-end. All services report healthy through Nexus's aggregated `/health`:
+
+```
+OVERALL: healthy
+  schema-service     healthy=True
+  llm_service        healthy=True
+  trino-service      healthy=True
+  cache-service      healthy=True
+```
+
+Three real bugs were surfaced by the health aggregation and fixed in the process (none were observability-library bugs — the health checks did their job by exposing them):
+
+1. **schema-service startup** — `ImportError` on `from shared.observability import …`; rerouted through the local `app/observability_init.py` importlib loader (the pattern Nexus uses).
+2. **Nexus → schema-service health check** — used `httpx._utils.default_timer()`, a private API removed in current httpx; replaced with stdlib `time.perf_counter()` in `nexus/app/services/base.py`.
+3. **cache-service false-unhealthy** — in-memory cache `get_stats()` omitted the `connected` key the orchestrator checks; added `"connected": True`.
+
+**Scope note (important):** what is shipped is **operational/SRE-facing** observability — health probes, Prometheus metrics, and structured logs for whoever runs the deployment. It is **emit-only**: services emit signals and you bring your own backend. **End-user-facing** observability (per-query execution timelines, query history with timings in the UI, cache/freshness badges, AI "receipt") is **not** part of this and is tracked as a future enhancement — see the linked GitHub issue.
 
 ---
 
 ## Summary
 
-Comprehensive, production-ready observability across all Actyze services:
+Operational observability across all Actyze services:
 
 - ✅ **Shared Observability Library** (`shared/observability/`) with Python and JavaScript modules
 - ✅ **All Services Instrumented** (Nexus, Schema Service, 3× Prediction Workers, Frontend)
 - ✅ **Documentation Updated** (main README, docker, guides, API reference)
 - ✅ **Old Planning Files Cleaned Up** (HYBRID_OBSERVABILITY_PLAN.md, OBSERVABILITY_SUMMARY.md removed)
+- ⏳ **End-user observability** — deferred to a future release (Query History UI first)
+
+### Honest gaps (operational layer)
+- Some metrics are **defined but not yet recorded** in live code paths (`cache_hits_total`, `llm_calls_total`, `db_connections_*`). They appear in `/metrics` with zero values until wired.
+- Frontend JS metrics accumulate in an **in-memory buffer** and are not shipped anywhere yet.
+- No backend (Prometheus/Grafana/Loki) is bundled — that is by design (emit-only), but means out-of-the-box you get logs + a scrape endpoint, not dashboards.
 
 ---
 

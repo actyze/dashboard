@@ -318,6 +318,7 @@ class MemoryCacheService:
             return {
                 "cache_type": "memory",
                 "enabled": settings.cache_enabled,
+                "connected": True,  # in-process cache is always available
                 "statistics": {
                     "hits": self._stats["hits"],
                     "misses": self._stats["misses"],

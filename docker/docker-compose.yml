@@ -285,7 +285,7 @@ services:
   # XGBoost Worker — tabular classification + regression (default: enabled)
   prediction-worker-xgboost:
     build:
-      context: .
+      context: ..
       dockerfile: docker/prediction-worker-xgboost/Dockerfile
     container_name: prediction-worker-xgboost
     ports:
@@ -324,7 +324,7 @@ services:
   # LightGBM Worker — tabular classification + regression (default: enabled)
   prediction-worker-lightgbm:
     build:
-      context: .
+      context: ..
       dockerfile: docker/prediction-worker-lightgbm/Dockerfile
     container_name: prediction-worker-lightgbm
     ports:
@@ -364,7 +364,7 @@ services:
   # NOTE: Heavy image (~3.5GB). Only start when needed for time-series testing.
   prediction-worker-autogluon:
     build:
-      context: .
+      context: ..
       dockerfile: docker/prediction-worker-autogluon/Dockerfile
     container_name: prediction-worker-autogluon
     ports:

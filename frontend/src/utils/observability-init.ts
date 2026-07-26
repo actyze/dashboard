@@ -15,7 +15,7 @@ import {
   isObservabilityReady,
   type LogEntry,
   type LogContext,
-} from '../../shared/observability/javascript';
+} from './observability';
 
 import {
   trackQuery as trackQueryCore,
@@ -32,7 +32,7 @@ import {
   type QueryMetrics,
   type PerformanceMetric,
   type Metric,
-} from '../../shared/observability/javascript';
+} from './observability';
 
 /**
  * Initialize observability for the dashboard frontend

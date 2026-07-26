@@ -6,7 +6,14 @@ from unittest.mock import AsyncMock, patch
 
 async def test_health_endpoint(test_client):
     """GET /health returns 200 with status 'healthy'."""
-    resp = await test_client.get("/health")
+    # Mock the aggregated dependency check so the test is hermetic — otherwise
+    # it makes real network calls to schema-service/Trino, which don't exist in CI.
+    with patch(
+        "app.services.orchestration_service.orchestration_service.get_health_status",
+        new_callable=AsyncMock,
+        return_value={"status": "healthy", "services": []},
+    ):
+        resp = await test_client.get("/health")
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "healthy"
@@ -25,21 +32,14 @@ async def test_root_endpoint(test_client):
 
 
 async def test_metrics_endpoint(test_client):
-    """GET /metrics returns 200."""
-    with patch(
-        "app.services.orchestration_service.orchestration_service.cache_service.get_stats",
-        new_callable=AsyncMock,
-        return_value={"hits": 0, "misses": 0},
-    ), patch(
-        "app.services.orchestration_service.orchestration_service.get_health_status",
-        new_callable=AsyncMock,
-        return_value={"status": "healthy", "services": []},
-    ):
-        resp = await test_client.get("/metrics")
+    """GET /metrics returns Prometheus exposition text (not JSON)."""
+    resp = await test_client.get("/metrics")
     assert resp.status_code == 200
-    body = resp.json()
-    assert body["service"] == "nexus"
-    assert "cache" in body
+    assert "text/plain" in resp.headers["content-type"]
+    body = resp.text
+    # Prometheus exposition format: HELP/TYPE comments and our HTTP metric.
+    assert "# HELP" in body
+    assert "http_requests_total" in body
 
 
 async def test_docs_endpoint(test_client):

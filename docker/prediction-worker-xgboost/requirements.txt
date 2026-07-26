@@ -6,3 +6,8 @@ scikit-learn==1.5.2
 numpy==1.26.4
 trino==0.329.0
 psycopg2-binary==2.9.9
+
+# Observability dependencies (shared)
+structlog==24.4.0
+python-json-logger==3.2.1
+prometheus-client==0.24.1

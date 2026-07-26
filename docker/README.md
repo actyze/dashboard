@@ -140,9 +140,38 @@ docker-compose logs nexus  # Specific service logs
 | Service | Port | Description |
 |---------|------|-------------|
 | Frontend | 3000 | React application with nginx proxy |
-| Nexus API | 8002 | FastAPI backend service |
+| Nexus API | 8000 | FastAPI backend service |
 | Schema Service | 8001 | FAISS schema recommendations (full env only) |
+| Trino | 8081 | Federated query engine |
 | PostgreSQL | 5432 | Database server |
+
+## 📈 **Observability**
+
+Every Actyze service is instrumented by the shared observability library (`shared/observability/`). It is **emit-only**: services emit structured JSON logs and Prometheus metrics, and you point your own backend at them — nothing is bundled.
+
+**Health & metrics endpoints:**
+```bash
+# Liveness / readiness (Kubernetes-style probes)
+curl http://localhost:8000/healthz     # Nexus liveness
+curl http://localhost:8000/readyz      # Nexus readiness (checks dependencies)
+
+# Aggregated health — Nexus rolls up Schema Service, LLM, Trino, cache
+curl -s http://localhost:8000/health | jq '.status, .details.services[].name'
+
+# Prometheus metrics
+curl -s http://localhost:8000/metrics | head -30   # Nexus
+curl -s http://localhost:8001/metrics | head -30   # Schema Service
+```
+
+**Structured logs (JSON):**
+```bash
+docker logs dashboard-nexus | jq '.'
+docker logs dashboard-schema-service | jq 'select(.event)'
+```
+
+Logs carry propagated context (`request_id`, `user_id`, `query_id`, `session_id`). See [TEST_OBSERVABILITY.md](TEST_OBSERVABILITY.md) for a full walkthrough and [../shared/observability/docs/ARCHITECTURE.md](../shared/observability/docs/ARCHITECTURE.md) for the design.
+
+> Today's instrumentation is operational/SRE-facing. End-user-facing observability (query timelines, history with timings, freshness badges in the UI) is planned for a future release.
 
 ## 🧪 **Testing**
 

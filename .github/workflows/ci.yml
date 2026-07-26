@@ -128,12 +128,17 @@ jobs:
     strategy:
       matrix:
         include:
-          - context: frontend
-            name: frontend
-          - context: nexus
-            name: nexus
-          - context: schema-service
-            name: schema-service
+          - name: frontend
+            context: ./frontend
+            dockerfile: frontend/Dockerfile
+          - name: nexus
+            context: .
+            dockerfile: nexus/Dockerfile
+          - name: schema-service
+            context: .
+            dockerfile: schema-service/Dockerfile
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t ${{ matrix.name }}:ci-test ./${{ matrix.context }}
+      # nexus, schema-service and the workers COPY shared/observability, so
+      # they build from the repo root; frontend is self-contained.
+      - run: docker build -t ${{ matrix.name }}:ci-test -f ${{ matrix.dockerfile }} ${{ matrix.context }}

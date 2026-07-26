@@ -68,6 +68,27 @@ class TrinoSchemaService:
             logger.error(f"Trino connect failed: {e}")
             raise
 
+
+    async def check_connection(self) -> bool:
+        """Check if Trino is accessible without fetching schema.
+        
+        Returns:
+            True if connection is successful, False otherwise.
+        """
+        try:
+            if not self.connection:
+                self.connect()
+            
+            # Execute a simple query to verify connectivity
+            cursor = self.connection.cursor()
+            cursor.execute("SELECT 1")
+            cursor.fetchall()
+            cursor.close()
+            return True
+        except Exception as e:
+            logger.warning(f"Trino connection check failed: {e}")
+            return False
+
     async def get_all_schemas(self, retries: int = 3, backoff_base: float = 1.0) -> List[Dict[str, Any]]:
         """Fetch catalog/schema/table/columns with connector types using system.jdbc.columns."""
         logger.info("Starting get_all_schemas - fetching schemas with connector types")

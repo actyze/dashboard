@@ -1,6 +1,7 @@
 """Base service class with common functionality."""
 
 import httpx
+import time
 import structlog
 from typing import Dict, Any, Optional
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
@@ -79,9 +80,9 @@ class BaseService:
     async def health_check(self) -> Dict[str, Any]:
         """Check service health."""
         try:
-            start_time = httpx._utils.default_timer()
+            start_time = time.perf_counter()
             result = await self._make_request("GET", "/health")
-            response_time = httpx._utils.default_timer() - start_time
+            response_time = time.perf_counter() - start_time
             
             return {
                 "name": self.service_name,

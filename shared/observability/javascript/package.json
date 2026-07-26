@@ -1,0 +1,25 @@
+{
+  "name": "@actyze/observability-js",
+  "version": "1.0.0",
+  "description": "Browser-based observability module for Actyze Dashboard",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo 'No tests configured yet'"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "observability",
+    "logging",
+    "metrics",
+    "performance",
+    "browser"
+  ],
+  "author": "Actyze",
+  "license": "AGPL-3.0-only",
+  "private": true
+}

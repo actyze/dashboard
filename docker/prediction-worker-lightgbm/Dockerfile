@@ -2,13 +2,22 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y     build-essential     curl     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+# Copy shared observability library first
+COPY shared/observability/python /shared/observability/python
+
+# Copy requirements
+COPY docker/prediction-worker-lightgbm/requirements.txt .
+
+# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Copy application
+COPY docker/prediction-worker-lightgbm . .
 
-EXPOSE 8400
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3     CMD curl -f http://localhost:8400/health || exit 1
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8400"]
+# Run app
+CMD ["python", "main.py"]

@@ -1,0 +1,12 @@
+# Observability Module Dependencies
+# Used by: nexus, schema-service, prediction-workers, and any other Python services
+
+# Logging
+structlog==24.4.0
+python-json-logger==3.2.1
+
+# Monitoring & Metrics
+prometheus-client==0.24.1
+
+# Async utilities (for health checks)
+# (most services will have async frameworks already installed)

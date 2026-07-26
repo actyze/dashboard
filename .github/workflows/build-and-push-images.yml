@@ -166,7 +166,7 @@ jobs:
         id: build
         uses: docker/build-push-action@v5
         with:
-          context: ./nexus
+          context: .
           file: ./nexus/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -244,7 +244,7 @@ jobs:
         id: build
         uses: docker/build-push-action@v5
         with:
-          context: ./schema-service
+          context: .
           file: ./schema-service/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -263,13 +263,13 @@ jobs:
       matrix:
         worker:
           - name: xgboost
-            context: ./docker/prediction-worker-xgboost
+            dockerfile: docker/prediction-worker-xgboost/Dockerfile
             image: actyze/prediction-worker-xgboost
           - name: lightgbm
-            context: ./docker/prediction-worker-lightgbm
+            dockerfile: docker/prediction-worker-lightgbm/Dockerfile
             image: actyze/prediction-worker-lightgbm
           - name: autogluon
-            context: ./docker/prediction-worker-autogluon
+            dockerfile: docker/prediction-worker-autogluon/Dockerfile
             image: actyze/prediction-worker-autogluon
     steps:
       - name: Checkout repository
@@ -306,8 +306,8 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ${{ matrix.worker.context }}
-          file: ${{ matrix.worker.context }}/Dockerfile
+          context: .
+          file: ${{ matrix.worker.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

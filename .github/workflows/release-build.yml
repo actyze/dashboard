@@ -47,28 +47,52 @@ jobs:
     needs: validate-release
     strategy:
       matrix:
-        service: [frontend, nexus, schema-service]
+        service:
+          - frontend
+          - nexus
+          - schema-service
+          - prediction-worker-xgboost
+          - prediction-worker-lightgbm
+          - prediction-worker-autogluon
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up build environment
         run: |
+          # Python services and the prediction workers copy the shared
+          # observability library, so they build from the repo root (.).
+          # Only the self-contained frontend builds from its own directory.
           case "${{ matrix.service }}" in
             frontend)
-              echo "BUILD_CONTEXT=." >> $GITHUB_ENV
-              echo "DOCKERFILE=./docker/Dockerfile.frontend" >> $GITHUB_ENV
+              echo "BUILD_CONTEXT=./frontend" >> $GITHUB_ENV
+              echo "DOCKERFILE=./frontend/Dockerfile" >> $GITHUB_ENV
               echo "IMAGE_NAME=actyze/dashboard-frontend" >> $GITHUB_ENV
               ;;
             nexus)
-              echo "BUILD_CONTEXT=./nexus" >> $GITHUB_ENV
+              echo "BUILD_CONTEXT=." >> $GITHUB_ENV
               echo "DOCKERFILE=./nexus/Dockerfile" >> $GITHUB_ENV
               echo "IMAGE_NAME=actyze/dashboard-nexus" >> $GITHUB_ENV
               ;;
             schema-service)
-              echo "BUILD_CONTEXT=./models/schema-service" >> $GITHUB_ENV
-              echo "DOCKERFILE=./models/schema-service/Dockerfile" >> $GITHUB_ENV
+              echo "BUILD_CONTEXT=." >> $GITHUB_ENV
+              echo "DOCKERFILE=./schema-service/Dockerfile" >> $GITHUB_ENV
               echo "IMAGE_NAME=actyze/dashboard-schema-service" >> $GITHUB_ENV
+              ;;
+            prediction-worker-xgboost)
+              echo "BUILD_CONTEXT=." >> $GITHUB_ENV
+              echo "DOCKERFILE=./docker/prediction-worker-xgboost/Dockerfile" >> $GITHUB_ENV
+              echo "IMAGE_NAME=actyze/prediction-worker-xgboost" >> $GITHUB_ENV
+              ;;
+            prediction-worker-lightgbm)
+              echo "BUILD_CONTEXT=." >> $GITHUB_ENV
+              echo "DOCKERFILE=./docker/prediction-worker-lightgbm/Dockerfile" >> $GITHUB_ENV
+              echo "IMAGE_NAME=actyze/prediction-worker-lightgbm" >> $GITHUB_ENV
+              ;;
+            prediction-worker-autogluon)
+              echo "BUILD_CONTEXT=." >> $GITHUB_ENV
+              echo "DOCKERFILE=./docker/prediction-worker-autogluon/Dockerfile" >> $GITHUB_ENV
+              echo "IMAGE_NAME=actyze/prediction-worker-autogluon" >> $GITHUB_ENV
               ;;
           esac
 
@@ -141,7 +165,7 @@ jobs:
               ;;
               
             schema-service)
-              cd models/schema-service
+              cd schema-service
               pip install python-minifier
               
               # Advanced minification for schema service
@@ -213,6 +237,9 @@ jobs:
           echo "- \`actyze/dashboard-frontend:${{ needs.validate-release.outputs.version }}\`" >> RELEASE_NOTES.md
           echo "- \`actyze/dashboard-nexus:${{ needs.validate-release.outputs.version }}\`" >> RELEASE_NOTES.md
           echo "- \`actyze/dashboard-schema-service:${{ needs.validate-release.outputs.version }}\`" >> RELEASE_NOTES.md
+          echo "- \`actyze/prediction-worker-xgboost:${{ needs.validate-release.outputs.version }}\`" >> RELEASE_NOTES.md
+          echo "- \`actyze/prediction-worker-lightgbm:${{ needs.validate-release.outputs.version }}\`" >> RELEASE_NOTES.md
+          echo "- \`actyze/prediction-worker-autogluon:${{ needs.validate-release.outputs.version }}\`" >> RELEASE_NOTES.md
           echo "" >> RELEASE_NOTES.md
           echo "## Security Features" >> RELEASE_NOTES.md
           echo "- Advanced code obfuscation applied to all services" >> RELEASE_NOTES.md

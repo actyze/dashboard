@@ -11,3 +11,8 @@ httpx>=0.24.0
 python-jose[cryptography]
 psycopg2-binary>=2.9.0
 asyncpg>=0.29.0
+
+# Observability module dependencies
+structlog==24.4.0
+python-json-logger==3.2.1
+prometheus-client==0.24.1

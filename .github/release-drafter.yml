@@ -1,0 +1,83 @@
+# Release Drafter config — auto-drafts the next release's notes from merged PRs.
+# Categories are keyed off labels (applied by .github/labeler.yml + the autolabeler
+# below, which maps Conventional Commit PR-title prefixes to labels).
+# Docs: https://github.com/release-drafter/release-drafter
+
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+
+categories:
+  - title: "🚀 Features"
+    labels:
+      - "enhancement"
+      - "feature"
+  - title: "🐛 Bug Fixes"
+    labels:
+      - "bug"
+      - "fix"
+  - title: "📈 Observability"
+    labels:
+      - "area/observability"
+  - title: "📝 Documentation"
+    labels:
+      - "documentation"
+  - title: "🧰 Maintenance & CI"
+    labels:
+      - "chore"
+      - "ci/cd"
+      - "infrastructure"
+      - "dependencies"
+
+# Map Conventional Commit PR-title prefixes to labels so version resolution and
+# categorization work without anyone manually labelling.
+autolabeler:
+  - label: "enhancement"
+    title:
+      - "/^feat(\\(.+\\))?!?:/"
+  - label: "bug"
+    title:
+      - "/^fix(\\(.+\\))?!?:/"
+  - label: "documentation"
+    title:
+      - "/^docs(\\(.+\\))?:/"
+  - label: "chore"
+    title:
+      - "/^(chore|refactor|style|test)(\\(.+\\))?:/"
+  - label: "ci/cd"
+    title:
+      - "/^(ci|build)(\\(.+\\))?:/"
+
+# SemVer resolution: breaking -> major, feat -> minor, everything else -> patch.
+version-resolver:
+  major:
+    labels:
+      - "major"
+      - "breaking"
+  minor:
+    labels:
+      - "minor"
+      - "enhancement"
+      - "feature"
+  patch:
+    labels:
+      - "patch"
+      - "fix"
+      - "bug"
+      - "chore"
+      - "documentation"
+      - "ci/cd"
+      - "infrastructure"
+      - "dependencies"
+  default: patch
+
+change-template: "- $TITLE @$AUTHOR (#$NUMBER)"
+change-title-escapes: '\<*_&'
+exclude-labels:
+  - "skip-changelog"
+
+template: |
+  ## What's Changed
+
+  $CHANGES
+
+  **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION

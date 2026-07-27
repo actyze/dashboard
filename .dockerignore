@@ -1,0 +1,70 @@
+# Keep build context minimal and free of anything that must not ship in an image.
+# Without this file the whole repo (including .git) is baked into every service image.
+
+# VCS and CI
+.git
+.gitignore
+.github
+.pre-commit-config.yaml
+
+# Secrets and local config — must never enter a build context
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.env
+.aws
+.docker
+.npmrc
+
+# Agent / editor / local tooling
+.claude
+.claude-drafts
+.mcp.json
+AGENTS.md
+CLAUDE.md
+.playwright-mcp
+.ruff_cache
+.mvn
+.vscode
+.idea
+.DS_Store
+
+# Python build artifacts
+__pycache__
+**/__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.mypy_cache
+.coverage
+htmlcov
+.venv
+venv
+
+# Node build artifacts (each image installs its own)
+node_modules
+**/node_modules
+npm-debug.log*
+frontend/build
+frontend-demo
+
+# Docs — not needed at runtime
+*.md
+!README.md
+docs
+Content
+
+# Test output and local data
+test-results
+playwright-report
+demo-data
+security/sbom
+security/scans
+
+# Local infra descriptors
+kind-*.yaml
+helm
+.helm-charts

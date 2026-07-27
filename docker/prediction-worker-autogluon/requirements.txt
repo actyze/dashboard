@@ -6,10 +6,6 @@ numpy==2.3.5
 trino==0.329.0
 psycopg2-binary==2.9.11
 
-# Transitive pin: autogluon's dependency tree resolves pyarrow to 20.0.0,
-# which carries GHSA-rgxp-2hwp-jwgg (HIGH). No installed package caps it.
-pyarrow>=23.0.1
-
 # Observability dependencies (shared)
 structlog==24.4.0
 python-json-logger==3.2.1

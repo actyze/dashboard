@@ -23,7 +23,17 @@ RUN pip install --no-cache-dir \
     'torch>=2.6,<2.10'
 
 COPY docker/prediction-worker-autogluon/requirements.txt /tmp/requirements.txt
+
+# autogluon.tabular requires xgboost by distribution name, so the CPU-only
+# xgboost-cpu build cannot be substituted the way it is in the xgboost
+# worker. xgboost declares nvidia-nccl-cu12 on Linux: NVIDIA's multi-GPU
+# collective communication library, which ships under proprietary terms and
+# cannot be used by a CPU-only worker. Remove it and prove the imports still
+# resolve, so an upstream change fails this build rather than the container.
+# Order matters: pip itself is removed last.
 RUN pip install --no-cache-dir -r /tmp/requirements.txt \
+    && pip uninstall -y nvidia-nccl-cu12 \
+    && python -c "import xgboost, autogluon.timeseries; print('xgboost', xgboost.__version__)" \
     && pip uninstall -y pip setuptools wheel
 
 # ---------------------------------------------------------------------------

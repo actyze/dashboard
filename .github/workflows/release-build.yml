@@ -35,7 +35,11 @@ jobs:
             VERSION="${{ github.event.inputs.version }}"
             IS_PRERELEASE="false"
           fi
-          
+
+          # Strip leading v: git tags are vX.Y.Z, Docker image tags are X.Y.Z
+          # (matches Helm appVersion and the pinned chart image tags).
+          VERSION="${VERSION#v}"
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "is-prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
           

@@ -18,9 +18,9 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # CPU-only torch: the default PyPI wheel pulls ~7 GB of proprietary NVIDIA
 # CUDA libraries that this worker never uses.
-RUN pip install --no-cache-dir \\
-    --index-url https://download.pytorch.org/whl/cpu \\
-    torch
+RUN pip install --no-cache-dir \
+    --index-url https://download.pytorch.org/whl/cpu \
+    'torch>=2.6,<2.10'
 
 COPY docker/prediction-worker-autogluon/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt \

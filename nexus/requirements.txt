@@ -1,6 +1,6 @@
 # Web Framework
-fastapi==0.115.6
-uvicorn[standard]==0.42.0
+fastapi==0.140.0
+uvicorn[standard]==0.51.0
 
 # GraphQL
 
@@ -8,7 +8,7 @@ uvicorn[standard]==0.42.0
 httpx==0.28.1
 
 # LLM Abstraction (supports 100+ providers)
-litellm==1.81.12
+litellm==1.93.0
 
 # LiteLLM Provider Dependencies (matched to LiteLLM v1.81.12 requirements)
 # AWS Bedrock
@@ -20,7 +20,7 @@ google-cloud-aiplatform==1.133.0
 google-genai==1.37.0
 
 # Azure OpenAI
-openai==2.9.0
+openai==2.48.0
 azure-identity==1.16.1
 azure-keyvault==4.2.0
 
@@ -48,10 +48,10 @@ python-json-logger==3.2.1
 prometheus-client==0.24.1
 
 # Utilities
-python-multipart==0.0.20
+python-multipart==0.0.32
 python-dotenv==1.0.1
 typing-extensions>=4.11,<5  # Compatible with both litellm and openai
-python-jose[cryptography]==3.3.0
+python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
 
 # Background Tasks & Scheduling

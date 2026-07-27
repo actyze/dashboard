@@ -20,10 +20,14 @@ spec:
         checksum/config: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
         rollout/timestamp: {{ now | date "20060102150405" | quote }}
     spec:
+      securityContext:
+        {{- include "dashboard.podSecurityContext" (dict) | nindent 8 }}
       containers:
       - name: nexus
         image: "{{ .Values.nexus.image.repository }}:{{ .Values.nexus.image.tag }}"
         imagePullPolicy: {{ .Values.nexus.image.pullPolicy | default .Values.global.imagePullPolicy }}
+        securityContext:
+          {{- include "dashboard.containerSecurityContext" (dict "readOnlyRootFilesystem" false) | nindent 10 }}
         ports:
         - name: http
           containerPort: 8002

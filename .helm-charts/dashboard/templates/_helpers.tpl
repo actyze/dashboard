@@ -131,3 +131,33 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Pod-level security context.
+Satisfies the Kubernetes "restricted" Pod Security Standard, which many
+enterprise clusters enforce via admission control. Service images run as
+uid 10001; the frontend (nginx-unprivileged) runs as 101 and Trino as 1000.
+*/}}
+{{- define "dashboard.podSecurityContext" -}}
+runAsNonRoot: true
+runAsUser: {{ .runAsUser | default 10001 }}
+runAsGroup: {{ .runAsGroup | default 10001 }}
+fsGroup: {{ .fsGroup | default 10001 }}
+seccompProfile:
+  type: RuntimeDefault
+{{- end }}
+
+{{/*
+Container-level security context.
+readOnlyRootFilesystem is opt-in per service: services that write scratch data
+(model cache, matplotlib/litellm caches) need an emptyDir mount before it can
+be enabled, so it defaults to false rather than risking a crashloop.
+*/}}
+{{- define "dashboard.containerSecurityContext" -}}
+allowPrivilegeEscalation: false
+privileged: false
+readOnlyRootFilesystem: {{ .readOnlyRootFilesystem | default false }}
+capabilities:
+  drop:
+    - ALL
+{{- end }}

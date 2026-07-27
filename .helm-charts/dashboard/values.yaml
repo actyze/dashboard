@@ -105,8 +105,8 @@ nexus:
   replicaCount: 2  # High availability
   image:
     repository: actyze/dashboard-nexus  # Public DockerHub image
-    tag: main-llm-flex  # Flexible LLM authentication
-    pullPolicy: Always  # Always pull latest from DockerHub
+    tag: "0.1.0"  # pinned release
+    pullPolicy: IfNotPresent
   service:
     type: ClusterIP
     port: 8002
@@ -163,8 +163,8 @@ frontend:
   replicaCount: 2  # High availability
   image:
     repository: actyze/dashboard-frontend  # Public DockerHub image
-    tag: latest
-    pullPolicy: Always  # Always pull latest from DockerHub
+    tag: "0.1.0"  # pinned release
+    pullPolicy: IfNotPresent
   # Google Analytics (optional — provide your own tracking ID)
   googleAnalytics:
     enabled: false
@@ -392,8 +392,8 @@ schemaService:
   replicaCount: 1
   image:
     repository: actyze/dashboard-schema-service  # Public DockerHub image
-    tag: latest
-    pullPolicy: Always  # Always pull latest from DockerHub
+    tag: "0.1.0"  # pinned release
+    pullPolicy: IfNotPresent
   resources:
     requests:
       memory: "2Gi"
@@ -448,7 +448,7 @@ predictionWorker:
   models:
     xgboost:
       enabled: true
-      image: actyze/prediction-worker-xgboost:latest
+      image: actyze/prediction-worker-xgboost:0.1.0
       replicas: 1
       resources:
         limits:
@@ -459,7 +459,7 @@ predictionWorker:
           memory: "256Mi"
     lightgbm:
       enabled: true
-      image: actyze/prediction-worker-lightgbm:latest
+      image: actyze/prediction-worker-lightgbm:0.1.0
       replicas: 1
       resources:
         limits:
@@ -470,7 +470,7 @@ predictionWorker:
           memory: "256Mi"
     autogluon:
       enabled: false
-      image: actyze/prediction-worker-autogluon:latest
+      image: actyze/prediction-worker-autogluon:0.1.0
       replicas: 1
       preset: "fast_training"   # fast_training (CPU) | medium_quality | best_quality (GPU)
       resources:

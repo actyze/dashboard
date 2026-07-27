@@ -78,6 +78,8 @@ jobs:
               - 'docker/prediction-worker-autogluon/**'
 
   build-frontend:
+    # Fail fast rather than burning the 6-hour job ceiling.
+    timeout-minutes: 90
     needs: detect-changes
     if: |
       needs.detect-changes.outputs.frontend == 'true' || 
@@ -132,6 +134,8 @@ jobs:
             REACT_APP_API_BASE_URL=/api
 
   build-nexus:
+    # Fail fast rather than burning the 6-hour job ceiling.
+    timeout-minutes: 90
     needs: detect-changes
     if: |
       needs.detect-changes.outputs.nexus == 'true' || 
@@ -184,6 +188,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
 
   build-schema-service:
+    # Fail fast rather than burning the 6-hour job ceiling.
+    timeout-minutes: 90
     needs: detect-changes
     if: |
       needs.detect-changes.outputs.schema == 'true' || 
@@ -266,6 +272,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
 
   build-prediction-workers:
+    # Fail fast rather than burning the 6-hour job ceiling.
+    timeout-minutes: 90
     needs: detect-changes
     if: |
       needs.detect-changes.outputs.prediction-workers == 'true' ||

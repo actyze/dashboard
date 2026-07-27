@@ -2,7 +2,11 @@
 # ---------------------------------------------------------------------------
 # Build stage
 # ---------------------------------------------------------------------------
-FROM node:22-alpine AS build
+# --platform=$BUILDPLATFORM: run this stage natively on the builder rather
+# than once per target architecture. The output is compiled JS/CSS, which
+# is architecture-independent, so emulating arm64 here bought nothing and
+# cost hours of QEMU time on the multi-arch build.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS build
 WORKDIR /app
 
 # Copy package files first for better caching

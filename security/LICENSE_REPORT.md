@@ -59,8 +59,31 @@ none of it was reachable code. It also accounted for most of that image's
 
 Both affected images now install the CPU-only `torch` build from PyTorch's CPU
 index before resolving the rest of the requirements, so the CUDA stack is never
-pulled in. `security/license-policy.yml` denies these licence identifiers and CI
-fails the build if they reappear.
+pulled in.
+
+### A second, separate source: xgboost
+
+`torch` was not the only path. `xgboost` declares `nvidia-nccl-cu12` on Linux
+unconditionally — NVIDIA's multi-GPU collective communication library, also
+proprietary, and equally unusable in a CPU-only worker:
+
+```
+Collecting nvidia-nccl-cu12 (from xgboost==2.1.3 ...)
+```
+
+- The xgboost worker now uses **`xgboost-cpu`**, the CPU-only distribution of
+  the same version, which declares no NVIDIA dependencies. The import name is
+  unchanged.
+- The autogluon worker cannot substitute it, because `autogluon.tabular`
+  requires `xgboost` by distribution name. It uninstalls the package after the
+  requirements install and then imports `xgboost` in the same layer, so an
+  upstream change fails the build rather than the running container.
+
+This one was **missed by local verification and caught only by CI**, because
+`nvidia-nccl-cu12` is published for x86_64 only and the local rebuilds were on
+arm64. Container licence and CVE claims must be made against a build for the
+architecture that actually ships. `security/license-policy.yml` denies these
+identifiers and CI fails the build if any of them reappear.
 
 ## Copyleft
 

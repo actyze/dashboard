@@ -63,18 +63,21 @@ The residual findings are upstream-capped, not deferred work. See
 
 ### Verification status
 
-Directly rebuilt and rescanned locally: **nexus, xgboost, lightgbm**.
+**CI is the authoritative check, not local builds.** The
+`SBOM and Vulnerability Scan` workflow builds all six images from the committed
+Dockerfiles on amd64 runners and runs the CVE and licence gates against them.
 
-**autogluon** — dependency resolution and CVE outcome verified; the image was
-built with the PyPI build of `torch` because this workstation's network
-intercepts TLS to `download.pytorch.org`. The committed Dockerfile installs the
-CPU-only build, which does not carry the NVIDIA CUDA libraries.
+Local rebuilds during this work were done on arm64 and proved to be
+**unrepresentative**: `nvidia-nccl-cu12`, pulled in unconditionally by
+`xgboost` on Linux, is published for x86_64 only, so it was absent from every
+local scan and present in the images that would actually ship. CI caught it;
+the local scans reported clean. Treat any architecture-specific claim about
+these images as valid only when made against an amd64 build.
 
-**schema-service** — requirement resolution verified against Python 3.13; the
-full image was not built locally for the same network reason.
-
-Both are covered by the CI gate described below, which builds from the
-committed Dockerfiles on a clean runner.
+Two images were additionally never built locally at all — `schema-service` and
+`prediction-worker-autogluon` — because this workstation's network intercepts
+TLS to `download.pytorch.org`, which the CPU-only `torch` install requires. For
+those, only dependency resolution was verified locally.
 
 ## 3. Supply chain
 

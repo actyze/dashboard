@@ -44,3 +44,13 @@ When reviewing pull requests, check for the following:
 - Trino handles federated queries across data sources
 - LiteLLM provides LLM abstraction (100+ providers)
 - No license or paywall code — all features are free and unlimited
+
+## Commits
+- **Never add a `Co-Authored-By:` trailer to a commit message.** This repo uses
+  cla-assistant, which requires a CLA signature from every author *and*
+  co-author on a pull request. A trailer naming a no-reply address adds a
+  "contributor" that can never sign, leaving the `license/cla` check stuck at
+  "Contributor License Agreement is not signed yet" and blocking the PR.
+- Do not append a "Generated with" footer to commit messages either, for the
+  same reason.
+- PR descriptions are unaffected — cla-assistant only reads commit metadata.

@@ -16,10 +16,12 @@ spec:
       labels:
         {{- include "dashboard.trino.selectorLabels" . | nindent 8 }}
     spec:
+      securityContext:
+        {{- include "dashboard.podSecurityContext" (dict "runAsUser" 1000 "runAsGroup" 1000 "fsGroup" 1000) | nindent 8 }}
       {{- if .Values.trino.security.authentication.enabled }}
       initContainers:
       - name: generate-password-file
-        image: python:3.11-slim
+        image: python:3.13-slim
         command:
         - /bin/sh
         - -c
@@ -57,6 +59,8 @@ spec:
       - name: trino
         image: "{{ .Values.trino.image.repository }}:{{ .Values.trino.image.tag }}"
         imagePullPolicy: {{ .Values.trino.imagePullPolicy | default .Values.global.imagePullPolicy }}
+        securityContext:
+          {{- include "dashboard.containerSecurityContext" (dict "readOnlyRootFilesystem" false) | nindent 10 }}
         ports:
         - name: http
           containerPort: 8080

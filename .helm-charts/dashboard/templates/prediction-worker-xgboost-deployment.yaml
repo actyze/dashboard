@@ -19,10 +19,14 @@ spec:
         {{- include "dashboard.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: prediction-worker-xgboost
     spec:
+      securityContext:
+        {{- include "dashboard.podSecurityContext" (dict) | nindent 8 }}
       containers:
       - name: prediction-worker-xgboost
         image: "{{ .Values.predictionWorker.models.xgboost.image | default "actyze/prediction-worker-xgboost:latest" }}"
         imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" }}
+        securityContext:
+          {{- include "dashboard.containerSecurityContext" (dict "readOnlyRootFilesystem" false) | nindent 10 }}
         ports:
         - name: http
           containerPort: 8400

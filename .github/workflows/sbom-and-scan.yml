@@ -1,0 +1,173 @@
+name: SBOM and Vulnerability Scan
+
+# Produces a CycloneDX SBOM for every service image and fails the build on
+# fixable CRITICAL/HIGH vulnerabilities or on a disallowed licence.
+#
+# Deliberately separate from build-and-push-images.yml, whose security-scan job
+# is continue-on-error and only runs against already-pushed tags. That job
+# reports; this one gates, and it runs on pull requests because it needs no
+# registry credentials.
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # New advisories land against unchanged images, so rescan weekly.
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  sbom-scan:
+    name: SBOM + scan (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: nexus
+            dockerfile: nexus/Dockerfile
+            context: .
+          - service: schema-service
+            dockerfile: schema-service/Dockerfile
+            context: .
+          - service: frontend
+            dockerfile: frontend/Dockerfile
+            context: frontend
+          - service: prediction-worker-xgboost
+            dockerfile: docker/prediction-worker-xgboost/Dockerfile
+            context: .
+          - service: prediction-worker-lightgbm
+            dockerfile: docker/prediction-worker-lightgbm/Dockerfile
+            context: .
+          - service: prediction-worker-autogluon
+            dockerfile: docker/prediction-worker-autogluon/Dockerfile
+            context: .
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Built locally into the runner's docker daemon. No registry credentials
+      # are involved, so this works identically on dependabot and fork PRs.
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: false
+          load: true
+          tags: scan-target/${{ matrix.service }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      - name: Install syft and grype
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+            | sh -s -- -b "$RUNNER_TEMP/bin"
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
+            | sh -s -- -b "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Generate SBOM (CycloneDX + syft JSON)
+        env:
+          IMAGE: scan-target/${{ matrix.service }}:${{ github.sha }}
+          SERVICE: ${{ matrix.service }}
+        run: |
+          syft "$IMAGE" \
+            -o cyclonedx-json="sbom-${SERVICE}.cdx.json" \
+            -o syft-json="syft-${SERVICE}.json" \
+            -q
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.service }}
+          path: sbom-${{ matrix.service }}.cdx.json
+          retention-days: 90
+
+      - name: Scan for vulnerabilities
+        env:
+          IMAGE: scan-target/${{ matrix.service }}:${{ github.sha }}
+          SERVICE: ${{ matrix.service }}
+        run: |
+          grype "$IMAGE" -o json --file "grype-${SERVICE}.json" -q
+          grype "$IMAGE" -o sarif --file "grype-${SERVICE}.sarif" -q
+
+      # Everything is reported to the Security tab, including findings with no
+      # fix available, so nothing is hidden by the gate below.
+      - name: Upload scan results to Security tab
+        if: always() && hashFiles(format('grype-{0}.sarif', matrix.service)) != ''
+        uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
+        with:
+          sarif_file: grype-${{ matrix.service }}.sarif
+          category: grype-${{ matrix.service }}
+
+      # Gate on what is actionable: a fixable CRITICAL/HIGH means an upgrade
+      # exists and we have simply not taken it. Findings with no available fix
+      # are reported but must not block delivery; waive them explicitly in
+      # security/vulnerability-allowlist.txt so each one is a recorded decision.
+      - name: Fail on fixable CRITICAL/HIGH
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, sys
+
+          service = os.environ["SERVICE"]
+          data = json.loads(pathlib.Path(f"grype-{service}.json").read_text())
+
+          allow = set()
+          allowlist = pathlib.Path("security/vulnerability-allowlist.txt")
+          if allowlist.exists():
+              for line in allowlist.read_text().splitlines():
+                  line = line.split("#", 1)[0].strip()
+                  if line:
+                      allow.add(line)
+
+          blocking, waived = set(), set()
+          for match in data.get("matches", []):
+              vuln = match["vulnerability"]
+              if vuln.get("severity") not in ("Critical", "High"):
+                  continue
+              if vuln.get("fix", {}).get("state") != "fixed":
+                  continue
+              row = (
+                  vuln["severity"],
+                  match["artifact"]["name"],
+                  match["artifact"]["version"],
+                  vuln["id"],
+                  ",".join(vuln["fix"].get("versions", [])),
+              )
+              (waived if vuln["id"] in allow else blocking).add(row)
+
+          def show(title, rows):
+              if rows:
+                  print(f"\n{title}")
+                  for sev, name, ver, vid, fix in sorted(rows):
+                      print(f"  {sev:8} {name} {ver}  {vid}  fix={fix}")
+
+          show("Waived (security/vulnerability-allowlist.txt):", waived)
+          show("Fixable CRITICAL/HIGH — upgrade required:", blocking)
+
+          if blocking:
+              print(f"\n{len(blocking)} fixable finding(s) in {service}.")
+              sys.exit(1)
+          print(f"\nNo unwaived fixable CRITICAL/HIGH findings in {service}.")
+          PY
+
+      - name: Check licences against policy
+        run: |
+          python3 security/check_licenses.py \
+            --sbom "syft-${{ matrix.service }}.json" \
+            --policy security/license-policy.yml \
+            --service "${{ matrix.service }}"

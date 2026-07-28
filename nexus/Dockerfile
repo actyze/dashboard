@@ -1,38 +1,54 @@
-FROM python:3.11-slim
+# syntax=docker/dockerfile:1
+# ---------------------------------------------------------------------------
+# Build stage — compilers and build-only packages live here and never ship.
+# ---------------------------------------------------------------------------
+FROM python:3.13-slim AS builder
 
-# Set working directory
-WORKDIR /app
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# g++ as well as gcc: meson-based sdists need a C++ compiler.
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    curl \
-    postgresql-client \
+    g++ \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy shared observability library first
-COPY shared/observability/python /shared/observability/python
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy requirements first for better caching
-COPY nexus/requirements.txt .
+COPY nexus/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt \
+    && pip uninstall -y pip setuptools wheel
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# ---------------------------------------------------------------------------
+# Runtime stage — no compilers, no pip/setuptools/wheel, no build artifacts.
+# ---------------------------------------------------------------------------
+FROM python:3.13-slim AS runtime
 
-# Copy application code
-COPY nexus .
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH"
 
-# Create non-root user
-RUN useradd --create-home --shell /bin/bash app \
-    && chown -R app:app /app
-USER app
+# libpq5 is the runtime half of libpq-dev (psycopg2).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --shell /usr/sbin/nologin --uid 10001 app
 
-# Expose port
+WORKDIR /app
+
+COPY --from=builder /opt/venv /opt/venv
+COPY --chown=app:app shared/observability/python /shared/observability/python
+COPY --chown=app:app nexus .
+
+USER 10001
+
 EXPOSE 8000
 
-# Health check
+# stdlib probe — avoids shipping curl purely to health-check ourselves.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=5).status==200 else 1)"]
 
-# Run the application
 CMD ["python", "main.py"]

@@ -132,7 +132,7 @@ services:
         reservations:
           memory: 1G  # Soft limit: guarantee this amount on startup
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=5).status==200 else 1)\" || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -232,7 +232,7 @@ services:
         reservations:
           memory: 512M
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=5).status==200 else 1)\" || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -254,7 +254,7 @@ services:
         REACT_APP_EXECUTE_TIMEOUT_SECONDS: ${EXECUTE_TIMEOUT_SECONDS:-120}
     container_name: dashboard-frontend
     ports:
-      - "3000:80"
+      - "3000:8080"
     depends_on:
       nexus:
         condition: service_healthy
@@ -265,7 +265,7 @@ services:
         reservations:
           memory: 128M
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:80 || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

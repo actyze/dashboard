@@ -20,10 +20,14 @@ spec:
         checksum/config: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
         rollout/timestamp: {{ now | date "20060102150405" | quote }}
     spec:
+      securityContext:
+        {{- include "dashboard.podSecurityContext" (dict "runAsUser" 101 "runAsGroup" 101 "fsGroup" 101) | nindent 8 }}
       containers:
       - name: frontend
         image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
         imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+        securityContext:
+          {{- include "dashboard.containerSecurityContext" (dict "readOnlyRootFilesystem" false) | nindent 10 }}
         # Use custom entrypoint for runtime HTML injection (demo features)
         command: ["/scripts/docker-entrypoint.sh"]
         {{- $intercomEnabled := false }}
@@ -45,7 +49,9 @@ spec:
         {{- end }}
         ports:
         - name: http
-          containerPort: 80
+          # 8080: nginx runs unprivileged (uid 101) and cannot bind <1024.
+          # Service targetPort is the named port, so Service specs are unchanged.
+          containerPort: 8080
           protocol: TCP
         volumeMounts:
         - name: entrypoint-script

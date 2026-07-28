@@ -19,10 +19,14 @@ spec:
         {{- include "dashboard.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: prediction-worker-lightgbm
     spec:
+      securityContext:
+        {{- include "dashboard.podSecurityContext" (dict) | nindent 8 }}
       containers:
       - name: prediction-worker-lightgbm
         image: "{{ .Values.predictionWorker.models.lightgbm.image | default "actyze/prediction-worker-lightgbm:latest" }}"
         imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" }}
+        securityContext:
+          {{- include "dashboard.containerSecurityContext" (dict "readOnlyRootFilesystem" false) | nindent 10 }}
         ports:
         - name: http
           containerPort: 8400

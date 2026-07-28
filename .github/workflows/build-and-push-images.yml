@@ -100,7 +100,7 @@ jobs:
         # logging in would fail with "Username and password required" before a
         # single image is built. PRs verify the build; only pushes publish.
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }}
@@ -156,7 +156,7 @@ jobs:
         # logging in would fail with "Username and password required" before a
         # single image is built. PRs verify the build; only pushes publish.
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }}
@@ -240,7 +240,7 @@ jobs:
         # logging in would fail with "Username and password required" before a
         # single image is built. PRs verify the build; only pushes publish.
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }}
@@ -309,7 +309,7 @@ jobs:
         # logging in would fail with "Username and password required" before a
         # single image is built. PRs verify the build; only pushes publish.
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }}

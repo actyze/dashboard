@@ -43,7 +43,7 @@ async-lru==2.0.4
 tenacity==9.1.4
 
 # Logging & Monitoring (now from shared observability module)
-structlog==24.4.0
+structlog==26.1.0
 python-json-logger==3.2.1
 prometheus-client==0.24.1
 

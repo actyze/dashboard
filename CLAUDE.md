@@ -20,6 +20,21 @@ When reviewing pull requests, check for the following:
   - **`.github/workflows/secret-scan.yml`** — gitleaks runs on every PR and push to main
   - **GitHub Push Protection** — enabled in repo settings, blocks pushes at GitHub's receive step
 
+### Container images — no CUDA in CPU-only services
+No service in this repo requests a GPU (neither `docker-compose.yml` nor the Helm chart), so no image should ship CUDA runtime libraries. They are also **proprietary** (`LicenseRef-NVIDIA-Proprietary`), so they break the "everything is open source" claim as well as bloating images — `schema-service` once carried 15 of them and weighed 9.21 GB.
+
+- **PyTorch**: the default PyPI `torch` wheel is the CUDA build and pulls ~15 `nvidia-*` packages (cuDNN, cuBLAS, NCCL, ...) plus `triton`. Any image that installs `torch` — directly or transitively via `sentence-transformers`, `autogluon`, etc. — must install it from the CPU index **first**, then install the rest:
+  ```dockerfile
+  RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+      && pip install --no-cache-dir -r requirements.txt
+  ```
+  Pin the torch version when a dependency caps it (`autogluon.timeseries==1.5.0` requires `torch>=2.6,<2.10`). An unpinned install resolves to the newest CPU wheel, which pip then **downgrades back to the CUDA build** to satisfy the ceiling — silently undoing the fix.
+- Use `--index-url` scoped to the torch install, never `--extra-index-url` in `requirements.txt`: an extra index makes pip search both indexes for every package and pick whichever version looks newest (dependency-confusion risk).
+- **xgboost** declares `nvidia-nccl-cu12` (~300 MB) for distributed GPU training, with the marker `platform_system == 'Linux' and platform_machine != 'aarch64'` — so it lands on amd64 and never on arm64. Prefer the **`xgboost-cpu`** distribution, which declares no NVIDIA dependencies and has the same import name. Where a dependency requires `xgboost` by name (`autogluon.tabular` does), install it then `pip uninstall -y nvidia-nccl-cu12`, and import the package in the same layer so an upstream change fails the build rather than the container.
+- Verify on **both** architectures. CI builds `linux/amd64,linux/arm64` and these dependency markers are arch-conditional — an arm64-only check will miss CUDA that amd64 pulls in. This is not hypothetical: local arm64 scans reported clean while the shipped amd64 images carried `nvidia-nccl-cu12`, and only CI caught it.
+- After changing image dependencies, confirm behaviour is unchanged (identical model output/predictions), not just that the image is smaller.
+- `.github/workflows/sbom-and-scan.yml` enforces this: `security/license-policy.yml` denies the NVIDIA licence identifiers and fails the build. Note the gate currently builds **amd64 only** while images publish amd64 and arm64 (#250), so it catches the case that matters here but is not full coverage.
+
 ## AGPL Compliance
 - New source files should include AGPL-3.0 license header
 - Third-party libraries must be compatible with AGPL-3.0

@@ -42,7 +42,19 @@ USER root
 RUN apk upgrade --no-cache
 USER 101
 
-COPY --from=build /app/build /usr/share/nginx/html
+COPY --from=build --chown=101:101 /app/build /usr/share/nginx/html
+
+# The Helm deployment runs docker-entrypoint.sh, which injects the Google
+# Analytics snippet with `sed -i` over index.html at startup. sed -i writes a
+# temp file *into the directory*, so the runtime user must own the web root
+# itself. COPY --chown only sets ownership on the entries it copies, and
+# /usr/share/nginx/html already exists in the base image owned by root, so the
+# directory has to be chowned explicitly. Without this the entrypoint dies with
+# "can't create temp file ... Permission denied", the pod never becomes ready,
+# and `helm upgrade --wait` times out after 15 minutes.
+USER root
+RUN chown 101:101 /usr/share/nginx/html
+USER 101
 
 # Custom nginx config to support client-side routing
 COPY nginx.conf /etc/nginx/conf.d/default.conf

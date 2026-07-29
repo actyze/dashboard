@@ -127,3 +127,11 @@ helm/dashboard/values-*-secrets.yaml
 .mcp.json
 .claude/
 .claude-drafts/
+
+# Generated SBOM and vulnerability scan output.
+# security/ holds the policy, checker and reports, which are committed. These
+# are ~40 MB of point-in-time JSON that go stale as soon as a new advisory
+# lands, and CI regenerates them on every run (retained 90 days as workflow
+# artifacts by .github/workflows/sbom-and-scan.yml).
+security/sbom/
+security/scans/

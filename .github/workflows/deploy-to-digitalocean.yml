@@ -105,9 +105,13 @@ jobs:
         run: |
           STATUS=$(helm status ${{ env.HELM_RELEASE }} -n ${{ env.NAMESPACE }} -o json 2>/dev/null | jq -r '.info.status' 2>/dev/null || echo "not-found")
           echo "Current release status: $STATUS"
-          if [[ "$STATUS" == "pending-install" || "$STATUS" == "pending-upgrade" || "$STATUS" == "pending-rollback" ]]; then
-            echo "Release is stuck in $STATUS — rolling back..."
-            helm rollback ${{ env.HELM_RELEASE }} -n ${{ env.NAMESPACE }} || true
+          # `failed` is included deliberately: a previous timed-out upgrade leaves
+          # the release in `failed`, not `pending-*`, and without a rollback the
+          # next upgrade starts from that broken state and times out the same way.
+          if [[ "$STATUS" == "pending-install" || "$STATUS" == "pending-upgrade" || "$STATUS" == "pending-rollback" || "$STATUS" == "failed" ]]; then
+            echo "Release is in $STATUS — attempting rollback to the last good revision..."
+            helm rollback ${{ env.HELM_RELEASE }} -n ${{ env.NAMESPACE }} || \
+              echo "Rollback failed or no prior revision exists; continuing to upgrade anyway."
           fi
 
       - name: Create values-secrets.yaml from GitHub Secrets
@@ -199,6 +203,44 @@ jobs:
             --set schemaService.image.tag=latest \
             --timeout 15m \
             --wait
+
+      # `helm upgrade --wait` reports only "context deadline exceeded" and never
+      # says which resource it was waiting on, so a failure is otherwise a
+      # 15-minute black box. This runs only on failure and is best-effort.
+      - name: Diagnose failed deployment
+        if: failure()
+        continue-on-error: true
+        run: |
+          NS=${{ env.NAMESPACE }}
+          echo "::group::Helm release history"
+          helm history ${{ env.HELM_RELEASE }} -n "$NS" || true
+          echo "::endgroup::"
+
+          echo "::group::Pods"
+          kubectl get pods -n "$NS" -o wide || true
+          echo "::endgroup::"
+
+          echo "::group::Pods not Ready"
+          kubectl get pods -n "$NS" \
+            -o jsonpath='{range .items[?(@.status.phase!="Succeeded")]}{.metadata.name}{"\t"}{range .status.conditions[?(@.type=="Ready")]}{.status}{end}{"\n"}{end}' \
+            | awk -F'\t' '$2!="True"{print $1}' > /tmp/unready.txt || true
+          cat /tmp/unready.txt || true
+          echo "::endgroup::"
+
+          while read -r pod; do
+            [ -z "$pod" ] && continue
+            echo "::group::describe $pod"
+            kubectl describe pod "$pod" -n "$NS" | tail -40 || true
+            echo "::endgroup::"
+            echo "::group::logs $pod (current + previous)"
+            kubectl logs "$pod" -n "$NS" --all-containers --tail=60 || true
+            kubectl logs "$pod" -n "$NS" --all-containers --tail=60 --previous 2>/dev/null || true
+            echo "::endgroup::"
+          done < /tmp/unready.txt
+
+          echo "::group::Recent events"
+          kubectl get events -n "$NS" --sort-by=.lastTimestamp | tail -40 || true
+          echo "::endgroup::"
 
       - name: Verify deployment
         run: |

@@ -32,8 +32,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH"
 
 # libpq5 is the runtime half of libpq-dev (psycopg2).
+# postgresql-client provides the `psql` binary, which app/migrations.py shells
+# out to on startup to read applied migrations without holding a connection
+# lock. Dropping it makes every migration fail with
+# "[Errno 2] No such file or directory: 'psql'", the lifespan raises
+# RuntimeError("Database migrations failed"), and the container exits 0 into a
+# crash loop. libpq5 is the shared library only and does not provide psql.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --shell /usr/sbin/nologin --uid 10001 app
 

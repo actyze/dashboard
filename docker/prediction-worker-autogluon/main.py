@@ -16,8 +16,6 @@ from observability_init import (
     configure_logging,
     get_logger,
     setup_health_endpoints,
-)
-from observability.metrics import (
     MetricsContext,
     record_prediction,
     record_prediction_duration,
@@ -132,3 +130,17 @@ async def predict(req: PredictRequest, x_worker_secret: str = Header(default="")
         record_prediction_duration("autogluon", duration)
         logger.error("prediction_failed", error=str(e), duration_s=duration, exc_info=True)
         raise HTTPException(status_code=500, detail="Prediction failed. Check worker logs for details.")
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    # The Dockerfile CMD is `python main.py`, matching nexus. Without this guard
+    # the module only defines `app` and the process exits 0 immediately, which
+    # Kubernetes reports as Completed and restarts forever.
+    uvicorn.run(
+        "main:app",
+        host=os.environ.get("HOST", "0.0.0.0"),
+        port=int(os.environ.get("PORT", "8400")),
+        log_level=os.environ.get("LOG_LEVEL", "info").lower(),
+    )

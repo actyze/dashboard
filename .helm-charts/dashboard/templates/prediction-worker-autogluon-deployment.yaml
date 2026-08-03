@@ -30,6 +30,8 @@ spec:
         env:
         - name: AUTOGLUON_PRESET
           value: {{ .Values.predictionWorker.models.autogluon.preset | default "fast_training" | quote }}
+        env:
+        {{- include "dashboard.predictionWorker.dbEnv" . | nindent 8 }}
         ports:
         - name: http
           containerPort: 8400

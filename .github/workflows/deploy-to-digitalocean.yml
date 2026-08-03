@@ -201,6 +201,9 @@ jobs:
             --set frontend.image.tag=latest \
             --set nexus.image.tag=latest \
             --set schemaService.image.tag=latest \
+            --set predictionWorker.models.xgboost.image=actyze/prediction-worker-xgboost:latest \
+            --set predictionWorker.models.lightgbm.image=actyze/prediction-worker-lightgbm:latest \
+            --set predictionWorker.models.autogluon.image=actyze/prediction-worker-autogluon:latest \
             --timeout 15m \
             --wait
 

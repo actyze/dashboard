@@ -244,6 +244,18 @@ spec:
         - name: ALLOW_SELF_REGISTRATION
           value: {{ .Values.nexus.env.ALLOW_SELF_REGISTRATION | quote }}
         {{- end }}
+        # Guards a slow first start. nexus applies 35 SQL migrations before it
+        # binds the port; the liveness probe alone (30s + 3x10s) killed it
+        # mid-migration, so it never recorded completion and re-ran the whole
+        # set on every restart — a loop it could not exit. startupProbe gives
+        # it up to 5 minutes to come up, after which liveness takes over at the
+        # normal cadence.
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+          failureThreshold: 30
         livenessProbe:
           httpGet:
             path: /health

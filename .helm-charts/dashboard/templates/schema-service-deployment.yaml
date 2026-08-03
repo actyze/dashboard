@@ -8,6 +8,12 @@ metadata:
     {{- include "dashboard.labels" . | nindent 4 }}
     app.kubernetes.io/component: schema-service
 spec:
+  # The model-cache PVC is ReadWriteOnce, so the incoming pod cannot attach
+  # the volume while the outgoing one still holds it. A rolling update
+  # deadlocks with 'Multi-Attach error for volume', which is what blocked
+  # this deployment. Recreate terminates the old pod first.
+  strategy:
+    type: Recreate
   replicas: {{ .Values.schemaService.replicaCount }}
   selector:
     matchLabels:

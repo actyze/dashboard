@@ -201,6 +201,9 @@ jobs:
             --set frontend.image.tag=latest \
             --set nexus.image.tag=latest \
             --set schemaService.image.tag=latest \
+            --set frontend.image.pullPolicy=Always \
+            --set nexus.image.pullPolicy=Always \
+            --set schemaService.image.pullPolicy=Always \
             --set predictionWorker.models.xgboost.image=actyze/prediction-worker-xgboost:latest \
             --set predictionWorker.models.lightgbm.image=actyze/prediction-worker-lightgbm:latest \
             --set predictionWorker.models.autogluon.image=actyze/prediction-worker-autogluon:latest \

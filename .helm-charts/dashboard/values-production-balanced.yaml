@@ -11,8 +11,8 @@ frontend:
   replicaCount: 2
   resources:
     requests:
-      memory: "96Mi"     # Between original (128Mi) and minimal (64Mi)
-      cpu: "75m"         # Comfortable for nginx + React
+      memory: "64Mi"     # measured ~4Mi; nginx serving static assets
+      cpu: "25m"         # measured ~1m
     limits:
       memory: "192Mi"    # Can handle traffic spikes
       cpu: "150m"
@@ -22,18 +22,18 @@ nexus:
   replicaCount: 2
   resources:
     requests:
-      memory: "384Mi"    # Good for caching + FastAPI
-      cpu: "200m"        # Enough for API processing
+      memory: "768Mi"    # measured ~650Mi; previous 384Mi request was under actual use
+      cpu: "100m"        # measured ~13m
     limits:
-      memory: "768Mi"    # Can handle LLM responses and caching
+      memory: "1536Mi"   # raised: usage sat at ~86% of the previous 768Mi limit
       cpu: "400m"        # Good burst capacity
 
 # PostgreSQL - Production-ready settings
 postgres:
   resources:
     requests:
-      memory: "384Mi"    # Good for production database
-      cpu: "150m"        # Comfortable for queries
+      memory: "256Mi"    # measured ~176Mi
+      cpu: "100m"        # measured ~6m
     limits:
       memory: "1Gi"      # Can handle connection pools
       cpu: "500m"        # Burst capacity for migrations/backups
@@ -45,8 +45,8 @@ trino:
   replicaCount: 1
   resources:
     requests:
-      memory: "3Gi"      # Good for query processing
-      cpu: "1500m"       # 1.5 CPUs for decent performance
+      memory: "2Gi"      # measured ~1.6Gi
+      cpu: "400m"        # measured ~72m; limit stays at 3000m for query bursts
     limits:
       memory: "5Gi"      # Can handle complex queries
       cpu: "3000m"       # Up to 3 CPUs for heavy queries
@@ -59,7 +59,7 @@ schemaService:
   resources:
     requests:
       memory: "1536Mi"   # 1.5Gi - good for embeddings
-      cpu: "750m"        # Decent for initial indexing
+      cpu: "200m"        # measured ~4m; limit stays at 1500m for indexing bursts
     limits:
       memory: "3Gi"      # Can handle large schemas
       cpu: "1500m"       # Burst for embedding generation

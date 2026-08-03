@@ -27,6 +27,8 @@ spec:
         imagePullPolicy: {{ .Values.global.imagePullPolicy | default "IfNotPresent" }}
         securityContext:
           {{- include "dashboard.containerSecurityContext" (dict "readOnlyRootFilesystem" false) | nindent 10 }}
+        env:
+        {{- include "dashboard.predictionWorker.dbEnv" . | nindent 8 }}
         ports:
         - name: http
           containerPort: 8400

@@ -100,6 +100,14 @@ services:
   trino:
     enabled: true        # Trino query engine (REQUIRED)
 
+# Demo-only features. Not used by normal deployments, but these keys must
+# exist: templates guard on .Values.demo.ssoProxy.enabled, and in Helm a
+# missing parent map is a nil-pointer error rather than a falsy value.
+demo:
+  ssoProxy:
+    enabled: false
+    # supabaseJwtSecret: ""   # required only when enabled
+
 # Nexus FastAPI orchestration service
 nexus:
   replicaCount: 2  # High availability
@@ -142,8 +150,16 @@ nexus:
     schemaService:
       url: "http://dashboard-schema-service:8001"
     trino:
-      # All Trino connection details loaded from values-secrets.yaml
-      # host, port, catalog, schema, user, password
+      # Defaults target the in-cluster Trino this chart deploys
+      # (services.trino.enabled is true by default). Point these at an external
+      # Trino if you disable it. Credentials stay empty and come from
+      # values-secrets.yaml.
+      host: ""              # defaults to this chart's own Trino Service
+      port: 8080
+      catalog: "postgres"
+      schema: "public"
+      ssl: false
+      sslVerify: true
     # ML Service Configuration
     mlService:
       modelType: "external-llm"
@@ -403,8 +419,16 @@ schemaService:
       cpu: "4000m"
   env:
     trino:
-      # All Trino connection details loaded from values-secrets.yaml
-      # host, port, catalog, schema, user, password
+      # Defaults target the in-cluster Trino this chart deploys
+      # (services.trino.enabled is true by default). Point these at an external
+      # Trino if you disable it. Credentials stay empty and come from
+      # values-secrets.yaml.
+      host: ""              # defaults to this chart's own Trino Service
+      port: 8080
+      catalog: "postgres"
+      schema: "public"
+      ssl: false
+      sslVerify: true
     refreshHours: 6  # Refresh schema every 6 hours
     includeTpch: false  # Exclude TPC-H in production
   probes:

@@ -45,7 +45,7 @@ spec:
         {{- end }}
         # Trino Configuration
         - name: TRINO_HOST
-          value: "{{ .Values.schemaService.env.trino.host }}"
+          value: "{{ .Values.schemaService.env.trino.host | default (include "dashboard.trino.fullname" .) }}"
         - name: TRINO_PORT
           value: "{{ .Values.schemaService.env.trino.port }}"
         - name: TRINO_CATALOG

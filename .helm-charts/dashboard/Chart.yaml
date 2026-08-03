@@ -2,8 +2,8 @@ apiVersion: v2
 name: dashboard
 description: AI-powered analytics dashboard with Natural Language to SQL conversion
 type: application
-version: 0.2.0
-appVersion: "0.1.0"
+version: 0.2.1
+appVersion: "0.1.1"
 
 keywords:
   - dashboard

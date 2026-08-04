@@ -165,6 +165,57 @@ jobs:
           print(f"\nNo unwaived fixable CRITICAL/HIGH findings in {service}.")
           PY
 
+      # Unfixable CRITICAL/HIGH findings are assessed one by one in
+      # security/VULNERABILITY_EXCEPTIONS.md and stated machine-readably in
+      # security/vex/actyze.openvex.json. Neither file can gate a build — an
+      # unfixable finding is by definition not actionable — but both go stale
+      # silently, in two directions. This step reports the drift in the job
+      # summary so it is visible at review time.
+      - name: Report VEX coverage drift
+        if: always() && hashFiles(format('grype-{0}.json', matrix.service)) != ''
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, os, pathlib
+
+          service = os.environ["SERVICE"]
+          data = json.loads(pathlib.Path(f"grype-{service}.json").read_text())
+          vex_path = pathlib.Path("security/vex/actyze.openvex.json")
+
+          stated = {}
+          if vex_path.exists():
+              for stmt in json.loads(vex_path.read_text()).get("statements", []):
+                  stated[stmt["vulnerability"]["name"]] = stmt.get("status", "")
+
+          unfixable, resolved = set(), set()
+          for match in data.get("matches", []):
+              vuln = match["vulnerability"]
+              if vuln.get("severity") not in ("Critical", "High"):
+                  continue
+              vid = vuln["id"]
+              if vuln.get("fix", {}).get("state") == "fixed":
+                  # A CVE we documented as unfixable now has an upstream fix.
+                  if vid in stated:
+                      resolved.add((vid, ",".join(vuln["fix"].get("versions", []))))
+              elif vid not in stated:
+                  unfixable.add((vuln["severity"], match["artifact"]["name"], vid))
+
+          print(f"### VEX coverage — {service}")
+          if resolved:
+              print("\n**Fix now available for a documented exception** — move it out of "
+                    "`security/VULNERABILITY_EXCEPTIONS.md` and take the upgrade:\n")
+              for vid, fix in sorted(resolved):
+                  print(f"- `{vid}` — fixed in {fix}")
+          if unfixable:
+              print("\n**Unfixable CRITICAL/HIGH with no VEX statement** — assess and add "
+                    "to `security/VULNERABILITY_EXCEPTIONS.md`:\n")
+              for sev, pkg, vid in sorted(unfixable):
+                  print(f"- {sev} `{vid}` in `{pkg}`")
+          if not resolved and not unfixable:
+              print("\nEvery unfixable CRITICAL/HIGH finding is covered by a VEX statement.")
+          PY
+
       - name: Check licences against policy
         run: |
           python3 security/check_licenses.py \

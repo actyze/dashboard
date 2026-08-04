@@ -61,6 +61,12 @@ CRITICAL/HIGH — the same basis the enterprise scanner used:
 The residual findings are upstream-capped, not deferred work. See
 `vulnerability-allowlist.txt` for each one with its reason and review date.
 
+A scan that also counts **unfixable** findings — `grype` without
+`--ignore-unfixed` — reports more than this, because the Debian base carries
+CRITICAL and HIGH advisories that have no fixed version in any release. Those
+are assessed individually in `VULNERABILITY_EXCEPTIONS.md` and stated
+machine-readably in `vex/actyze.openvex.json`. See §5.
+
 ### Verification status
 
 **CI is the authoritative check, not local builds.** The
@@ -121,6 +127,35 @@ credentials, then:
 The pre-existing `security-scan` job in `build-and-push-images.yml` remains, but
 it is `continue-on-error` and scans only already-pushed tags. It reports; this
 workflow gates.
+
+### Findings with no available fix
+
+The gate deliberately ignores findings with no upstream fix, so a reviewer
+scanning without `--ignore-unfixed` sees more than the table in §2. As of
+2026-08-04 that is **27 findings across 21 CVEs**, all of them from
+`python:3.13-slim` and shared by the five Python images. Actyze's own
+dependencies contribute none.
+
+`VULNERABILITY_EXCEPTIONS.md` assesses each one, with the command used to reach
+the assessment. `perl-base` alone accounts for 12; eight of those are against
+CPAN modules that are not installed in the image at all.
+
+`vex/actyze.openvex.json` states the same conclusions in
+[OpenVEX](https://openvex.dev) form, so the assessment can be applied to your
+own scan rather than taken on trust:
+
+```bash
+grype actyze/dashboard-nexus:<tag> \
+  --vex security/vex/actyze.openvex.json \
+  --show-suppressed
+```
+
+Suppressed findings are shown with their justification rather than dropped.
+Drop `--vex` for the unfiltered result.
+
+CI reports drift in both directions in the job summary — a documented exception
+that gains an upstream fix, and a new unfixable finding with no statement — so
+neither file rots unnoticed. Neither check blocks a build.
 
 ## 6. Kubernetes
 

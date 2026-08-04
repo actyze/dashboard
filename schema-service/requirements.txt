@@ -9,6 +9,9 @@ python-dotenv>=1.0.0
 apscheduler>=3.10.0
 httpx>=0.24.0
 python-jose[cryptography]
+# Transitive via python-jose[cryptography]. Pinned to a floor because
+# 49.0.0 carries GHSA-g6cj-pr64-35w5 (HIGH), fixed in 50.0.0.
+cryptography>=50.0.0
 psycopg2-binary>=2.9.0
 asyncpg>=0.29.0
 

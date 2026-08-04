@@ -52,6 +52,9 @@ python-multipart==0.0.32
 python-dotenv==1.0.1
 typing-extensions>=4.11,<5  # Compatible with both litellm and openai
 python-jose[cryptography]==3.5.0
+# Transitive via python-jose[cryptography]. Pinned to a floor because
+# 49.0.0 carries GHSA-g6cj-pr64-35w5 (HIGH), fixed in 50.0.0.
+cryptography>=50.0.0
 passlib[bcrypt]==1.7.4
 
 # Background Tasks & Scheduling

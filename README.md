@@ -108,6 +108,39 @@ See [shared/observability/docs/ARCHITECTURE.md](shared/observability/docs/ARCHIT
 - Live docs and walkthroughs: [docs.actyze.io](https://docs.actyze.io)
 - Demo videos: **TODO** — host `Actyze_ Data Clarity.mp4` and `Actyze_ Federated Querying.mp4` (e.g., upload to a GitHub issue/release asset or YouTube) and link them here.
 
+## Security
+
+Actyze is AGPL-3.0. Everything in the images is open source — no proprietary
+components, no licensed tier, no paywalled features.
+
+- Every image runs as a **non-root user** and meets the Kubernetes **restricted**
+  Pod Security Standard, apart from `readOnlyRootFilesystem`.
+- A **CycloneDX SBOM** is produced for every image on every build.
+- CI **fails the build** on a fixable CRITICAL/HIGH vulnerability or a
+  non-open-source licence.
+- **Zero fixable CRITICAL findings.** The only fixable HIGH findings are three
+  CPython advisories whose sole fix is an unreleased CPython 3.15 (two of them
+  only in a beta). We will not ship a pre-release interpreter for them. Each is
+  waived individually in
+  [security/vulnerability-allowlist.txt](security/vulnerability-allowlist.txt)
+  with a reason and a review date, not suppressed by a severity threshold.
+- This is **not a zero-CVE claim.** Findings with no upstream fix remain, mostly
+  `perl-base` and `libc6` from the Debian base.
+
+Verify any published image yourself:
+
+```bash
+syft actyze/dashboard-nexus:0.1.1 -o cyclonedx-json
+
+# Expect exit 2 and three CPython HIGH findings — the waived ones above.
+# Anything beyond those three is a regression worth reporting.
+grype actyze/dashboard-nexus:0.1.1 --only-fixed --fail-on high
+```
+
+Details in [security/CONTAINER_SECURITY.md](security/CONTAINER_SECURITY.md) and
+[security/LICENSE_REPORT.md](security/LICENSE_REPORT.md). To report a
+vulnerability, see [SECURITY.md](SECURITY.md).
+
 ## Documentation
 
 - [Docker deployment](docker/README.md)
@@ -119,6 +152,9 @@ See [shared/observability/docs/ARCHITECTURE.md](shared/observability/docs/ARCHIT
 - [Predictive intelligence test plan](PREDICTIVE_INTELLIGENCE_TEST_PLAN.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
+- [Upgrading between versions](UPGRADING.md) — breaking changes and required actions
+- [Container security posture](security/CONTAINER_SECURITY.md) — base images, CVE counts, SBOM
+- [Open source licence report](security/LICENSE_REPORT.md) — what is in the images and under what terms
 
 ## Related Repositories
 

@@ -1,0 +1,1098 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://github.com/actyze/dashboard/blob/main/security/vex/actyze.openvex.json",
+  "author": "Actyze",
+  "role": "Project maintainers",
+  "timestamp": "2026-08-04T00:00:00Z",
+  "last_updated": "2026-08-04T00:00:00Z",
+  "version": 1,
+  "tooling": "hand-authored; see security/VULNERABILITY_EXCEPTIONS.md for the evidence behind each statement",
+  "statements": [
+    {
+      "vulnerability": {
+        "name": "CVE-2026-42496"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/perl-base"
+        },
+        {
+          "@id": "perl-base"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "impact_statement": "The advisory is against a CPAN module that Debian ships in perl-modules-5.40. python:3.13-slim installs perl-base only, so the vulnerable code is not in the image; grype attributes the advisory to the shared perl source package. Verified: `find / -name Tar.pm` returns nothing. Affected module: Archive::Tar.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-42497"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/perl-base"
+        },
+        {
+          "@id": "perl-base"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "impact_statement": "The advisory is against a CPAN module that Debian ships in perl-modules-5.40. python:3.13-slim installs perl-base only, so the vulnerable code is not in the image; grype attributes the advisory to the shared perl source package. Verified: `find / -name Tar.pm` returns nothing. Affected module: Archive::Tar.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-9538"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/perl-base"
+        },
+        {
+          "@id": "perl-base"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "impact_statement": "The advisory is against a CPAN module that Debian ships in perl-modules-5.40. python:3.13-slim installs perl-base only, so the vulnerable code is not in the image; grype attributes the advisory to the shared perl source package. Verified: `find / -name Tar.pm` returns nothing. Affected module: Archive::Tar.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-57433"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/perl-base"
+        },
+        {
+          "@id": "perl-base"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "impact_statement": "The advisory is against a CPAN module that Debian ships in perl-modules-5.40. python:3.13-slim installs perl-base only, so the vulnerable code is not in the image; grype attributes the advisory to the shared perl source package. Verified: `find / -name Storable.pm` returns nothing. Affected module: Storable.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-48959"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/perl-base"
+        },
+        {
+          "@id": "perl-base"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "impact_statement": "The advisory is against a CPAN module that Debian ships in perl-modules-5.40. python:3.13-slim installs perl-base only, so the vulnerable code is not in the image; grype attributes the advisory to the shared perl source package. Verified: `find / -name Unzip.pm` returns nothing. Affected module: IO::Uncompress::Unzip.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-48961"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/perl-base"
+        },
+        {
+          "@id": "perl-base"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "impact_statement": "The advisory is against a CPAN module that Debian ships in perl-modules-5.40. python:3.13-slim installs perl-base only, so the vulnerable code is not in the image; grype attributes the advisory to the shared perl source package. Verified: `find / -name zipdetails` returns nothing. Affected tool: the zipdetails CLI from IO::Compress.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-48962"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/perl-base"
+        },
+        {
+          "@id": "perl-base"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "impact_statement": "The advisory is against a CPAN module that Debian ships in perl-modules-5.40. python:3.13-slim installs perl-base only, so the vulnerable code is not in the image; grype attributes the advisory to the shared perl source package. Verified: `find / -name GlobMapper.pm` returns nothing. Affected module: File::GlobMapper via IO::Compress.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-7017"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/perl-base"
+        },
+        {
+          "@id": "perl-base"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "component_not_present",
+      "impact_statement": "The advisory is against a CPAN module that Debian ships in perl-modules-5.40. python:3.13-slim installs perl-base only, so the vulnerable code is not in the image; grype attributes the advisory to the shared perl source package. Verified: `find / -name Tiny.pm` returns nothing. Affected module: HTTP::Tiny.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-12087"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/perl-base"
+        },
+        {
+          "@id": "perl-base"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "perl is present but is never executed. No Actyze service, entrypoint, or healthcheck spawns a perl process, so the vulnerable code is unreachable and no attacker-controlled input can reach it. Socket.pm is present in perl-base, but pack_ip_mreq_source() is only reachable from a running perl program.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-13221"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/perl-base"
+        },
+        {
+          "@id": "perl-base"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "perl is present but is never executed. No Actyze service, entrypoint, or healthcheck spawns a perl process, so the vulnerable code is unreachable and no attacker-controlled input can reach it. The defect is in regular-expression compilation, which requires a perl process.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-57432"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/perl-base"
+        },
+        {
+          "@id": "perl-base"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "perl is present but is never executed. No Actyze service, entrypoint, or healthcheck spawns a perl process, so the vulnerable code is unreachable and no attacker-controlled input can reach it. The defect is in pack/unpack template handling, which requires a perl process.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-8376"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/perl-base"
+        },
+        {
+          "@id": "perl-base"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "perl is present but is never executed. No Actyze service, entrypoint, or healthcheck spawns a perl process, so the vulnerable code is unreachable and no attacker-controlled input can reach it. Additionally out of scope by architecture: the advisory states the overflow requires a 32-bit build, and both published architectures are 64-bit (perl -V:ivsize reports 8).",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-5450"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/libc6"
+        },
+        {
+          "@id": "libc6"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin"
+        },
+        {
+          "@id": "libc-bin"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The defect is in the scanf family when called with %mc and an explicit field width above 1024. Neither the CPython interpreter nor any compiled stdlib extension references __isoc99_scanf or __isoc99_sscanf; verified with objdump -T against /usr/local/bin/python3.13 and every .so under /usr/local/lib/python3.13.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-5928"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/libc6"
+        },
+        {
+          "@id": "libc6"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin"
+        },
+        {
+          "@id": "libc-bin"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The defect is in ungetwc on wide-character FILE streams. CPython does not use the wide-character stdio API; objdump -T against the interpreter and every stdlib extension module reports zero references to ungetwc.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-5435"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/libc6"
+        },
+        {
+          "@id": "libc6"
+        },
+        {
+          "@id": "pkg:deb/debian/libc-bin"
+        },
+        {
+          "@id": "libc-bin"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The defect is in the deprecated resolver helpers ns_printrrf, ns_printrr and fp_nquery when printing TSIG records. Name resolution in CPython goes through getaddrinfo; objdump -T reports zero references to any of the three symbols.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2025-69720"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/libncursesw6"
+        },
+        {
+          "@id": "libncursesw6"
+        },
+        {
+          "@id": "pkg:deb/debian/libtinfo6"
+        },
+        {
+          "@id": "libtinfo6"
+        },
+        {
+          "@id": "pkg:deb/debian/ncurses-base"
+        },
+        {
+          "@id": "ncurses-base"
+        },
+        {
+          "@id": "pkg:deb/debian/ncurses-bin"
+        },
+        {
+          "@id": "ncurses-bin"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The overflow is in analyze_string in progs/infocmp.c, part of the infocmp command-line tool rather than the terminfo library. /usr/bin/infocmp is present and is never executed; the containers run a single application process with no TTY. Reported four times because these packages share a source package and version.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-11822"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/libsqlite3-0"
+        },
+        {
+          "@id": "libsqlite3-0"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The defect is in the SQLite FTS5 extension and requires the process to open an attacker-supplied database file. Actyze persists to PostgreSQL; no service opens a SQLite database or uses FTS5. libsqlite3-0 is present only because CPython builds the stdlib sqlite3 module unconditionally.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-11824"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/libsqlite3-0"
+        },
+        {
+          "@id": "libsqlite3-0"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The defect is in the SQLite FTS5 extension and requires the process to open an attacker-supplied database file. Actyze persists to PostgreSQL; no service opens a SQLite database or uses FTS5. libsqlite3-0 is present only because CPython builds the stdlib sqlite3 module unconditionally.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-54369"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/libacl1"
+        },
+        {
+          "@id": "libacl1"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
+      "impact_statement": "A local privilege-escalation primitive requiring an attacker who can already execute code in the container and race a pathname component against a more-privileged caller. The images run one application process as uid 10001 with allowPrivilegeEscalation false and all capabilities dropped; there is no second local user and no setuid binary to escalate to.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-54370"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/libacl1"
+        },
+        {
+          "@id": "libacl1"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_cannot_be_controlled_by_adversary",
+      "impact_statement": "A local TOCTOU privilege-escalation primitive requiring an attacker who can already execute code in the container and race a pathname component against a more-privileged caller. The images run one application process as uid 10001 with allowPrivilegeEscalation false and all capabilities dropped; there is no second local user and no setuid binary to escalate to.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    },
+    {
+      "vulnerability": {
+        "name": "CVE-2026-41992"
+      },
+      "timestamp": "2026-08-04T00:00:00Z",
+      "products": [
+        {
+          "@id": "pkg:oci/dashboard-nexus"
+        },
+        {
+          "@id": "pkg:oci/dashboard-nexus?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service"
+        },
+        {
+          "@id": "pkg:oci/dashboard-schema-service?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-xgboost?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-lightgbm?repository_url=docker.io/actyze"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon"
+        },
+        {
+          "@id": "pkg:oci/prediction-worker-autogluon?repository_url=docker.io/actyze"
+        }
+      ],
+      "subcomponents": [
+        {
+          "@id": "pkg:deb/debian/gzip"
+        },
+        {
+          "@id": "gzip"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "The overflow is in the gzip binary's LZH decompression path and requires invoking gzip on attacker-supplied data with more than one file per invocation. Nothing in Actyze shells out to gzip; Python decompression goes through the stdlib gzip and zlib modules, which link zlib and do not implement LZH.",
+      "action_statement": "No action available: the advisory has no fixed version in Debian 13 (fix state not-fixed or wont-fix). Reassess at the 2026-11 review or when the base image digest changes."
+    }
+  ]
+}

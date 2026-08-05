@@ -14,6 +14,7 @@ import { Chart } from '../Charts';
 import { RestService, QueryManagementService } from '../../services';
 import DashboardService from '../../services/DashboardService';
 import { transformQueryResults } from '../../utils/dataTransformers';
+import { formatDistanceToNowStrict, parseISO } from 'date-fns';
 
 // Grid configuration constants
 const GRID_COLS = 12;
@@ -390,6 +391,18 @@ const Dashboard = ({ isPublic = false }) => {
       // stays pending — background refresh will populate
     } finally {
       setLoadingTiles(prev => ({ ...prev, [tile.id]: false }));
+    }
+  };
+
+  const formatLastUpdated = (dateString) => {
+    if (!dateString) return null;
+
+    try {
+      const date = parseISO(dateString);
+
+      return `Last updated ${formatDistanceToNowStrict(date)} ago`;
+    } catch {
+      return null;
     }
   };
 
@@ -1246,6 +1259,19 @@ const Dashboard = ({ isPublic = false }) => {
                   <div className="flex-1 overflow-hidden p-2 min-h-0">
                     {renderTileContent(tile)}
                   </div>
+
+                  {/* Tile Footer */}
+                  {tileCache[tile.id]?.cached_at && (
+                    <div
+                      className={`px-3 py-1 text-[10px] border-t ${
+                        isDark
+                          ? 'border-gray-700 text-gray-500'
+                          : 'border-gray-200 text-gray-500'
+                      }`}
+                    >
+                      {formatLastUpdated(tileCache[tile.id].cached_at)}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

@@ -93,7 +93,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to Docker Hub
         # Dependabot and fork pull requests run without repository secrets, so
@@ -149,7 +149,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to Docker Hub
         # Dependabot and fork pull requests run without repository secrets, so
@@ -233,7 +233,7 @@ jobs:
           docker system df
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to Docker Hub
         # Dependabot and fork pull requests run without repository secrets, so
@@ -302,7 +302,7 @@ jobs:
           docker system prune -af --volumes
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to Docker Hub
         # Dependabot and fork pull requests run without repository secrets, so

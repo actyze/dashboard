@@ -1,3 +1,4 @@
+[English](README.md) · [Français](README.fr.md)
 # Actyze
 
 **Open-source, self-hosted AI analytics platform.** Natural language to SQL across 50+ languages, federated queries via Trino, no-code ML predictions, voice queries, and 100+ LLM providers via LiteLLM.

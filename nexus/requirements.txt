@@ -1,6 +1,6 @@
 # Web Framework
-fastapi==0.140.0
-uvicorn[standard]==0.51.0
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
 
 # GraphQL
 
@@ -8,11 +8,11 @@ uvicorn[standard]==0.51.0
 httpx==0.28.1
 
 # LLM Abstraction (supports 100+ providers)
-litellm==1.93.0
+litellm==1.98.0
 
 # LiteLLM Provider Dependencies (matched to LiteLLM v1.81.12 requirements)
 # AWS Bedrock
-boto3==1.40.53
+boto3==1.43.83
 aioboto3==15.5.0
 
 # Google Vertex AI / Gemini
@@ -21,23 +21,23 @@ google-genai==1.37.0
 
 # Azure OpenAI
 openai==2.48.0
-azure-identity==1.16.1
+azure-identity==1.25.3
 azure-keyvault==4.2.0
 
 # Anthropic Claude
 anthropic[vertex]==0.54.0
 
 # Data Validation
-pydantic==2.10.5
-pydantic-settings==2.7.1
-email-validator==2.2.0
+pydantic==2.13.5
+pydantic-settings==2.15.0
+email-validator==2.3.0
 
 # Database & Caching
-sqlalchemy[asyncio]==2.0.36
-asyncpg==0.30.0
+sqlalchemy[asyncio]==2.0.52
+asyncpg==0.31.0
 trino>=0.328.0
 cachetools==5.5.0
-async-lru==2.0.4
+async-lru==2.3.0
 
 # Retry Logic
 tenacity==9.1.4
@@ -45,11 +45,11 @@ tenacity==9.1.4
 # Logging & Monitoring (now from shared observability module)
 structlog==24.4.0
 python-json-logger==3.2.1
-prometheus-client==0.24.1
+prometheus-client==0.26.0
 
 # Utilities
 python-multipart==0.0.32
-python-dotenv==1.0.1
+python-dotenv==1.2.3
 typing-extensions>=4.11,<5  # Compatible with both litellm and openai
 python-jose[cryptography]==3.5.0
 # Transitive via python-jose[cryptography]. Pinned to a floor because
@@ -58,8 +58,8 @@ cryptography>=50.0.0
 passlib[bcrypt]==1.7.4
 
 # Background Tasks & Scheduling
-apscheduler==3.11.0
-psycopg2-binary==2.9.11  # Required by APScheduler SQLAlchemyJobStore (sync driver)
+apscheduler==3.11.3
+psycopg2-binary==2.9.12  # Required by APScheduler SQLAlchemyJobStore (sync driver)
 
 # SQL Parsing (relationship mining)
 sqlglot>=25.0.0
@@ -67,7 +67,7 @@ sqlglot>=25.0.0
 # File Processing
 pandas==2.2.3
 openpyxl==3.1.5
-xlrd==2.0.1
+xlrd==2.0.2
 
 # Development
 pytest==8.3.4
